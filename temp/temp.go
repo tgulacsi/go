@@ -33,14 +33,15 @@ func ReaderToFile(r io.Reader, prefix, suffix string) (filename string, err erro
 		err = e
 		return
 	}
-    if suffix != "" {
-    defer func() {
-    if err == nil {
-    nfn := filename + suffix
-    err =os.Rename(filename, nfn)
-    filename =nfn
-    }}()
-    }
+	if suffix != "" {
+		defer func() {
+			if err == nil {
+				nfn := filename + suffix
+				err = os.Rename(filename, nfn)
+				filename = nfn
+			}
+		}()
+	}
 	if sfh, ok := r.(*os.File); ok {
 		filename = dfh.Name()
 		dfh.Close()

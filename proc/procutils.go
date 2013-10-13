@@ -30,8 +30,12 @@ import (
 	"github.com/golang/glog"
 )
 
+// ErrTimedOut is an error for child timeout
 var ErrTimedOut = errors.New("Child timed out.")
 
+// WithTimeout starts todo function, executes onTimeout if the todo function
+// does not return before timeoutSeconds elapses, and returns todo's returned
+// error or ErrTimedOut
 func WithTimeout(timeoutSeconds int, todo func() error, onTimeout func() error) error {
 	if timeoutSeconds <= 0 {
 		return todo()
@@ -56,6 +60,7 @@ func WithTimeout(timeoutSeconds int, todo func() error, onTimeout func() error) 
 	return err
 }
 
+// RunWithTimeout runs cmd, and kills the child on timeout
 func RunWithTimeout(timeoutSeconds int, cmd *exec.Cmd) error {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -66,6 +71,8 @@ func RunWithTimeout(timeoutSeconds int, cmd *exec.Cmd) error {
 	return WithTimeout(timeoutSeconds, cmd.Run, newFamilyKiller(cmd))
 }
 
+// KillWithChildren kills the process
+// and tries to kill its all children (process group)
 func KillWithChildren(p *os.Process) (err error) {
 	glog.V(1).Infof("killWithChildren(%s)", p)
 	if p == nil {

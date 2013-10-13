@@ -90,7 +90,7 @@ func Convert(srcFn, dstFn, format string) error {
 		return fmt.Errorf("cannot open %q: %s", tfn, err)
 	}
 	defer src.Close()
-	var dst io.WriteCloser = os.Stdout
+	var dst = io.WriteCloser(os.Stdout)
 	if !(dstFn == "-" || dstFn == "") {
 		if dst, err = os.Create(dstFn); err != nil {
 			return fmt.Errorf("cannot create dest file %q: %s", dstFn, err)
