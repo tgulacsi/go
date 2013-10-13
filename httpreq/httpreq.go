@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/golang/glog"
 
@@ -139,4 +140,28 @@ func SendFile(w http.ResponseWriter, filename, contentType string) error {
 		glog.Error(err)
 	}
 	return err
+}
+
+// GetCombinedLogLine returns a CombinedLog - format of the request
+// copied from https://github.com/gorilla/handlers/blob/master/handlers.go
+func GetCombinedLogLine(r *http.Request, ts time.Time, status int, size int) string {
+	username := "-"
+	if r.URL.User != nil {
+		if name := r.URL.User.Username(); name != "" {
+			username = name
+		}
+	}
+
+	return fmt.Sprintf("%s - %s [%s] \"%s %s %s\" %d %d \"%s\" \"%s\"",
+		strings.Split(r.RemoteAddr, ":")[0],
+		username,
+		ts.Format("02/Jan/2006:15:04:05 -0700"),
+		r.Method,
+		r.URL.RequestURI(),
+		r.Proto,
+		status,
+		size,
+		r.Referer(),
+		r.UserAgent(),
+	)
 }
