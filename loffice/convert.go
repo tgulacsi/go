@@ -27,7 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	//"github.com/golang/glog"
+	"github.com/golang/glog"
 
 	"github.com/tgulacsi/go/proc"
 )
@@ -41,7 +41,7 @@ var Timeout = 300
 // Convert converts from srcFn to dstFn, into the given format.
 // Either filenames can be empty or "-" which treated as stdin/stdout
 func Convert(srcFn, dstFn, format string) error {
-	tempDir, err := ioutil.TempDir("", srcFn)
+	tempDir, err := ioutil.TempDir("", filepath.Base(srcFn))
 	if err != nil {
 		return fmt.Errorf("cannot create temporary directory: %s", err)
 	}
@@ -59,11 +59,12 @@ func Convert(srcFn, dstFn, format string) error {
 		fh.Close()
 	}
 	c := exec.Command(Loffice, "--nolockcheck", "--norestore", "--headless",
-		"--convert-to", format, "--outdir", tempDir)
+		"--convert-to", format, "--outdir", tempDir, srcFn)
 	c.Stderr = os.Stderr
 	c.Stdout = c.Stderr
+	glog.Infof("calling %q", c.Args)
 	if err = proc.RunWithTimeout(Timeout, c); err != nil {
-		return fmt.Errorf("error running %s %q: %s", c.Path, c.Args, err)
+		return fmt.Errorf("error running %q: %s", c.Args, err)
 	}
 	dh, err := os.Open(tempDir)
 	if err != nil {
@@ -80,7 +81,7 @@ func Convert(srcFn, dstFn, format string) error {
 	var tfn string
 	for _, fn := range names {
 		if fn != "source" {
-			tfn = fn
+			tfn = filepath.Join(dh.Name(), fn)
 			break
 		}
 	}
