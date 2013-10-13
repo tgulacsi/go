@@ -20,9 +20,12 @@ Package loffice for calling loffice, for example for converting files to PDF
 package loffice
 
 import (
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	//"github.com/golang/glog"
 
@@ -36,22 +39,64 @@ var Loffice = "loffice"
 var Timeout = 300
 
 // Convert converts from srcFn to dstFn, into the given format.
-// Eithe filenames can be empty or "-" which treated as stdin/stdout
+// Either filenames can be empty or "-" which treated as stdin/stdout
 func Convert(srcFn, dstFn, format string) error {
 	tempDir, err := ioutil.TempDir("", srcFn)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot create temporary directory: %s", err)
+	}
+	defer os.RemoveAll(tempDir)
+	if srcFn == "-" || srcFn == "" {
+		srcFn = filepath.Join(tempDir, "source")
+		fh, err := os.Create(srcFn)
+		if err != nil {
+			return fmt.Errorf("error creating temp file %q: %s", srcFn, err)
+		}
+		if _, err = io.Copy(fh, os.Stdin); err != nil {
+			fh.Close()
+			return fmt.Errorf("error writing stdout to %q: %s", srcFn, err)
+		}
+		fh.Close()
 	}
 	c := exec.Command(Loffice, "--nolockcheck", "--norestore", "--headless",
 		"--convert-to", format, "--outdir", tempDir)
 	c.Stderr = os.Stderr
-	if dstFn == "" || dstFn == "-" {
-		c.Stdout = os.Stdout
-	} else {
-		var err error
-		if c.Stdout, err = os.Create(dstFn); err != nil {
-			return err
+	c.Stdout = c.Stderr
+	if err = proc.RunWithTimeout(Timeout, c); err != nil {
+		return fmt.Errorf("error running %s %q: %s", c.Path, c.Args, err)
+	}
+	dh, err := os.Open(tempDir)
+	if err != nil {
+		return fmt.Errorf("error opening dest dir %q: %s", tempDir, err)
+	}
+	defer dh.Close()
+	names, err := dh.Readdirnames(3)
+	if err != nil {
+		return fmt.Errorf("error listing %q: %s", tempDir, err)
+	}
+	if len(names) > 2 {
+		return fmt.Errorf("too many files in %q: %q", tempDir, names)
+	}
+	var tfn string
+	for _, fn := range names {
+		if fn != "source" {
+			tfn = fn
+			break
 		}
 	}
-	return proc.RunWithTimeout(Timeout, c)
+	src, err := os.Open(tfn)
+	if err != nil {
+		return fmt.Errorf("cannot open %q: %s", tfn, err)
+	}
+	defer src.Close()
+	var dst io.WriteCloser = os.Stdout
+	if !(dstFn == "-" || dstFn == "") {
+		if dst, err = os.Create(dstFn); err != nil {
+			return fmt.Errorf("cannot create dest file %q: %s", dstFn, err)
+		}
+	}
+	if _, err = io.Copy(dst, src); err != nil {
+		return fmt.Errorf("error copying from %s to %s: %s", src, dst, err)
+	}
+	return nil
 }
