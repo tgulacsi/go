@@ -1,17 +1,17 @@
 /*
-  Copyright 2013 Tamás Gulácsi
+Copyright 2013 Tamás Gulácsi
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+     http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 
 /*
@@ -23,8 +23,6 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/golang/glog"
@@ -63,10 +61,7 @@ func WithTimeout(timeoutSeconds int, todo func() error, onTimeout func() error) 
 // RunWithTimeout runs cmd, and kills the child on timeout
 func RunWithTimeout(timeoutSeconds int, cmd *exec.Cmd) error {
 	if cmd.SysProcAttr == nil {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid:   true, // to be able to kill all children, too
-			Pdeathsig: syscall.SIGKILL,
-		}
+		procAttrSetGroup(cmd)
 	}
 	return WithTimeout(timeoutSeconds, cmd.Run, newFamilyKiller(cmd))
 }
@@ -89,7 +84,7 @@ func KillWithChildren(p *os.Process) (err error) {
 		return nil
 	}
 	defer p.Kill()
-	return exec.Command("pkill", "-KILL", "-P", strconv.Itoa(p.Pid)).Run()
+	return Pkill(p.Pid)
 }
 
 func groupKill(p *os.Process) error {
@@ -99,7 +94,7 @@ func groupKill(p *os.Process) error {
 	glog.Infof("groupKill p.Pid=%d", p.Pid)
 	defer recover()
 	defer p.Kill()
-	return exec.Command("kill", "-KILL", "-"+strconv.Itoa(p.Pid)).Run()
+	return GroupKill(p.Pid)
 }
 
 func simpleKill(p *os.Process) error {
@@ -115,7 +110,7 @@ func newFamilyKiller(cmd *exec.Cmd) func() error {
 	return func() error {
 		if cmd != nil {
 			glog.Infof("killing timed out (%d) %s %s", cmd.Process.Pid, cmd.Path, cmd.Args)
-			if cmd.SysProcAttr != nil && cmd.SysProcAttr.Setpgid {
+			if cmd.SysProcAttr != nil && isGroupLeader(cmd) {
 				return groupKill(cmd.Process)
 			}
 			return KillWithChildren(cmd.Process)
