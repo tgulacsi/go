@@ -31,15 +31,15 @@ func procAttrSetGroup(c *exec.Cmd) {
 
 func isGroupLeader(c *exec.Cmd) bool {
 	return c.SysProcAttr != nil &&
-    c.SysProcAttr.CreationFlags&syscall.CREATE_NEW_PROCESS_GROUP > 0
+		c.SysProcAttr.CreationFlags&syscall.CREATE_NEW_PROCESS_GROUP > 0
 }
 
 // Pkill kills the process with the given pid
 func Pkill(pid int) error {
-	return exec.Command("taskkill", "/pid", strconv.Itoa(pid)).Run()
+	return exec.Command("taskkill", "/f", "/pid", strconv.Itoa(pid)).Run()
 }
 
 // GroupKill kills the process group lead by the given pid
 func GroupKill(pid int) error {
-	return Pkill(pid)
+	return exec.Command("taskkill", "/f", "/t", strconv.Itoa(pid)).Run()
 }
