@@ -22,11 +22,15 @@ Every other argument is treated as a search root.
 package main
 
 import (
+	"archive/tar"
 	"bufio"
 	"flag"
+	"fmt"
+	"io"
 	"log"
-    "path/filepath"
 	"os"
+	"path/filepath"
+	"sync"
 )
 
 var (
@@ -57,20 +61,86 @@ func main() {
 
 	log.Printf("start searching for %d needles", len(needles))
 
+	var foundCh chan fileInfo
+	var wg sync.WaitGroup
+	if *flagTar != "" {
+		var tfh *os.File
+		fn := *flagTar
+		if fn == "-" {
+			tfh = os.Stdout
+		} else {
+			if tfh, err = os.Create(*flagTar); err != nil {
+				log.Fatalf("cannot open tar output %q: %s", *flagTar, err)
+			}
+		}
+		defer tfh.Close()
+		tw := tar.NewWriter(tfh)
+		defer tw.Close()
+
+		foundCh = make(chan fileInfo, 16)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for info := range foundCh {
+				if err = addFile(tw, info); err != nil {
+					log.Fatalf("%s", err)
+				}
+			}
+		}()
+	}
+
 	w := func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() || info.Mode()&os.ModeType > 0 {
 			return nil
 		}
 		bn := filepath.Base(path)
-		if _, ok := needles[bn]; ok {
+		if old, ok := needles[bn]; ok {
+			if old != "" {
+				log.Printf("found AGAIN %q at %q", bn, path)
+				return nil
+			}
 			log.Printf("found %q at %q", bn, path)
 			needles[bn] = path
+			if foundCh != nil {
+				foundCh <- fileInfo{FileInfo: info, Path: path}
+			}
 		}
 		return nil
 	}
 	for _, root := range flag.Args()[1:] {
 		if err = filepath.Walk(root, w); err != nil {
-			log.Fatalf("errof walking %q: %s", root, err)
+			log.Fatalf("error walking %q: %s", root, err)
 		}
 	}
+
+	if foundCh != nil {
+		close(foundCh)
+		log.Printf("waiting tar to finish...")
+		wg.Wait()
+		log.Printf("tar done")
+	}
+}
+
+type fileInfo struct {
+	Path string
+	os.FileInfo
+}
+
+func addFile(tw *tar.Writer, info fileInfo) error {
+	fh, err := os.Open(info.Path)
+	if err != nil {
+		return fmt.Errorf("error opening %q: %s", info.Path, err)
+	}
+	defer fh.Close()
+	hdr, err := tar.FileInfoHeader(info.FileInfo, "")
+	if err != nil {
+		return fmt.Errorf("error creating tar header: %s", err)
+	}
+	if err = tw.WriteHeader(hdr); err != nil {
+		return fmt.Errorf("error writing tar header: %s", err)
+	}
+	if _, err = io.Copy(tw, fh); err != nil {
+		return fmt.Errorf("error writing file %q: %s", info.Path, err)
+	}
+	return nil
 }
