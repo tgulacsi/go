@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package netmail implements parsing of mail messages.
+Package i18nmail implements parsing of mail messages.
 
 For the most part, this package follows the syntax as specified by RFC 5322.
 Notable divergences:
@@ -13,7 +13,7 @@ Notable divergences:
     * The full range of spacing (the CFWS syntax element) is not supported,
       such as breaking addresses across lines.
 */
-package netmail
+package i18nmail
 
 import (
 	"bytes"
