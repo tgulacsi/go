@@ -27,7 +27,6 @@
 package main
 
 import (
-	"archive/zip"
 	"flag"
 	"fmt"
 	"io"
@@ -35,8 +34,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
-	"unsafe"
+
+	"github.com/tgulacsi/go/zipA/azip"
 )
 
 func main() {
@@ -45,20 +44,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Usage: "+os.Args[0]+" <zipfile> <exefile>")
 	}
 	flag.Parse()
-
-	zr, err := zip.OpenReader(flag.Arg(0))
-	if err != nil {
-		log.Fatalf("cannot open source zip %q: %v", flag.Arg(0), err)
-	}
-	defer zr.Close()
-	if len(zr.File) == 0 {
-		return
-	}
-
-	// The first element in the zip starts at "beginning".
-	// We have to create a file where the first exeStat.Size() bytes
-	// are the exe, and then comes the zip - but that zip must contain files
-	// with offsets shifted with
 
 	exeFn := flag.Arg(1)
 	exe, err := os.Open(exeFn)
@@ -84,28 +69,11 @@ func main() {
 		log.Fatalf("error copying %q to %q: %v", exe.Name(), tempFh.Name(), err)
 	}
 
-	zw := zip.NewWriter(out)
+	zw := azip.NewZipWriterOffset(out, n)
 	defer zw.Close()
-	setCountOfWriter(zw, n)
 
-	// copy the zip's contents
-	for _, f := range zr.File {
-		w, err := zw.CreateHeader(&f.FileHeader)
-		if err != nil {
-			log.Printf("error creating header for %q: %v", f.FileHeader.Name, err)
-			continue
-		}
-		src, err := f.Open()
-		if err != nil {
-			log.Printf("error opening %s: %v", f.Name)
-			continue
-		}
-		// We always get "zip: checksum error", but the resulting file is OK.
-		if _, err = io.Copy(w, src); err != nil && !strings.HasSuffix(err.Error(), "checksum error") {
-			src.Close()
-			log.Printf("error copying from %s: %v", f.Name, err)
-		}
-		src.Close()
+	if err = azip.AppendZipFile(zw, flag.Arg(0)); err != nil {
+		log.Fatalf("AppendZipFile: %v", err)
 	}
 	if err = zw.Close(); err != nil {
 		log.Printf("error closing zip (first round): %v", err)
@@ -141,41 +109,4 @@ func main() {
 	if err = os.Chmod(*flagOutput, exeStat.Mode()); err != nil {
 		log.Printf("error with chmod %q: %v", *flagOutput, err)
 	}
-}
-
-// These are dirty hacks - to work it assumes that the archive/zip 's
-// structures looks like these.
-
-// localFile is a copy of archive/zip 's File.
-type localFile struct {
-	zip.FileHeader
-	zipr         io.ReaderAt
-	zipsize      int64
-	headerOffset int64
-}
-
-// getHeaderOffset returns the header offset of the file (only data offset is published).
-func getHeaderOffset(f *zip.File) int64 {
-	return (*localFile)(unsafe.Pointer(f)).headerOffset
-}
-
-// localWriter is an even dirtier hack: it assmes that the archive/zip 's
-// Writer struct's first element is an *zip.countWriter.
-type localWriter struct {
-	cw *localCountWriter
-}
-
-// localCountWriter is the copy of the archive/zip 's countWriter
-type localCountWriter struct {
-	w     io.Writer
-	count int64
-}
-
-// setCountOfWriter sets the zip.Writer's underlying countWriter's count.
-// Returns the previously set count.
-func setCountOfWriter(w *zip.Writer, count int64) int64 {
-	cw := ((*localWriter)(unsafe.Pointer(w))).cw
-	oldCount := cw.count
-	cw.count = count
-	return oldCount
 }
