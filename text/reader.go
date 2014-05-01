@@ -24,15 +24,13 @@ import (
 )
 
 // NewDecodingReader returns a reader which decode from the given encoding, to utf8.
+// If enc is nil, then only an utf8-enforcing replacement reader
+// (see http://godoc.org/code.google.com/p/go.text/encoding#pkg-variables)
+// is used.
 func NewDecodingReader(r io.Reader, enc encoding.Encoding) io.Reader {
+	if enc == nil || enc == encoding.Replacement {
+		return transform.NewReader(r, encoding.Replacement.NewEncoder())
+	}
 	return transform.NewReader(r,
-		transform.Chain(enc.NewDecoder(),
-			encoding.Replacement.NewEncoder()))
-}
-
-// NewReplacementReader returns an utf8-enforcing reader
-// which will replace all non-utf8 sequences with the replacement character
-// (see http://godoc.org/code.google.com/p/go.text/encoding#pkg-variables).
-func NewReplacementReader(r io.Reader) io.Reader {
-	return transform.NewReader(r, encoding.Replacement.NewEncoder())
+		transform.Chain(enc.NewDecoder(), encoding.Replacement.NewEncoder()))
 }
