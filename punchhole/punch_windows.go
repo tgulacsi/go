@@ -18,6 +18,7 @@ package punchhole
 
 import (
 	"os"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -57,10 +58,15 @@ var (
 	modkernel32 = syscall.NewLazyDLL("kernel32.dll")
 
 	procDeviceIOControl = modkernel32.NewProc("DeviceIoControl")
+
+	sparseFilesMu sync.Mutex
+	sparseFiles   map[*os.File]struct{}
 )
 
 func init() {
 	PunchHole = punchHoleWindows
+
+	sparseFiles = make(map[*os.File]struct{})
 }
 
 // http://msdn.microsoft.com/en-us/library/windows/desktop/aa364411%28v=vs.85%29.aspx
@@ -76,6 +82,10 @@ type fileZeroDataInformation struct {
 // measuring "size" bytes
 // (http://msdn.microsoft.com/en-us/library/windows/desktop/aa364597%28v=vs.85%29.aspx)
 func punchHoleWindows(file *os.File, offset, size int64) (err error) {
+	if err := ensureFileSparse(file); err != nil {
+		return err
+	}
+
 	lpInBuffer := fileZeroDataInformation{
 		FileOffset:      offset,
 		BeyondFinalZero: offset + size}
@@ -94,7 +104,7 @@ func punchHoleWindows(file *os.File, offset, size int64) (err error) {
 		file.Fd(),
 		uintptr(fsctl_set_zero_data),
 		uintptr(unsafe.Pointer(&lpInBuffer)),
-		8,
+		16,
 		0,
 		0,
 		uintptr(unsafe.Pointer(&lpBytesReturned[0])),
@@ -108,4 +118,52 @@ func punchHoleWindows(file *os.File, offset, size int64) (err error) {
 		}
 	}
 	return
+}
+
+// // http://msdn.microsoft.com/en-us/library/windows/desktop/cc948908%28v=vs.85%29.aspx
+// type fileSetSparseBuffer struct {
+//	 SetSparse bool
+// }
+
+func ensureFileSparse(file *os.File) (err error) {
+	sparseFilesMu.Lock()
+	if _, ok := sparseFiles[file]; ok {
+		sparseFilesMu.Unlock()
+		return nil
+	}
+
+	//lpInBuffer := fileSetSparseBuffer{SetSparse: true}
+	lpBytesReturned := make([]byte, 8)
+	// BOOL
+	// WINAPI
+	// DeviceIoControl( (HANDLE) hDevice,                      // handle to a file
+	//                  FSCTL_SET_SPARSE,                      // dwIoControlCode
+	//                  (PFILE_SET_SPARSE_BUFFER) lpInBuffer,  // input buffer
+	//                  (DWORD) nInBufferSize,                 // size of input buffer
+	//                  NULL,                                  // lpOutBuffer
+	//                  0,                                     // nOutBufferSize
+	//                  (LPDWORD) lpBytesReturned,             // number of bytes returned
+	//                  (LPOVERLAPPED) lpOverlapped );         // OVERLAPPED structure
+	r1, _, e1 := syscall.Syscall9(procDeviceIOControl.Addr(), 8,
+		file.Fd(),
+		uintptr(fsctl_set_sparse),
+		// If the lpInBuffer parameter is NULL, the operation will behave the same as if the SetSparse member of the FILE_SET_SPARSE_BUFFER structure were TRUE. In other words, the operation sets the file to a sparse file.
+		0, // uintptr(unsafe.Pointer(&lpInBuffer)),
+		0, // 1,
+		0,
+		0,
+		uintptr(unsafe.Pointer(&lpBytesReturned[0])),
+		0,
+		0)
+	if r1 == 0 {
+		if e1 != 0 {
+			err = error(e1)
+		} else {
+			err = syscall.EINVAL
+		}
+	} else {
+		sparseFiles[file] = struct{}{}
+	}
+	sparseFilesMu.Unlock()
+	return err
 }
