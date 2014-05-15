@@ -25,7 +25,8 @@ import (
 )
 
 // GetEncoding returns the encoding.Encoding for the text name of the encoding
-// Returns nil if the encoding is not found
+// Returns nil if the encoding is not found.
+//
 // Knows the ISO8859 family, KOI8, Windows and Mac codepages,
 // but misses other Asian codepages
 func GetEncoding(name string) encoding.Encoding {

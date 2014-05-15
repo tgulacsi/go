@@ -24,6 +24,7 @@ import (
 )
 
 // NewDecodingReader returns a reader which decode from the given encoding, to utf8.
+//
 // If enc is nil, then only an utf8-enforcing replacement reader
 // (see http://godoc.org/code.google.com/p/go.text/encoding#pkg-variables)
 // is used.

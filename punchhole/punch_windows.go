@@ -66,7 +66,10 @@ var (
 func init() {
 	PunchHole = punchHoleWindows
 
-	sparseFiles = make(map[*os.File]struct{})
+	// sparseFiles is an fd set for already "sparsed" files - according to
+	// msdn.microsoft.com/en-us/library/windows/desktop/aa364225(v=vs.85).aspx
+	// the file handles are unique per process.
+	sparseFiles = make(map[uintptr]struct{})
 }
 
 // http://msdn.microsoft.com/en-us/library/windows/desktop/aa364411%28v=vs.85%29.aspx
@@ -127,7 +130,8 @@ func punchHoleWindows(file *os.File, offset, size int64) (err error) {
 
 func ensureFileSparse(file *os.File) (err error) {
 	sparseFilesMu.Lock()
-	if _, ok := sparseFiles[file]; ok {
+	fd := file.Fd()
+	if _, ok := sparseFiles[fd]; ok {
 		sparseFilesMu.Unlock()
 		return nil
 	}
@@ -145,7 +149,7 @@ func ensureFileSparse(file *os.File) (err error) {
 	//                  (LPDWORD) lpBytesReturned,             // number of bytes returned
 	//                  (LPOVERLAPPED) lpOverlapped );         // OVERLAPPED structure
 	r1, _, e1 := syscall.Syscall9(procDeviceIOControl.Addr(), 8,
-		file.Fd(),
+		fd,
 		uintptr(fsctl_set_sparse),
 		// If the lpInBuffer parameter is NULL, the operation will behave the same as if the SetSparse member of the FILE_SET_SPARSE_BUFFER structure were TRUE. In other words, the operation sets the file to a sparse file.
 		0, // uintptr(unsafe.Pointer(&lpInBuffer)),
@@ -162,7 +166,7 @@ func ensureFileSparse(file *os.File) (err error) {
 			err = syscall.EINVAL
 		}
 	} else {
-		sparseFiles[file] = struct{}{}
+		sparseFiles[fd] = struct{}{}
 	}
 	sparseFilesMu.Unlock()
 	return err
