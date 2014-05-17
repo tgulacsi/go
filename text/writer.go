@@ -24,6 +24,7 @@ import (
 )
 
 // NewEncodingWriter returns a writer which encodes to the given encoding, utf8.
+//
 // If enc is nil, then only an utf8-enforcing replacement writer
 // (see http://godoc.org/code.google.com/p/go.text/encoding#pkg-variables)
 // is used.
