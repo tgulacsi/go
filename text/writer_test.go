@@ -1,3 +1,4 @@
+//
 /*
 Copyright 2014 Tamás Gulácsi
 
@@ -17,25 +18,27 @@ limitations under the License.
 package text
 
 import (
-	"io/ioutil"
-	"strings"
+	"bytes"
+	"io"
 	"testing"
 )
 
-func TestDecodingReader(t *testing.T) {
+func TestEncodingWriter(t *testing.T) {
 	for i, tup := range []struct {
 		charset, encoded, decoded string
 	}{
 		{"iso8859-2", "\xe1rv\xedzt\xfbr\xf5 t\xfck\xf6rf\xfar\xf3g\xe9p", "árvíztűrő tükörfúrógép"},
-		{"utf-8", "\xf5\xf6abraka dabra", "\ufffd\ufffdabraka dabra"},
+		{"utf-8", "\xef\xbf\xbd\xef\xbf\xbdabraka dabra", "\ufffd\ufffdabraka dabra"},
 	} {
-		res, err := ioutil.ReadAll(
-			NewDecodingReader(strings.NewReader(tup.encoded), GetEncoding(tup.charset)))
-		if err != nil {
-			t.Errorf("%d. error reading: %v", i, err)
+		var res bytes.Buffer
+		if _, err := io.WriteString(
+			NewEncodingWriter(&res, GetEncoding(tup.charset)),
+			tup.decoded); err != nil {
+			t.Errorf("%d. error writing: %v", i, err)
+			continue
 		}
-		if string(res) != tup.decoded {
-			t.Errorf("%d. mismatch: got %q (% x) awaited %q", i, res, res, tup.decoded)
+		if res.String() != tup.encoded {
+			t.Errorf("%d. mismatch: got %q (% x) awaited %q", i, res.String(), res.Bytes(), tup.encoded)
 		}
 	}
 }

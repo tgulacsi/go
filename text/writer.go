@@ -32,6 +32,5 @@ func NewEncodingWriter(w io.Writer, enc encoding.Encoding) io.Writer {
 	if enc == nil || enc == encoding.Replacement {
 		return transform.NewWriter(w, encoding.Replacement.NewEncoder())
 	}
-	return transform.NewWriter(w,
-		transform.Chain(enc.NewEncoder(), encoding.Replacement.NewEncoder()))
+	return transform.NewWriter(w, transform.Chain(enc.NewEncoder()))
 }
