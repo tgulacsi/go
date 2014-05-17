@@ -34,7 +34,10 @@ func GetEncoding(name string) encoding.Encoding {
 	if strings.HasPrefix(name, "iso") {
 		i := strings.LastIndex(name, "-")
 		if i < 0 {
-			return nil
+			if len(name) != len("iso88591") {
+				return nil
+			}
+			i = len(name) - 2
 		}
 		if i, err = strconv.Atoi(name[i+1:]); err != nil {
 			return nil
