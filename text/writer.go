@@ -28,7 +28,7 @@ import (
 // If enc is nil, then only an utf8-enforcing replacement writer
 // (see http://godoc.org/code.google.com/p/go.text/encoding#pkg-variables)
 // is used.
-func NewEncodingWriter(w io.Writer, enc encoding.Encoding) io.Writer {
+func NewEncodingWriter(w io.Writer, enc encoding.Encoding) io.WriteCloser {
 	if enc == nil || enc == encoding.Replacement {
 		return transform.NewWriter(w, encoding.Replacement.NewEncoder())
 	}
