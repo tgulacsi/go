@@ -23,15 +23,27 @@ import (
 	"code.google.com/p/go.text/transform"
 )
 
-// NewDecodingReader returns a reader which decode from the given encoding, to utf8.
+// NewReader returns a reader which decode from the given encoding, to utf8.
 //
 // If enc is nil, then only an utf8-enforcing replacement reader
 // (see http://godoc.org/code.google.com/p/go.text/encoding#pkg-variables)
 // is used.
-func NewDecodingReader(r io.Reader, enc encoding.Encoding) io.Reader {
+func NewReader(r io.Reader, enc encoding.Encoding) io.Reader {
 	if enc == nil || enc == encoding.Replacement {
 		return transform.NewReader(r, encoding.Replacement.NewEncoder())
 	}
 	return transform.NewReader(r,
 		transform.Chain(enc.NewDecoder(), encoding.Replacement.NewEncoder()))
+}
+
+// Decode decodes the bytes to utf8 (an allocating, convenience version of transform.Transform).
+func Decode(p []byte, enc encoding.Encoding) ([]byte, error) {
+	dst := make([]byte, 0, len(p))
+	nDst, _, err := enc.NewDecoder().Transform(dst, p, true)
+	return dst[:nDst], err
+}
+
+// NewDecodingReader is a deprecated, it has been renamed to NewReader.
+func NewDecodingReader(r io.Reader, enc encoding.Encoding) io.Reader {
+	return NewReader(r, enc)
 }
