@@ -35,6 +35,7 @@ type testLogHandler struct {
 }
 
 func (tl testLogHandler) Log(r *log15.Record) error {
-	tl.Logf("%s", tl.fmt.Format(r))
+	s := string(tl.fmt.Format(r))
+	tl.T.Log(s[:len(s)-1]) // strip \n
 	return nil
 }
