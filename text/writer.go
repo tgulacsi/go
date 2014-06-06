@@ -23,14 +23,26 @@ import (
 	"code.google.com/p/go.text/transform"
 )
 
-// NewEncodingWriter returns a writer which encodes to the given encoding, utf8.
+// NewWriter returns a writer which encodes to the given encoding, utf8.
 //
 // If enc is nil, then only an utf8-enforcing replacement writer
 // (see http://godoc.org/code.google.com/p/go.text/encoding#pkg-variables)
 // is used.
-func NewEncodingWriter(w io.Writer, enc encoding.Encoding) io.WriteCloser {
+func NewWriter(w io.Writer, enc encoding.Encoding) io.WriteCloser {
 	if enc == nil || enc == encoding.Replacement {
 		return transform.NewWriter(w, encoding.Replacement.NewEncoder())
 	}
 	return transform.NewWriter(w, transform.Chain(enc.NewEncoder()))
+}
+
+// Encode encodes the bytes to utf8 (an allocating, convenience version of transform.Transform).
+func Encode(p []byte, enc encoding.Encoding) ([]byte, error) {
+	dst := make([]byte, 0, len(p))
+	nDst, _, err := enc.NewEncoder().Transform(dst, p, true)
+	return dst[:nDst], err
+}
+
+// NewEncodingWriter is deprecated, has been renamed to NewWriter.
+func NewEncodingWriter(w io.Writer, enc encoding.Encoding) io.WriteCloser {
+	return NewWriter(w, enc)
 }

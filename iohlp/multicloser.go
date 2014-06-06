@@ -37,8 +37,8 @@ func (mc *multiCloser) Append(c ...io.Closer) {
 }
 
 // Insert inserts new closers at the beginning (to be called first).
-func (mc multiCloser) Insert (c ...io.Closer) {
-	mc.closers = append(append(make([]io.Closer, 0, len(c) + len(mc.closers)), c...), mc.closers...)
+func (mc multiCloser) Insert(c ...io.Closer) {
+	mc.closers = append(append(make([]io.Closer, 0, len(c)+len(mc.closers)), c...), mc.closers...)
 }
 
 // Close which closes all contained Closers.
@@ -54,4 +54,3 @@ func (mc *multiCloser) Close() error {
 	mc.closers = mc.closers[:0]
 	return err
 }
-
