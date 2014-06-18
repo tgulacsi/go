@@ -21,15 +21,19 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-
-	"camlistore.org/pkg/types"
 )
 
-const maxInMemorySlurp = 4 << 20 // 4MB.  *shrug*
+var MaxInMemorySlurp = 4 << 20 // 4MB.  *shrug*.
+
+type ReadSeekCloser interface {
+	io.Reader
+	io.Seeker
+	io.Closer
+}
 
 // MakeReadSeekCloser makes an io.ReadSeeker + io.Closer by reading the whole reader
 // If the given Reader is a Closer, too, than that Close will be called
-func MakeReadSeekCloser(blobRef string, r io.Reader) (types.ReadSeekCloser, error) {
+func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 	if rc, ok := r.(io.Closer); ok {
 		defer rc.Close()
 	}
@@ -42,7 +46,7 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (types.ReadSeekCloser, erro
 }
 
 // memorySlurper slurps up a blob to memory (or spilling to disk if
-// over maxInMemorySlurp) and deletes the file on Close
+// over MaxInMemorySlurp) and deletes the file on Close
 type memorySlurper struct {
 	blobRef string // only used for tempfile's prefix
 	buf     *bytes.Buffer
@@ -97,7 +101,7 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 		return
 	}
 
-	if ms.buf.Len()+len(p) > maxInMemorySlurp {
+	if ms.buf.Len()+len(p) > MaxInMemorySlurp {
 		ms.file, err = ioutil.TempFile("", ms.blobRef)
 		if err != nil {
 			return
