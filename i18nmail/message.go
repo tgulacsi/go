@@ -112,6 +112,15 @@ func (h Header) AddressList(key string) ([]*Address, error) {
 	return ParseAddressList(hdr)
 }
 
+// Decode returns the named header field as an utf-8 string.
+func (h Header) Decode(key string) string {
+	hdr := h.Get(key)
+	if hdr == "" {
+		return ""
+	}
+	return HeadDecode(hdr)
+}
+
 // Address represents a single mail address.
 // An address such as "Barry Gibbs <bg@example.com>" is represented
 // as Address{Name: "Barry Gibbs", Address: "bg@example.com"}.
