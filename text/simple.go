@@ -72,6 +72,8 @@ func GetEncoding(name string) encoding.Encoding {
 		return nil
 	}
 	switch strings.Replace(name, "-", "", -1) {
+	case "utf8":
+		return encoding.Replacement
 	case "cp437":
 		return charmap.CodePage437
 	case "cp866":
