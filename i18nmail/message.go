@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/mahonia"
+	"github.com/tgulacsi/go/text"
 )
 
 var debug = debugT(false)
@@ -417,49 +417,97 @@ func (p *addrParser) len() int {
 	return len(*p)
 }
 
+type splitter struct {
+	state uint8
+}
+
+// =?iso-8859-2?Q?MEN-261_K=D6BE_k=E1r.pdf?=
+// 012222222222233444444444444444444444444560
+func (s *splitter) fieldsFunc(r rune) bool {
+	oldstate := s.state
+	switch s.state {
+	case 0:
+		if r == '=' {
+			s.state++
+		}
+	case 1:
+		if r == '?' {
+			s.state++
+		} else {
+			s.state = 0
+		}
+	case 2:
+		if r == '?' {
+			s.state++
+		}
+	case 3:
+		if r == '?' {
+			s.state++
+		}
+	case 4:
+		if r == '?' {
+			s.state++
+		}
+	case 5:
+		if r == '=' {
+			s.state = 0
+		}
+	}
+	debug.Printf("splitter(%s): %d=>%d", string([]rune{r}), oldstate, s.state)
+	if s.state == 0 && (r == ' ' || r == '\n' || r == '\r' || r == '\t' || r == '\v') {
+		return true
+	}
+	return false
+}
+
+// HeadDecode decodes mail header encoding (quopri or base64) such as
+// =?iso-8859-2?Q?MEN-261_K=D6BE_k=E1r.pdf?=
+func HeadDecode(head string) string {
+	if head == "" {
+		return ""
+	}
+
+	res := make([]string, 0, 4)
+	var err error
+	for _, word := range strings.FieldsFunc(head, new(splitter).fieldsFunc) {
+		if strings.HasPrefix(word, "=?") && strings.HasSuffix(word, "?=") {
+			if word, err = DecodeRFC2047Word(word); err != nil {
+				log.Println("HeadDecode", "word", word, "error", err)
+			}
+		}
+		res = append(res, word)
+	}
+	return strings.Join(res, "")
+}
+
 func DecodeRFC2047Word(s string) (string, error) {
 	fields := strings.Split(s, "?")
 	if len(fields) != 5 || fields[0] != "=" || fields[4] != "=" {
 		return "", errors.New("mail: address not RFC 2047 encoded")
 	}
-	var mdec mahonia.Decoder
-	charset, enc := strings.ToLower(fields[1]), strings.ToLower(fields[2])
-	if charset != "iso-8859-1" && charset != "utf-8" {
-		mdec = mahonia.NewDecoder(charset)
-		if mdec == nil {
-			return "", fmt.Errorf("mail: charset not supported: %q", charset)
-		}
+	charset, encMark := strings.ToLower(fields[1]), strings.ToLower(fields[2])
+	enc := text.GetEncoding(charset)
+	if enc == nil {
+		return "", fmt.Errorf("mail: charset not supported: %q", charset)
 	}
 
 	in := bytes.NewBufferString(fields[3])
 	var r io.Reader
-	switch enc {
+	switch encMark {
 	case "b":
 		r = base64.NewDecoder(base64.StdEncoding, in)
 	case "q":
 		r = qDecoder{r: in}
 	default:
-		return "", fmt.Errorf("mail: RFC 2047 encoding not supported: %q", enc)
+		return "", fmt.Errorf("mail: RFC 2047 encoding not supported: %q", encMark)
 	}
 
-	dec, err := ioutil.ReadAll(r)
+	dec, err := ioutil.ReadAll(text.NewReader(r, enc))
 	if err != nil {
 		return "", err
 	}
 
-	switch charset {
-	case "iso-8859-1":
-		b := new(bytes.Buffer)
-		for _, c := range dec {
-			b.WriteRune(rune(c))
-		}
-		return b.String(), nil
-	case "utf-8":
-		return string(dec), nil
-	default:
-		return mdec.ConvertString(string(dec)), nil
-	}
-	panic("unreachable")
+	return string(dec), err
 }
 
 type qDecoder struct {
