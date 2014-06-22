@@ -29,17 +29,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
-
 	"github.com/tgulacsi/go/temp"
+	"gopkg.in/inconshreveable/log15.v2"
 )
+
+// Log is discarded by default
+var Log = log15.New("lib", "httpreq")
+
+func init() {
+	Log.SetHandler(log15.DiscardHandler())
+}
 
 // ReadRequestOneFile reads the first file from the request (if multipart/),
 // or returns the body if not
 func ReadRequestOneFile(r *http.Request) (body io.ReadCloser, contentType string, status int, err error) {
 	body = r.Body
 	contentType = r.Header.Get("Content-Type")
-	glog.Infof("ct=%q", contentType)
+	Log.Debug("ReadRequestOneFile", "ct", contentType)
 	if !strings.HasPrefix(contentType, "multipart/") {
 		// not multipart-form
 		status = 200
@@ -93,7 +99,7 @@ func ReadRequestFiles(r *http.Request) (filenames []string, status int, err erro
 				status, err = 405, fmt.Errorf("error reading part %q: %s", fileHeader.Filename, err)
 				return
 			}
-			glog.V(1).Infof("part filename=%q", fileHeader.Filename)
+			Log.Debug("part", "filename", fileHeader.Filename)
 			if fn, err = temp.ReaderToFile(f, fileHeader.Filename, ""); err != nil {
 				f.Close()
 				status, err = 500, fmt.Errorf("error saving %q: %s", fileHeader.Filename, err)
@@ -124,7 +130,7 @@ func SendFile(w http.ResponseWriter, filename, contentType string) error {
 	}
 	size := fi.Size()
 	if _, err = fh.Seek(0, 0); err != nil {
-		err = fmt.Errorf("error seeking in %s: %s", fh, err)
+		err = fmt.Errorf("error seeking in %v: %s", fh, err)
 		http.Error(w, err.Error(), 500)
 		return err
 	}
@@ -133,11 +139,11 @@ func SendFile(w http.ResponseWriter, filename, contentType string) error {
 	}
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", size))
 	w.WriteHeader(200)
-	glog.Infof("sending file %q (%d) length with headers: %q", filename, size, w.Header())
+	Log.Info("SendFile", "filename", filename, "length", size, "header", w.Header())
 	fh.Seek(0, 0)
 	if _, err = io.CopyN(w, fh, size); err != nil {
 		err = fmt.Errorf("error sending file %q: %s", filename, err)
-		glog.Error(err)
+		Log.Error("SendFile", "filename", filename, "error", err)
 	}
 	return err
 }

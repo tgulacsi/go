@@ -25,8 +25,15 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/golang/glog"
+	"gopkg.in/inconshreveable/log15.v2"
 )
+
+// Log is discarded by default
+var Log = log15.New("lib", "httpreq")
+
+func init() {
+	Log.SetHandler(log15.DiscardHandler())
+}
 
 // ErrTimedOut is an error for child timeout
 var ErrTimedOut = errors.New("Child timed out.")
@@ -69,14 +76,14 @@ func RunWithTimeout(timeoutSeconds int, cmd *exec.Cmd) error {
 // KillWithChildren kills the process
 // and tries to kill its all children (process group)
 func KillWithChildren(p *os.Process) (err error) {
-	glog.V(1).Infof("killWithChildren(%s)", p)
+	Log.Debug("killWithChildren", "process", p)
 	if p == nil {
 		return
 	}
-	glog.Infof("killWithChildren p.Pid=%d", p.Pid)
+	Log.Info("killWithChildren", "pid", p.Pid)
 	defer func() {
 		if r := recover(); r != nil {
-			glog.Warningf("PANIC in kill %s: %s", p, r)
+			Log.Warn("PANIC in kill", "process", p, "error", r)
 		}
 	}()
 	defer p.Release()
@@ -91,7 +98,7 @@ func groupKill(p *os.Process) error {
 	if p == nil {
 		return nil
 	}
-	glog.Infof("groupKill p.Pid=%d", p.Pid)
+	Log.Info("groupKill", "pid", p.Pid)
 	defer recover()
 	defer p.Kill()
 	return GroupKill(p.Pid)
@@ -101,7 +108,7 @@ func simpleKill(p *os.Process) error {
 	if p == nil {
 		return nil
 	}
-	glog.Infof("killing %d", p.Pid)
+	Log.Info("killing", "pid", p.Pid)
 	defer recover()
 	return p.Kill()
 }
@@ -109,7 +116,7 @@ func simpleKill(p *os.Process) error {
 func newFamilyKiller(cmd *exec.Cmd) func() error {
 	return func() error {
 		if cmd != nil {
-			glog.Infof("killing timed out (%d) %s %s", cmd.Process.Pid, cmd.Path, cmd.Args)
+			Log.Info("killing timed out", "pid", cmd.Process.Pid, "path", cmd.Path, "args", cmd.Args)
 			if cmd.SysProcAttr != nil && isGroupLeader(cmd) {
 				return groupKill(cmd.Process)
 			}

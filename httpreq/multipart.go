@@ -17,11 +17,11 @@
 package httpreq
 
 import (
-	"mime/multipart"
-	"strings"
-	"io"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/textproto"
+	"strings"
 )
 
 // CreatFormFile is like multipart.Writer.CreateFormFile, but allows the setting of Content-Type.
@@ -42,4 +42,3 @@ var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
 func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
 }
-

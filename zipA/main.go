@@ -104,7 +104,7 @@ func main() {
 	}
 	exeStat, err := exe.Stat()
 	if err != nil {
-		log.Fatal("cannot stat %q: %v", exe.Name(), err)
+		log.Fatalf("cannot stat %q: %v", exe.Name(), err)
 	}
 	if err = os.Chmod(*flagOutput, exeStat.Mode()); err != nil {
 		log.Printf("error with chmod %q: %v", *flagOutput, err)

@@ -40,7 +40,7 @@ func AppendZip(zw ZipWriter, zr *zip.ReadCloser) error {
 		}
 		src, err := f.Open()
 		if err != nil {
-			return fmt.Errorf("error opening %s: %v", f.Name)
+			return fmt.Errorf("error opening %s: %v", f.Name, err)
 		}
 		// We always get "zip: checksum error", but the resulting file is OK.
 		if _, err = io.Copy(w, src); err != nil && !strings.HasSuffix(err.Error(), "checksum error") {

@@ -27,10 +27,16 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/golang/glog"
-
 	"github.com/tgulacsi/go/proc"
+	"gopkg.in/inconshreveable/log15.v2"
 )
+
+// Log is discarded by default
+var Log = log15.New("lib", "httpreq")
+
+func init() {
+	Log.SetHandler(log15.DiscardHandler())
+}
 
 // loffice executable name
 var Loffice = "loffice"
@@ -62,7 +68,7 @@ func Convert(srcFn, dstFn, format string) error {
 		"--convert-to", format, "--outdir", tempDir, srcFn)
 	c.Stderr = os.Stderr
 	c.Stdout = c.Stderr
-	glog.Infof("calling %q", c.Args)
+	Log.Info("calling", "args", c.Args)
 	if err = proc.RunWithTimeout(Timeout, c); err != nil {
 		return fmt.Errorf("error running %q: %s", c.Args, err)
 	}
@@ -97,7 +103,7 @@ func Convert(srcFn, dstFn, format string) error {
 		}
 	}
 	if _, err = io.Copy(dst, src); err != nil {
-		return fmt.Errorf("error copying from %s to %s: %s", src, dst, err)
+		return fmt.Errorf("error copying from %v to %v: %v", src, dst, err)
 	}
 	return nil
 }

@@ -40,7 +40,7 @@ func TestParseMediaRange(t *testing.T) {
 		}
 		if !(mr.typ == s.awaited.typ && mr.subtyp == s.awaited.subtyp &&
 			mr.q == s.awaited.q) {
-			t.Errorf("%d. awaited %q got %q", i, s.awaited, mr)
+			t.Errorf("%d. awaited %v got %v", i, s.awaited, mr)
 		}
 	}
 }
