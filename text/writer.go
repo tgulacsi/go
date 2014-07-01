@@ -18,6 +18,7 @@ package text
 
 import (
 	"io"
+	"bytes"
 
 	"code.google.com/p/go.text/encoding"
 	"code.google.com/p/go.text/transform"
@@ -35,11 +36,31 @@ func NewWriter(w io.Writer, enc encoding.Encoding) io.WriteCloser {
 	return transform.NewWriter(w, transform.Chain(enc.NewEncoder()))
 }
 
+var encBufs = make(chan bytes.Buffer, 4)
+
 // Encode encodes the bytes to utf8 (an allocating, convenience version of transform.Transform).
 func Encode(p []byte, enc encoding.Encoding) ([]byte, error) {
-	dst := make([]byte, 0, len(p))
-	nDst, _, err := enc.NewEncoder().Transform(dst, p, true)
-	return dst[:nDst], err
+	var dst bytes.Buffer
+	select {
+	case dst = <-encBufs: 
+	default:
+	}
+	w := NewWriter(&dst, enc)
+	_, err := w.Write(p)
+	if err != nil {
+		return nil, err
+	}
+	if err = w.Close(); err != nil {
+		return nil, err
+	}
+	res := make([]byte, dst.Len())
+	copy(res, dst.Bytes())
+	dst.Reset()
+	select {
+	case encBufs<-dst:
+	default:
+	}
+	return res, nil
 }
 
 // NewEncodingWriter is deprecated, has been renamed to NewWriter.

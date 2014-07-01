@@ -31,14 +31,22 @@ func TestEncodingWriter(t *testing.T) {
 		{"utf-8", "\xef\xbf\xbd\xef\xbf\xbdabraka dabra", "\ufffd\ufffdabraka dabra"},
 	} {
 		var res bytes.Buffer
-		if _, err := io.WriteString(
-			NewEncodingWriter(&res, GetEncoding(tup.charset)),
-			tup.decoded); err != nil {
+		enc := GetEncoding(tup.charset)
+		if _, err := io.WriteString( NewWriter(&res, enc), tup.decoded); err != nil {
 			t.Errorf("%d. error writing: %v", i, err)
 			continue
 		}
 		if res.String() != tup.encoded {
 			t.Errorf("%d. mismatch: got %q (% x) awaited %q", i, res.String(), res.Bytes(), tup.encoded)
+		}
+
+		got, err := Encode([]byte(tup.decoded), enc)
+		if err != nil {
+			t.Errorf("%d. error encoding: %v", i, err)
+			continue
+		}
+		if string(got) != tup.encoded {
+			t.Errorf("%d. mismatch: got %q (% x) awaited %q", i, got, got, tup.encoded)
 		}
 	}
 }
