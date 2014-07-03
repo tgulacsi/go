@@ -32,7 +32,7 @@ func TestEncodingWriter(t *testing.T) {
 	} {
 		var res bytes.Buffer
 		enc := GetEncoding(tup.charset)
-		if _, err := io.WriteString( NewWriter(&res, enc), tup.decoded); err != nil {
+		if _, err := io.WriteString(NewWriter(&res, enc), tup.decoded); err != nil {
 			t.Errorf("%d. error writing: %v", i, err)
 			continue
 		}
@@ -40,7 +40,7 @@ func TestEncodingWriter(t *testing.T) {
 			t.Errorf("%d. mismatch: got %q (% x) awaited %q", i, res.String(), res.Bytes(), tup.encoded)
 		}
 
-		got, err := Encode([]byte(tup.decoded), enc)
+		got, err := Encode(tup.decoded, enc)
 		if err != nil {
 			t.Errorf("%d. error encoding: %v", i, err)
 			continue

@@ -29,13 +29,21 @@ func TestDecodingReader(t *testing.T) {
 		{"iso8859-2", "\xe1rv\xedzt\xfbr\xf5 t\xfck\xf6rf\xfar\xf3g\xe9p", "árvíztűrő tükörfúrógép"},
 		{"utf-8", "\xf5\xf6abraka dabra", "\ufffd\ufffdabraka dabra"},
 	} {
-		res, err := ioutil.ReadAll(
-			NewDecodingReader(strings.NewReader(tup.encoded), GetEncoding(tup.charset)))
+		enc := GetEncoding(tup.charset)
+		res, err := ioutil.ReadAll(NewDecodingReader(strings.NewReader(tup.encoded), enc))
 		if err != nil {
 			t.Errorf("%d. error reading: %v", i, err)
 		}
 		if string(res) != tup.decoded {
 			t.Errorf("%d. mismatch: got %q (% x) awaited %q", i, res, res, tup.decoded)
+		}
+
+		got, err := Decode([]byte(tup.encoded), enc)
+		if err != nil {
+			t.Errorf("%d. error decoding: %v", i, err)
+		}
+		if got != tup.decoded {
+			t.Errorf("%d. mismatch: got %q awaited %q", i, res, tup.decoded)
 		}
 	}
 }

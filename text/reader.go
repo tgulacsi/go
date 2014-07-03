@@ -17,7 +17,9 @@ limitations under the License.
 package text
 
 import (
+	"bytes"
 	"io"
+	"io/ioutil"
 
 	"code.google.com/p/go.text/encoding"
 	"code.google.com/p/go.text/transform"
@@ -36,11 +38,11 @@ func NewReader(r io.Reader, enc encoding.Encoding) io.Reader {
 		transform.Chain(enc.NewDecoder(), encoding.Replacement.NewEncoder()))
 }
 
-// Decode decodes the bytes to utf8 (an allocating, convenience version of transform.Transform).
-func Decode(p []byte, enc encoding.Encoding) ([]byte, error) {
-	dst := make([]byte, 0, len(p))
-	nDst, _, err := enc.NewDecoder().Transform(dst, p, true)
-	return dst[:nDst], err
+// Decode decodes the bytes from enc to utf8 (an allocating, convenience version of transform.Transform).
+func Decode(p []byte, enc encoding.Encoding) (string, error) {
+	r := NewReader(bytes.NewReader(p), enc)
+	q, err := ioutil.ReadAll(r)
+	return string(q), err
 }
 
 // NewDecodingReader is a deprecated, it has been renamed to NewReader.

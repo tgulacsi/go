@@ -17,8 +17,8 @@ limitations under the License.
 package text
 
 import (
-	"io"
 	"bytes"
+	"io"
 
 	"code.google.com/p/go.text/encoding"
 	"code.google.com/p/go.text/transform"
@@ -38,15 +38,15 @@ func NewWriter(w io.Writer, enc encoding.Encoding) io.WriteCloser {
 
 var encBufs = make(chan bytes.Buffer, 4)
 
-// Encode encodes the bytes to utf8 (an allocating, convenience version of transform.Transform).
-func Encode(p []byte, enc encoding.Encoding) ([]byte, error) {
+// Encode encodes the bytes from utf8 to the given encoding (an allocating, convenience version of transform.Transform).
+func Encode(p string, enc encoding.Encoding) ([]byte, error) {
 	var dst bytes.Buffer
 	select {
-	case dst = <-encBufs: 
+	case dst = <-encBufs:
 	default:
 	}
 	w := NewWriter(&dst, enc)
-	_, err := w.Write(p)
+	_, err := io.WriteString(w, p)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func Encode(p []byte, enc encoding.Encoding) ([]byte, error) {
 	copy(res, dst.Bytes())
 	dst.Reset()
 	select {
-	case encBufs<-dst:
+	case encBufs <- dst:
 	default:
 	}
 	return res, nil
