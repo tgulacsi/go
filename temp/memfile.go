@@ -25,9 +25,14 @@ import (
 
 var MaxInMemorySlurp = 4 << 20 // 4MB.  *shrug*.
 
+type ReadAter interface {
+	ReadAt(p []byte, off int64) (n int, err error)
+}
+
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
+	ReadAter
 	io.Closer
 }
 
@@ -62,20 +67,33 @@ func NewMemorySlurper(blobRef string) *memorySlurper {
 	}
 }
 
-func (ms *memorySlurper) Read(p []byte) (n int, err error) {
-	if !ms.reading {
-		ms.reading = true
-		if ms.file != nil {
-			ms.file.Seek(0, 0)
-		} else {
-			ms.mem = bytes.NewReader(ms.buf.Bytes())
-			ms.buf = nil
-		}
+func (ms *memorySlurper) prepareRead() {
+	if ms.reading {
+		return
 	}
+	ms.reading = true
+	if ms.file != nil {
+		ms.file.Seek(0, 0)
+	} else {
+		ms.mem = bytes.NewReader(ms.buf.Bytes())
+		ms.buf = nil
+	}
+}
+
+func (ms *memorySlurper) Read(p []byte) (n int, err error) {
+	ms.prepareRead()
 	if ms.file != nil {
 		return ms.file.Read(p)
 	}
 	return ms.mem.Read(p)
+}
+
+func (ms *memorySlurper) ReadAt(p []byte, off int64) (n int, err error) {
+	ms.prepareRead()
+	if ms.file != nil {
+		return ms.file.ReadAt(p, off)
+	}
+	return ms.mem.ReadAt(p, off)
 }
 
 func (ms *memorySlurper) Seek(offset int64, whence int) (int64, error) {
