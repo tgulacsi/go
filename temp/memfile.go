@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"time"
 )
 
 var MaxInMemorySlurp = 4 << 20 // 4MB.  *shrug*.
@@ -29,11 +30,17 @@ type ReadAter interface {
 	ReadAt(p []byte, off int64) (n int, err error)
 }
 
+type Stater interface {
+	Stat() (os.FileInfo, error)
+}
+
+// ReadSeekCloser is an io.Reader + ReadAter + io.Seeker + io.Closer + Stater
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
 	ReadAter
 	io.Closer
+	Stat() (os.FileInfo, error)
 }
 
 // MakeReadSeekCloser makes an io.ReadSeeker + io.Closer by reading the whole reader
@@ -43,9 +50,18 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 		defer rc.Close()
 	}
 	ms := NewMemorySlurper(blobRef)
-	_, err := io.Copy(ms, r)
+	n, err := io.Copy(ms, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if fh, ok := r.(*os.File); ok {
+		ms.stat, err = fh.Stat()
+	}
+	if ms.file == nil {
+		if ms.stat == nil {
+			ms.stat = dummyFileInfo{name: "memory", size: n, mtime: time.Now()}
+		}
 	}
 	return ms, nil
 }
@@ -63,6 +79,7 @@ type memorySlurper struct {
 	mem     *bytes.Reader
 	file    *os.File // nil until allocated
 	reading bool     // transitions at most once from false -> true
+	stat    os.FileInfo
 }
 
 func NewMemorySlurper(blobRef string) *memorySlurper {
@@ -150,4 +167,35 @@ func (ms *memorySlurper) Cleanup() error {
 
 func (ms *memorySlurper) Close() error {
 	return ms.Cleanup()
+}
+
+func (ms *memorySlurper) Stat() (os.FileInfo, error) {
+	return ms.stat, nil
+}
+
+type dummyFileInfo struct {
+	name  string
+	size  int64
+	mode  os.FileMode
+	mtime time.Time
+	isDir bool
+}
+
+func (dfi dummyFileInfo) Name() string {
+	return dfi.name
+}
+func (dfi dummyFileInfo) Size() int64 {
+	return dfi.size
+}
+func (dfi dummyFileInfo) Mode() os.FileMode {
+	return dfi.mode
+}
+func (dfi dummyFileInfo) ModTime() time.Time {
+	return dfi.mtime
+}
+func (dfi dummyFileInfo) IsDir() bool {
+	return dfi.isDir
+}
+func (dfi dummyFileInfo) Sys() interface{} {
+	return nil
 }
