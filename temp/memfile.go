@@ -26,7 +26,7 @@ import (
 
 var MaxInMemorySlurp = 4 << 20 // 4MB.  *shrug*.
 
-type ReadAter interface {
+type ReaderAt interface {
 	ReadAt(p []byte, off int64) (n int, err error)
 }
 
@@ -34,11 +34,11 @@ type Stater interface {
 	Stat() (os.FileInfo, error)
 }
 
-// ReadSeekCloser is an io.Reader + ReadAter + io.Seeker + io.Closer + Stater
+// ReadSeekCloser is an io.Reader + ReaderAt + io.Seeker + io.Closer + Stater
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
-	ReadAter
+	ReaderAt
 	io.Closer
 	Stat() (os.FileInfo, error)
 }
@@ -58,12 +58,14 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 	if fh, ok := r.(*os.File); ok {
 		ms.stat, err = fh.Stat()
 	}
-	if ms.file == nil {
-		if ms.stat == nil {
+	if ms.stat == nil {
+		if ms.file == nil {
 			ms.stat = dummyFileInfo{name: "memory", size: n, mtime: time.Now()}
+		} else {
+			ms.stat, err = ms.file.Stat()
 		}
 	}
-	return ms, nil
+	return ms, err
 }
 
 // NewReadSeeker is a convenience function of MakeReadSeekCloser.
@@ -74,12 +76,13 @@ func NewReadSeeker(r io.Reader) (ReadSeekCloser, error) {
 // memorySlurper slurps up a blob to memory (or spilling to disk if
 // over MaxInMemorySlurp) and deletes the file on Close
 type memorySlurper struct {
-	blobRef string // only used for tempfile's prefix
-	buf     *bytes.Buffer
-	mem     *bytes.Reader
-	file    *os.File // nil until allocated
-	reading bool     // transitions at most once from false -> true
-	stat    os.FileInfo
+	maxInMemorySlurp int
+	blobRef          string // only used for tempfile's prefix
+	buf              *bytes.Buffer
+	mem              *bytes.Reader
+	file             *os.File // nil until allocated
+	reading          bool     // transitions at most once from false -> true
+	stat             os.FileInfo
 }
 
 func NewMemorySlurper(blobRef string) *memorySlurper {
@@ -132,6 +135,30 @@ func (ms *memorySlurper) Seek(offset int64, whence int) (int64, error) {
 	return ms.mem.Seek(offset, whence)
 }
 
+func (ms *memorySlurper) ReadFrom(r io.Reader) (n int64, err error) {
+	if ms.reading {
+		panic("write after read")
+	}
+	if ms.maxInMemorySlurp <= 0 {
+		ms.maxInMemorySlurp = MaxInMemorySlurp
+	}
+	var size int64
+	if fh, ok := r.(*os.File); ok {
+		ms.stat, err = fh.Stat()
+		size = ms.stat.Size()
+	}
+	if ms.file == nil && size > 0 && size < int64(ms.maxInMemorySlurp) {
+		return io.Copy(ms.buf, r)
+	}
+	if ms.file == nil {
+		ms.file, err = ioutil.TempFile("", ms.blobRef)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return io.Copy(ms.file, r)
+}
+
 func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 	if ms.reading {
 		panic("write after read")
@@ -141,7 +168,10 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 		return
 	}
 
-	if ms.buf.Len()+len(p) > MaxInMemorySlurp {
+	if ms.maxInMemorySlurp <= 0 {
+		ms.maxInMemorySlurp = MaxInMemorySlurp
+	}
+	if ms.buf.Len()+len(p) > ms.maxInMemorySlurp {
 		ms.file, err = ioutil.TempFile("", ms.blobRef)
 		if err != nil {
 			return
