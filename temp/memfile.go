@@ -50,6 +50,11 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 	return ms, nil
 }
 
+// NewReadSeeker is a convenience function of MakeReadSeekCloser.
+func NewReadSeeker(r io.Reader) (ReadSeekCloser, error) {
+	return MakeReadSeekCloser("", r)
+}
+
 // memorySlurper slurps up a blob to memory (or spilling to disk if
 // over MaxInMemorySlurp) and deletes the file on Close
 type memorySlurper struct {
