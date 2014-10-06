@@ -1,4 +1,5 @@
 /*
+Copyright 2014 Tamás Gulácsi.
 Copyright 2013 The Camlistore Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package cmdmain contains the shared implementation for camget,
+// Package cmdmain contains the shared implementation for command-line tools.
+// It is copied from Camlistore, where it is used for camget,
 // camput, camtool, and other Camlistore command-line tools.
 package cmdmain
 
@@ -94,7 +96,7 @@ type describer interface {
 	Describe() string
 }
 
-// RegisterCommand adds a mode to the list of modes for the main command.
+// RegisterCommand adds a mode to the list of modes for the Main command.
 // It is meant to be called in init() for each subcommand.
 func RegisterCommand(mode string, makeCmd func(Flags *flag.FlagSet) CommandRunner) {
 	if _, dup := modeCommand[mode]; dup {
@@ -194,9 +196,19 @@ func help(mode string) {
 // Main multiple times, but duplicate flag registration is fatal.
 var registerFlagOnce sync.Once
 
-// Main is meant to be the core of a command that has
-// subcommands (modes), such as camput or camtool.
+// Main is meant to be the core of a command that has subcommands (modes).
+// Chooses the matching subcommand, and runs it.
+// Call CheckCwd on start, and PreExit before exiting.
 func Main() {
+	MainDefault("")
+}
+
+// MainDefault is meant to be the core of a command that has subcommands (modes).
+// Chooses the matching subcommand, and runs it.
+// Call CheckCwd on start, and PreExit before exiting.
+//
+// defaultMode will be used if not arguments given on command line.
+func MainDefault(defaultMode string) {
 	registerFlagOnce.Do(ExtraFlagRegistration)
 	flag.CommandLine.SetOutput(Stderr)
 	flag.Parse()
@@ -210,7 +222,10 @@ func Main() {
 		return
 	}
 	if len(args) == 0 {
-		usage("No mode given.")
+		if defaultMode == "" {
+			usage("No mode given.")
+		}
+		args = append(args, defaultMode)
 	}
 
 	mode := args[0]
