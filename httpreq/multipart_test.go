@@ -18,8 +18,9 @@ package httpreq
 
 import (
 	"bytes"
+	"errors"
 	"io"
-	"text/multipart"
+	"mime/multipart"
 	"net/http"
 )
 
@@ -41,13 +42,13 @@ func ExampleCreateFormFile(url, name, contentType string, r io.Reader) error {
 	if err := mw.Close(); err != nil {
 		return err
 	}
-	req, err := http.NewRequest("POST", url, buf)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(buf.Bytes()))
 	if err != nil {
 		return err
 	}
 	// this is essential: this dresses up our request properly as multipart/form-data
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	resp, err := http.Client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
