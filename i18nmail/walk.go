@@ -27,6 +27,7 @@ import (
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
+// TodoFunc is the type of the function called by Walk and WalkMultipart.
 type TodoFunc func(mp MailPart) error
 
 var (
@@ -77,8 +78,11 @@ type MailPart struct {
 
 // String returns some string representation of the part.
 func (mp MailPart) String() string {
-	return fmt.Sprintf("%d:::{%s %s %s}", mp.Parent.Seq, mp.ContentType,
-		mp.MediaType, mp.Header)
+	pseq := -1
+	if mp.Parent != nil {
+		pseq = mp.Parent.Seq
+	}
+	return fmt.Sprintf("%d:::{%s %s %s}", pseq, mp.ContentType, mp.MediaType, mp.Header)
 }
 
 // Spawn returns a descendant of the MailPart (Level+1, Parent=*mp, next sequence).
