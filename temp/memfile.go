@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -87,7 +88,7 @@ type memorySlurper struct {
 
 func NewMemorySlurper(blobRef string) *memorySlurper {
 	return &memorySlurper{
-		blobRef: blobRef,
+		blobRef: filepath.Base(blobRef),
 		buf:     new(bytes.Buffer),
 	}
 }
