@@ -15,21 +15,27 @@ limitations under the License.
 */
 
 // Package loghlp collects some small log15 handlers
-package loghlp
+package tsthlp
 
 import (
-	"flag"
-	"os"
+	"testing"
 
-	"github.com/tgulacsi/go/loghlp/gloghlp"
-	"github.com/tgulacsi/go/loghlp/tsthlp"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
-func init() {
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+// TestHandler returns a log15.Handler which logs using testing.T.Logf,
+// thus pringing only if the tests are colled with -v.
+func TestHandler(t *testing.T) log15.Handler {
+	return testLogHandler{t, log15.LogfmtFormat()}
 }
 
-var (
-	TestHandler = tsthlp.TestHandler
-	GLogHandler = gloghlp.GLogHandler
-)
+type testLogHandler struct {
+	*testing.T
+	fmt log15.Format
+}
+
+func (tl testLogHandler) Log(r *log15.Record) error {
+	b := tl.fmt.Format(r)
+	tl.T.Log(string(b[:len(b)-1])) // strip \n
+	return nil
+}
