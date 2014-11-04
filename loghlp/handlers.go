@@ -20,8 +20,36 @@ package loghlp
 import (
 	"testing"
 
+	"github.com/golang/glog"
 	"gopkg.in/inconshreveable/log15.v2"
 )
+
+// GLogHandler returns a log15.Handler which logs using glog.
+func GLogHandler() log15.Handler {
+	return glogHandler{log15.LogfmtFormat()}
+}
+
+type glogHandler struct {
+	fmt log15.Format
+}
+
+func (gl glogHandler) Log(r *log15.Record) error {
+	b := gl.fmt.Format(r)
+	s := string(b[:len(b)-1]) // strip \n
+	switch r.Lvl {
+	case log15.LvlCrit:
+		glog.Fatal(s)
+	case log15.LvlError:
+		glog.Error(s)
+	case log15.LvlWarn:
+		glog.Warning(s)
+	case log15.LvlInfo:
+		glog.Info(s)
+	default:
+		glog.V(1).Info(s)
+	}
+	return nil
+}
 
 // TestHandler returns a log15.Handler which logs using testing.T.Logf,
 // thus pringing only if the tests are colled with -v.
@@ -35,7 +63,7 @@ type testLogHandler struct {
 }
 
 func (tl testLogHandler) Log(r *log15.Record) error {
-	s := string(tl.fmt.Format(r))
-	tl.T.Log(s[:len(s)-1]) // strip \n
+	b := tl.fmt.Format(r)
+	tl.T.Log(string(b[:len(b)-1])) // strip \n
 	return nil
 }
