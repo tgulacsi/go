@@ -25,11 +25,17 @@ import (
 	"github.com/tgulacsi/go/loghlp/tsthlp"
 )
 
-func init() {
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-}
-
 var (
+	fsOrig = flag.CommandLine
+
 	TestHandler = tsthlp.TestHandler
 	GLogHandler = gloghlp.GLogHandler
 )
+
+func MaskFlags() {
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+}
+
+func UnmaskFlags() {
+	flag.CommandLine = fsOrig
+}

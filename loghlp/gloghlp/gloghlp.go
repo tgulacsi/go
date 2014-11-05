@@ -48,4 +48,3 @@ func (gl glogHandler) Log(r *log15.Record) error {
 	}
 	return nil
 }
-

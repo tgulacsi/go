@@ -17,8 +17,8 @@ import (
 	"net/mail"
 	"net/textproto"
 	"net/url"
-	"strings"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/juju/errgo"
