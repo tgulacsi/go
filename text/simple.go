@@ -20,8 +20,8 @@ import (
 	"strconv"
 	"strings"
 
-	"code.google.com/p/go.text/encoding"
-	"code.google.com/p/go.text/encoding/charmap"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 )
 
 // GetEncoding returns the encoding.Encoding for the text name of the encoding

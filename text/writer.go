@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"io"
 
-	"code.google.com/p/go.text/encoding"
-	"code.google.com/p/go.text/transform"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/transform"
 )
 
 // NewWriter returns a writer which encodes to the given encoding, utf8.

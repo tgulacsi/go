@@ -20,8 +20,8 @@ import (
 	"os"
 	"strings"
 
-	"code.google.com/p/go.text/encoding"
 	"github.com/tgulacsi/go/text"
+	"golang.org/x/text/encoding"
 )
 
 // GetTTYEncoding returns the TTY encoding

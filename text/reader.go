@@ -21,8 +21,8 @@ import (
 	"io"
 	"io/ioutil"
 
-	"code.google.com/p/go.text/encoding"
-	"code.google.com/p/go.text/transform"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/transform"
 )
 
 // NewReader returns a reader which decode from the given encoding, to utf8.
