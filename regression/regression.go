@@ -17,6 +17,7 @@
 package regression
 
 import (
+	"container/heap"
 	"sort"
 )
 
@@ -50,9 +51,11 @@ type line struct {
 
 type lines []line
 
-func (ln lines) Len() int           { return len(ln) }
-func (ln lines) Less(i, j int) bool { return ln[i].a < ln[j].a }
-func (ln lines) Swap(i, j int)      { ln[i], ln[j] = ln[j], ln[i] }
+func (ln lines) Len() int            { return len(ln) }
+func (ln lines) Less(i, j int) bool  { return ln[i].a < ln[j].a }
+func (ln lines) Swap(i, j int)       { ln[i], ln[j] = ln[j], ln[i] }
+func (ln *lines) Pop() interface{}   { x := (*ln)[0]; *ln = (*ln)[1:]; return x }
+func (ln *lines) Push(x interface{}) { *ln = append(*ln, x.(line)) }
 
 // Median returns the median from all the lines - based on the slope.
 // This sorts the underlying slice.
@@ -60,13 +63,23 @@ func (ln lines) Median() line {
 	if len(ln) == 0 {
 		return line{}
 	}
-	sort.Sort(ln)
-	return ln[len(ln)/2]
+	h := &ln
+	heap.Init(h)
+	for i := 0; i < len(ln)/2; i++ {
+		heap.Pop(h)
+	}
+	return heap.Pop(h).(line)
 }
 
+type floats []float64
+
+func (fh floats) Len() int            { return len(fh) }
+func (fh floats) Less(i, j int) bool  { return fh[i] < fh[j] }
+func (fh floats) Swap(i, j int)       { fh[i], fh[j] = fh[j], fh[i] }
+func (fh *floats) Pop() interface{}   { x := (*fh)[0]; *fh = (*fh)[1:]; return x }
+func (fh *floats) Push(x interface{}) { *fh = append(*fh, x.(float64)) }
+
 // Median returns the median value of the data.
-// If it is already sorted, then it will not sort again.
-// If it is not sorted, then the slice is copied first, to not influence the original.
 func Median(x []float64) float64 {
 	if len(x) == 0 {
 		return 0
@@ -74,8 +87,13 @@ func Median(x []float64) float64 {
 	if sort.Float64sAreSorted(x) {
 		return x[len(x)/2]
 	}
-	x2 := make([]float64, len(x))
-	copy(x2, x)
-	sort.Float64s(x2)
-	return x2[len(x2)/2]
+	h := new(floats)
+	heap.Init(h)
+	for _, f := range x {
+		heap.Push(h, f)
+	}
+	for i := 0; i < len(x)/2; i++ {
+		heap.Pop(h)
+	}
+	return heap.Pop(h).(float64)
 }
