@@ -86,6 +86,16 @@ type memorySlurper struct {
 	stat             os.FileInfo
 }
 
+// ReadWriteSeekCloser is an io.Writer + io.Reader + io.Seeker + io.Closer.
+type ReadWriteSeekCloser interface {
+	ReadSeekCloser
+	io.Writer
+}
+
+// NewMemorySlurper returns an *memorySlurper, which implements an,
+// ReadWriteSeekCloser, with some important constraints:
+// you can Write into it, but whenever you call Read or Seek on it,
+// Write is forbidden, will return an error.
 func NewMemorySlurper(blobRef string) *memorySlurper {
 	return &memorySlurper{
 		blobRef: filepath.Base(blobRef),
