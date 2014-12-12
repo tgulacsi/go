@@ -21,9 +21,9 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/juju/errgo"
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/temp"
+	"gopkg.in/errgo.v1"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
