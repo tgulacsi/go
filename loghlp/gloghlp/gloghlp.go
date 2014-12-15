@@ -22,6 +22,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/golang/glog"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -32,7 +33,14 @@ func GLogHandler() log15.Handler {
 	return glogHandler{GLogfmtFormat()}
 }
 
+var buffers = new(sync.Pool)
+
 func GLogfmtFormat() log15.Format {
+	if buffers.New == nil {
+		buffers.New = func() interface{} {
+			return bytes.NewBuffer(make([]byte, 128))
+		}
+	}
 	return log15.FormatFunc(func(r *log15.Record) []byte {
 		_, file, line, ok := runtime.Caller(7) // It's always the same number of frames to the user's call.
 		if !ok {
@@ -47,17 +55,21 @@ func GLogfmtFormat() log15.Format {
 		if line < 0 {
 			line = 0 // not a real line number, but acceptable to someDigits
 		}
-		var buf bytes.Buffer
-		_, _ = fmt.Fprintf(&buf, "[%s:%d] %s", file, line, r.Msg)
+		buf := buffers.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer func() {
+			buffers.Put(buf)
+		}()
+		_, _ = fmt.Fprintf(buf, "[%s:%d] %s", file, line, r.Msg)
 		if len(r.Ctx) == 0 {
 			return buf.Bytes()
 		}
-		_, _ = io.WriteString(&buf, "; ")
+		_, _ = io.WriteString(buf, "; ")
 		for i := 0; i < len(r.Ctx)-1; i++ {
 			if i > 0 {
 				_ = buf.WriteByte(' ')
 			}
-			fmt.Fprintf(&buf, "%s=%q", r.Ctx[i], r.Ctx[i+1])
+			fmt.Fprintf(buf, "%s=%q", r.Ctx[i], r.Ctx[i+1])
 		}
 		return buf.Bytes()
 	})
