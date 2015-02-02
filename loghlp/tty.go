@@ -18,19 +18,25 @@ package loghlp
 
 import (
 	"os"
-	"strings"
 
+	"github.com/tgulacsi/go/term"
 	"github.com/tgulacsi/go/text"
 	"golang.org/x/text/encoding"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
-// GetTTYEncoding returns the TTY encoding
-func GetTTYEncoding() encoding.Encoding {
-	lang := os.Getenv("LANG")
-	if lang != "" {
-		if i := strings.IndexByte(lang, '.'); i >= 0 {
-			return text.GetEncoding(lang[i+1:])
+// UseEncoding will use the given encoding for log15.StderrHandler.
+// If enc is nil, GetRawTTYEncoding is used.
+// If that returns nil, too, then nothing happens.
+func UseEncoding(enc encoding.Encoding) {
+	if enc == nil {
+		if enc = term.GetRawTTYEncoding(); enc == nil {
+			return
 		}
 	}
-	return text.GetEncoding("UTF-8")
+	logfmt := log15.LogfmtFormat()
+	if term.IsTTY {
+		logfmt = log15.TerminalFormat()
+	}
+	log15.StderrHandler = log15.StreamHandler(text.NewWriter(os.Stderr, enc), logfmt)
 }
