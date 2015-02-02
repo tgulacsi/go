@@ -17,26 +17,20 @@ limitations under the License.
 package loghlp
 
 import (
-	"os"
+	"io"
 
 	"github.com/tgulacsi/go/term"
-	"github.com/tgulacsi/go/text"
-	"golang.org/x/text/encoding"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
-// UseEncoding will use the given encoding for log15.StderrHandler.
-// If enc is nil, GetRawTTYEncoding is used.
-// If that returns nil, too, then nothing happens.
-func UseEncoding(enc encoding.Encoding) {
-	if enc == nil {
-		if enc = term.GetRawTTYEncoding(); enc == nil {
-			return
-		}
+// UseWriter will use the given writer for log15.StderrHandler.
+func UseWriter(w io.Writer) {
+	if w == nil {
+		return
 	}
 	logfmt := log15.LogfmtFormat()
 	if term.IsTTY {
 		logfmt = log15.TerminalFormat()
 	}
-	log15.StderrHandler = log15.StreamHandler(text.NewWriter(os.Stderr, enc), logfmt)
+	log15.StderrHandler = log15.StreamHandler(w, logfmt)
 }

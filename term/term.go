@@ -72,16 +72,6 @@ func MaskStdoutErr(enc encoding.Encoding) error {
 	return err
 }
 
-// MaskInStreams masks the given streams for Reads.
-func MaskInStreams(in ...*os.File) ([]*os.File, error) {
-	return in, nil
-}
-
-// MaskOutStreams masks the given streams for Writes
-func MaskOutStreams(out ...*os.File) ([]*os.File, error) {
-	return out, nil
-}
-
 // MaskIn masks the input stream for Reads.
 func MaskIn(in *os.File, enc encoding.Encoding) (*os.File, error) {
 	pr, pw, err := os.Pipe()
