@@ -17,6 +17,7 @@ limitations under the License.
 package proc
 
 import (
+	"os"
 	"os/exec"
 	"strconv"
 	"syscall"
@@ -35,11 +36,17 @@ func isGroupLeader(c *exec.Cmd) bool {
 }
 
 // Pkill kills the process with the given pid
-func Pkill(pid int) error {
-	return exec.Command("taskkill", "/f", "/pid", strconv.Itoa(pid)).Run()
+func Pkill(pid int, signal os.Signal) error {
+	if signal == os.Kill {
+		return exec.Command("taskkill", "/f", "/pid", strconv.Itoa(pid)).Run()
+	}
+	return exec.Command("taskkill", "/pid", strconv.Itoa(pid)).Run()
 }
 
 // GroupKill kills the process group lead by the given pid
-func GroupKill(pid int) error {
+func GroupKill(pid int, signal os.Signal) error {
+	if signal == os.Kill {
+		return exec.Command("taskkill", "/t", strconv.Itoa(pid)).Run()
+	}
 	return exec.Command("taskkill", "/f", "/t", strconv.Itoa(pid)).Run()
 }

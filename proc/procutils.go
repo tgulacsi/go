@@ -38,6 +38,9 @@ func init() {
 // ErrTimedOut is an error for child timeout
 var ErrTimedOut = errors.New("Child timed out.")
 
+// IntTimeout is the duration to wait before Kill after Int
+var IntTimeout = 3 * time.Second
+
 // WithTimeout starts todo function, executes onTimeout if the todo function
 // does not return before timeoutSeconds elapses, and returns todo's returned
 // error or ErrTimedOut
@@ -70,17 +73,39 @@ func RunWithTimeout(timeoutSeconds int, cmd *exec.Cmd) error {
 	if cmd.SysProcAttr == nil {
 		procAttrSetGroup(cmd)
 	}
-	return WithTimeout(timeoutSeconds, cmd.Run, newFamilyKiller(cmd))
+	gcmd := &gCmd{Cmd: cmd}
+	if err := gcmd.Start(); err != nil {
+		return err
+	}
+	if timeoutSeconds <= 0 {
+		return <-gcmd.done
+	}
+
+	select {
+	case err := <-gcmd.done:
+		return err
+	case <-time.After(time.Second * time.Duration(timeoutSeconds)):
+		Log.Info("killing timed out", "pid", cmd.Process.Pid, "path", cmd.Path, "args", cmd.Args)
+		if killErr := familyKill(gcmd.Cmd, true); killErr != nil {
+			Log.Warn("interrupt", "pid", cmd.Process.Pid)
+		}
+		select {
+		case <-gcmd.done:
+		case <-time.After(IntTimeout):
+			familyKill(gcmd.Cmd, false)
+		}
+	}
+	return ErrTimedOut
 }
 
 // KillWithChildren kills the process
 // and tries to kill its all children (process group)
-func KillWithChildren(p *os.Process) (err error) {
+func KillWithChildren(p *os.Process, interrupt bool) (err error) {
 	Log.Debug("killWithChildren", "process", p)
 	if p == nil {
 		return
 	}
-	Log.Info("killWithChildren", "pid", p.Pid)
+	Log.Info("killWithChildren", "pid", p.Pid, "interrupt", interrupt)
 	defer func() {
 		if r := recover(); r != nil {
 			Log.Warn("PANIC in kill", "process", p, "error", r)
@@ -90,18 +115,26 @@ func KillWithChildren(p *os.Process) (err error) {
 	if p.Pid == 0 {
 		return nil
 	}
+	if interrupt {
+		defer p.Signal(os.Interrupt)
+		return Pkill(p.Pid, os.Interrupt)
+	}
 	defer p.Kill()
-	return Pkill(p.Pid)
+	return Pkill(p.Pid, os.Kill)
 }
 
-func groupKill(p *os.Process) error {
+func groupKill(p *os.Process, interrupt bool) error {
 	if p == nil {
 		return nil
 	}
 	Log.Info("groupKill", "pid", p.Pid)
 	defer recover()
+	if interrupt {
+		defer p.Signal(os.Interrupt)
+		return GroupKill(p.Pid, os.Interrupt)
+	}
 	defer p.Kill()
-	return GroupKill(p.Pid)
+	return GroupKill(p.Pid, os.Kill)
 }
 
 func simpleKill(p *os.Process) error {
@@ -113,15 +146,32 @@ func simpleKill(p *os.Process) error {
 	return p.Kill()
 }
 
-func newFamilyKiller(cmd *exec.Cmd) func() error {
+func newFamilyKiller(cmd *exec.Cmd, interrupt bool) func() error {
 	return func() error {
-		if cmd != nil {
-			Log.Info("killing timed out", "pid", cmd.Process.Pid, "path", cmd.Path, "args", cmd.Args)
-			if cmd.SysProcAttr != nil && isGroupLeader(cmd) {
-				return groupKill(cmd.Process)
-			}
-			return KillWithChildren(cmd.Process)
+		if cmd == nil {
+			return nil
 		}
-		return nil
+		return familyKill(cmd, interrupt)
 	}
+}
+
+func familyKill(cmd *exec.Cmd, interrupt bool) error {
+	if cmd.SysProcAttr != nil && isGroupLeader(cmd) {
+		return groupKill(cmd.Process, interrupt)
+	}
+	return KillWithChildren(cmd.Process, interrupt)
+}
+
+type gCmd struct {
+	*exec.Cmd
+	done chan error
+}
+
+func (c *gCmd) Start() error {
+	if err := c.Cmd.Start(); err != nil {
+		return err
+	}
+	c.done = make(chan error, 1)
+	go func() { c.done <- c.Cmd.Wait() }()
+	return nil
 }
