@@ -26,7 +26,7 @@ import (
 // TestHandler returns a log15.Handler which logs using testing.T.Logf,
 // thus pringing only if the tests are colled with -v.
 func TestHandler(t *testing.T) log15.Handler {
-	return testLogHandler{t, log15.LogfmtFormat()}
+	return log15.CallerFileHandler(testLogHandler{t, log15.LogfmtFormat()})
 }
 
 type testLogHandler struct {
