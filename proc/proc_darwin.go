@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Tamás Gulácsi
+Copyright 2015 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 
 func procAttrSetGroup(c *exec.Cmd) {
 	c.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid:   true, // to be able to kill all children, too
-		Pdeathsig: syscall.SIGKILL,
+		Setpgid: true, // to be able to kill all children, too
 	}
 }
