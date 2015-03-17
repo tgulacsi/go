@@ -46,7 +46,7 @@ func Pkill(pid int, signal os.Signal) error {
 // GroupKill kills the process group lead by the given pid
 func GroupKill(pid int, signal os.Signal) error {
 	if signal == os.Kill {
-		return exec.Command("taskkill", "/t", strconv.Itoa(pid)).Run()
+		return exec.Command("taskkill", "/f", "/t", "/pid", strconv.Itoa(pid)).Run()
 	}
-	return exec.Command("taskkill", "/f", "/t", strconv.Itoa(pid)).Run()
+	return exec.Command("taskkill", "/t", "/pid", strconv.Itoa(pid)).Run()
 }
