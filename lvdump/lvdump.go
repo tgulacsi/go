@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package main of lvdump is for dumping the records from a
+// Package lvdump is for dumping the records from a
 // LevelDB database, format is http://cr.yp.to/cdb/cdbmake.html
-package main
+package lvdump
 
 import (
 	"bufio"
