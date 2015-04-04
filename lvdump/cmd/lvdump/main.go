@@ -7,12 +7,9 @@
 package main
 
 import (
-	"bufio"
 	"flag"
-	"fmt"
 	"os"
 
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/tgulacsi/go/loghlp"
 	"github.com/tgulacsi/go/lvdump"
 	"github.com/tgulacsi/go/term"
