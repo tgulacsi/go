@@ -8,32 +8,17 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"os"
 
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/tgulacsi/go/loghlp"
-	"github.com/tgulacsi/go/term"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var Log = log15.New()
+var Log = log15.New("lib", "lvdump")
 
-func main() {
-	Log.SetHandler(log15.StderrHandler)
-	stderr, err := term.MaskOut(os.Stderr, term.GetTTYEncoding())
-	if err != nil {
-		Log.Crit("mask stderr", "encoding", term.GetTTYEncoding(), "error", err)
-		os.Exit(1)
-	}
-	loghlp.UseWriter(stderr)
-	Log.SetHandler(log15.StderrHandler)
-
-	flag.Parse()
-	if err := Dump(flag.Arg(0)); err != nil {
-		Log.Error("Dump", "src", flag.Arg(0), "error")
-	}
+func init() {
+	Log.SetHandler(log15.DiscardHandler())
 }
 
 // Dump records.
