@@ -1,5 +1,6 @@
+// build: windows,!linux,!posix
 /*
-Copyright 2014 Tamás Gulácsi
+Copyright 2015 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,4 +17,23 @@ limitations under the License.
 
 package iohlp
 
-const MaxInt = int64(int(^uint(0) >> 1))
+import (
+	"io/ioutil"
+	"os"
+)
+
+// MmapFile returns the mmap of the given path.
+func MmapFile(fn string) ([]byte, error) {
+	f, err := os.Open(fn)
+	if err != nil {
+		return nil, err
+	}
+	p, err := Mmap(f)
+	f.Close()
+	return p, err
+}
+
+// Mmap returns a mmap of the given file - just a copy of it.
+func Mmap(f *os.File) ([]byte, error) {
+	return ioutil.ReadAll(f)
+}
