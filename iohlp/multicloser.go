@@ -27,7 +27,7 @@ type multiCloser struct {
 
 // NewMultiCloser returns an io.Closer which will close all contained io.Closer,
 // in the given order.
-func NewMultiCloser(c ...io.Closer) io.Closer {
+func NewMultiCloser(c ...io.Closer) *multiCloser {
 	return &multiCloser{c}
 }
 
