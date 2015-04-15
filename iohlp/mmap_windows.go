@@ -22,18 +22,8 @@ import (
 	"os"
 )
 
-// MmapFile returns the mmap of the given path.
-func MmapFile(fn string) ([]byte, error) {
-	f, err := os.Open(fn)
-	if err != nil {
-		return nil, err
-	}
-	p, err := Mmap(f)
-	f.Close()
-	return p, err
-}
-
 // Mmap returns a mmap of the given file - just a copy of it.
-func Mmap(f *os.File) ([]byte, error) {
-	return ioutil.ReadAll(f)
+func Mmap(f *os.File) ([]byte, io.Closer, error) {
+	p, err := ioutil.ReadAll(f)
+	return p, ioutil.NopCloser(nil), err
 }
