@@ -78,8 +78,8 @@ func MaskIn(in *os.File, enc encoding.Encoding) (*os.File, error) {
 	if err != nil {
 		return in, err
 	}
+	// in -> pw -> pr
 	go func() {
-		defer pw.Close()
 		defer in.Close()
 		io.Copy(pw, text.NewReader(in, enc))
 
@@ -93,9 +93,9 @@ func MaskOut(out *os.File, enc encoding.Encoding) (*os.File, error) {
 	if err != nil {
 		return out, err
 	}
+	// pw -> pr -> out
 	go func() {
 		defer out.Close()
-		defer pr.Close()
 		io.Copy(text.NewWriter(out, enc), pr)
 	}()
 	return pw, nil
