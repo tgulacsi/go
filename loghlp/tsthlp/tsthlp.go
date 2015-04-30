@@ -18,15 +18,28 @@ limitations under the License.
 package tsthlp
 
 import (
+	"fmt"
 	"testing"
 
 	"gopkg.in/inconshreveable/log15.v2"
+	"gopkg.in/inconshreveable/log15.v2/stack"
 )
 
 // TestHandler returns a log15.Handler which logs using testing.T.Logf,
 // thus pringing only if the tests are colled with -v.
 func TestHandler(t *testing.T) log15.Handler {
-	return log15.CallerFileHandler(testLogHandler{t, log15.LogfmtFormat()})
+	return CallerFileHandler(0, log15.LazyHandler(testLogHandler{t, log15.LogfmtFormat()}))
+}
+
+// CallerFileHandler returns a Handler that adds the line number and file of
+// the calling function to the context with key "caller".
+// The callOff parameter defines which caller will be printed.
+func CallerFileHandler(callOff int, h log15.Handler) log15.Handler {
+	return log15.FuncHandler(func(r *log15.Record) error {
+		call := stack.Call(r.CallPC[callOff])
+		r.Ctx = append(r.Ctx, "caller", fmt.Sprint(call))
+		return h.Log(r)
+	})
 }
 
 type testLogHandler struct {
