@@ -18,7 +18,9 @@ package promhlp
 
 import "strings"
 
-// ClearName replaces non-allowed characters.
+// ClearName replaces non-allowed characters for Prometheus metrics.
+//
+// For metrics, colon is allowed, for tags, is is not.
 func ClearName(txt string, allowColon bool, replaceRune rune) string {
 	if replaceRune == 0 {
 		replaceRune = -1
