@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tgulacsi/go/iohlp"
 	"github.com/tgulacsi/go/text"
 	"golang.org/x/text/encoding"
 	"gopkg.in/inconshreveable/log15.v2/term"
@@ -50,6 +51,8 @@ func GetRawTTYEncoding() encoding.Encoding {
 }
 
 // MaskInOutTTY mask os.Stdin, os.Stdout, os.Stderr with the TTY encoding, if any.
+//
+// WARNING! This uses os pipes, so kernel buffering may cut the tail!
 func MaskInOutTTY() error {
 	enc := GetRawTTYEncoding()
 	if enc == nil {
@@ -63,6 +66,8 @@ func MaskInOutTTY() error {
 }
 
 // MaskStdoutErr masks os.Stdout and os.Stderr.
+//
+// WARNING! This uses os pipes, so kernel buffering may cut the tail!
 func MaskStdoutErr(enc encoding.Encoding) error {
 	var err error
 	if os.Stdout, err = MaskOut(os.Stdout, enc); err != nil {
@@ -78,6 +83,8 @@ func MaskIn(in *os.File, enc encoding.Encoding) (*os.File, error) {
 	if err != nil {
 		return in, err
 	}
+	iohlp.SetDirect(pr)
+	iohlp.SetDirect(pw)
 	// in -> pw -> pr
 	go func() {
 		defer in.Close()
@@ -88,11 +95,15 @@ func MaskIn(in *os.File, enc encoding.Encoding) (*os.File, error) {
 }
 
 // MaskOut masks the output stream forWrites.
+//
+// WARNING! This uses os pipes, so kernel buffering may cut the tail!
 func MaskOut(out *os.File, enc encoding.Encoding) (*os.File, error) {
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return out, err
 	}
+	iohlp.SetDirect(pr)
+	iohlp.SetDirect(pw)
 	// pw -> pr -> out
 	go func() {
 		defer out.Close()
