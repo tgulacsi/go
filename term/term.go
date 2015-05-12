@@ -40,14 +40,20 @@ func GetTTYEncoding() encoding.Encoding {
 
 // GetRawTTYEncoding returns the TTY encoding, or nil if not found.
 func GetRawTTYEncoding() encoding.Encoding {
-	lang := os.Getenv("LANG")
+	lang := GetTTYEncodingName()
 	if lang == "" {
 		return nil
 	}
+	return text.GetEncoding(lang)
+}
+
+// GetTTYEncodingName returns the TTY encoding's name, or empty if not found.
+func GetTTYEncodingName() string {
+	lang := os.Getenv("LANG")
 	if i := strings.IndexByte(lang, '.'); i >= 0 {
-		return text.GetEncoding(lang[i+1:])
+		return lang[i+1:]
 	}
-	return nil
+	return ""
 }
 
 // MaskInOutTTY mask os.Stdin, os.Stdout, os.Stderr with the TTY encoding, if any.
