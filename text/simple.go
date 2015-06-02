@@ -19,9 +19,11 @@ package text
 import (
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/transform"
 )
 
 // GetEncoding returns the encoding.Encoding for the text name of the encoding
@@ -44,6 +46,8 @@ func GetEncoding(name string) encoding.Encoding {
 			return nil
 		}
 		switch i {
+		case 1:
+			return ISO8859_1
 		case 2:
 			return charmap.ISO8859_2
 		case 3:
@@ -108,4 +112,53 @@ func GetEncoding(name string) encoding.Encoding {
 		return charmap.Windows874
 	}
 	return nil
+}
+
+var ISO8859_1 encoding.Encoding = cmap("ISO8859-1")
+
+type cmap string
+
+func (m cmap) NewDecoder() transform.Transformer {
+	return fromISO8859_1{}
+}
+
+func (m cmap) NewEncoder() transform.Transformer {
+	return toISO8859_1{}
+}
+
+type fromISO8859_1 struct {
+	transform.NopResetter
+}
+type toISO8859_1 struct {
+	transform.NopResetter
+}
+
+func (m fromISO8859_1) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	var b [4]byte
+	for i, c := range src {
+		n := utf8.EncodeRune(b[:], rune(c))
+		if nDst+n > len(dst) {
+			err = transform.ErrShortDst
+			break
+		}
+		nSrc = i + 1
+		copy(dst[nDst:], b[:n])
+		nDst += n
+	}
+	return nDst, nSrc, err
+}
+
+func (m toISO8859_1) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	var b [4]byte
+	for i, c := range src {
+		n := utf8.EncodeRune(b[:], rune(c))
+		if nDst+n > len(dst) {
+			err = transform.ErrShortDst
+			break
+		}
+		nSrc = i + 1
+		copy(dst[nDst:], b[:n])
+		nDst += n
+	}
+	return nDst, nSrc, err
 }
