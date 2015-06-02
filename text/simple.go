@@ -149,16 +149,26 @@ func (m fromISO8859_1) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, e
 }
 
 func (m toISO8859_1) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
-	var b [4]byte
-	for i, c := range src {
-		n := utf8.EncodeRune(b[:], rune(c))
-		if nDst+n > len(dst) {
+	for {
+		r, n := utf8.DecodeRune(src[nSrc:])
+		if n == 0 { //EOF
+			break
+		}
+		if r == utf8.RuneError {
+			err = encoding.ErrInvalidUTF8
+			break
+		}
+		if r > 0xff {
+			r = '?'
+		}
+		if nDst+1 > len(dst) {
 			err = transform.ErrShortDst
 			break
 		}
-		nSrc = i + 1
-		copy(dst[nDst:], b[:n])
-		nDst += n
+		nSrc += n
+		dst[nDst] = byte(r)
+		nDst++
 	}
+
 	return nDst, nSrc, err
 }
