@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/tgulacsi/go/dber"
@@ -78,7 +77,6 @@ END;`, qry, &res,
 	if i := bytes.IndexByte(res, 0); i >= 0 {
 		res = res[:i]
 	}
-	log.Printf("res=%q", res)
 	lines := bytes.Split(res, []byte{'\n'})
 	cols := make([]Column, 0, len(lines))
 	var nullable int
