@@ -59,11 +59,12 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 		return errgo.Notef(err, "executing %q", qry)
 	}
 	defer rows.Close()
-	log.Printf("columns: %#v", columns)
+	//log.Printf("columns: %#v", columns)
 
 	dest := make([]interface{}, len(columns))
 	bw := bufio.NewWriterSize(w, 65536)
 	defer bw.Flush()
+	values := make([]stringer, len(columns))
 	for i, col := range columns {
 		if i > 0 {
 			bw.Write([]byte{';'})
@@ -72,7 +73,9 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 		bw.WriteString(col.Name)
 		bw.Write([]byte{'"'})
 
-		dest[i] = col.Converter()
+		c := col.Converter()
+		values[i] = c
+		dest[i] = c.Pointer()
 	}
 	bw.Write([]byte{'\n'})
 	n := 0
@@ -87,7 +90,7 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 			if data == nil {
 				continue
 			}
-			bw.WriteString(data.(stringer).String())
+			bw.WriteString(values[i].String())
 		}
 		bw.Write([]byte{'\n'})
 		n++
@@ -100,11 +103,8 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 	return nil
 }
 
-type ColConverter func(interface{}) string
-
 type Column struct {
 	orahlp.Column
-	String ColConverter
 }
 
 func (col Column) Converter() stringer {
@@ -125,35 +125,68 @@ func GetColumns(db dber.Execer, qry string) (cols []Column, err error) {
 
 type stringer interface {
 	String() string
+	Pointer() interface{}
 }
 
-type ValString string
+type ValString struct {
+	Value sql.NullString
+}
 
-func (v ValString) String() string { return string(v) }
+func (v ValString) String() string        { return `"` + v.Value.String + `"` }
+func (v *ValString) Pointer() interface{} { return &v.Value }
 
-type ValInt int64
+type ValInt struct {
+	Value sql.NullInt64
+}
 
-func (v ValInt) String() string { return strconv.FormatInt(int64(v), 10) }
+func (v ValInt) String() string {
+	if v.Value.Valid {
+		return strconv.FormatInt(v.Value.Int64, 10)
+	}
+	return ""
+}
+func (v *ValInt) Pointer() interface{} { return &v.Value }
 
-type ValFloat float64
+type ValFloat struct {
+	Value sql.NullFloat64
+}
 
-func (v ValFloat) String() string { return strconv.FormatFloat(float64(v), 'f', -1, 64) }
+func (v ValFloat) String() string {
+	if v.Value.Valid {
+		return strconv.FormatFloat(v.Value.Float64, 'f', -1, 64)
+	}
+	return ""
+}
+func (v *ValFloat) Pointer() interface{} { return &v.Value }
 
-type ValTime time.Time
+type ValTime struct {
+	Value time.Time
+}
 
-func (v ValTime) String() string { return `"` + time.Time(v).Format(time.RFC3339) + `"` }
+var (
+	dEnd       string
+	dateFormat = "2006-01-02"
+)
+
+func (v ValTime) String() string {
+	if v.Value.Year() < 0 {
+		return dEnd
+	}
+	return `"` + v.Value.Format(dateFormat) + `"`
+}
+func (v *ValTime) Pointer() interface{} { return &v.Value }
 
 func getColConverter(col orahlp.Column) stringer {
 	switch col.Type {
 	case 2:
 		if col.Scale == 0 {
-			return new(ValInt)
+			return &ValInt{}
 		}
-		return new(ValFloat)
+		return &ValFloat{}
 	case 12:
-		return new(ValTime)
+		return &ValTime{}
 	default:
-		return new(ValString)
+		return &ValString{}
 	}
 }
 
@@ -164,7 +197,17 @@ func main() {
 	)
 
 	flagConnect := flag.String("connect", os.Getenv("BRUNO_ID"), "user/passw@sid to connect to")
+	flagDateFormat := flag.String("date", dateFormat, "date format, in Go notation")
 	flag.Parse()
+	dateFormat = *flagDateFormat
+	dEnd = `"` + strings.NewReplacer(
+		"2006", "9999",
+		"01", "12",
+		"02", "31",
+		"15", "23",
+		"04", "59",
+		"05", "59",
+	).Replace(dateFormat) + `"`
 	if flag.NArg() > 1 {
 		where = flag.Arg(1)
 		if flag.NArg() > 2 {
