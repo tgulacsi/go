@@ -84,7 +84,7 @@ func checkList(t *testing.T, lis Lister, await []item) {
 		if err != nil {
 			t.Errorf("error reading from %s: %v", aw.Name, err)
 		} else if n != aw.Length {
-			t.Errorf("length mismatch on %s: got %d, awaited %d.", n, aw.Length)
+			t.Errorf("length mismatch on %s: got %d, awaited %d.", aw.Name, n, aw.Length)
 		} else {
 			g := hex.EncodeToString(hsh.Sum(hshBytes[:0]))
 			if g != aw.Sha1sum {
