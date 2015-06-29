@@ -215,13 +215,15 @@ func main() {
 		}
 	}
 	_ = ora.GetDrv()
+	//ora.Log = lg15.Log
+	//lg15.Log.SetHandler(log15.StderrHandler)
 	db, err := sql.Open("ora", *flagConnect)
 	if err != nil {
 		log.Printf("error connecting to %s: %v", *flagConnect, err)
 		os.Exit(2)
 	}
 	qry := getQuery(flag.Arg(0), where, columns)
-	err = dump(os.Stdout, dber.SqlDBer{db}, qry)
+	err = dump(os.Stdout, dber.SqlDBer{DB: db}, qry)
 	_ = db.Close()
 	if err != nil {
 		log.Printf("error dumping: %s", err)
