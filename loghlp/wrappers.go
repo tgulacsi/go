@@ -17,12 +17,13 @@ limitations under the License.
 package loghlp
 
 import (
+	"fmt"
 	"io"
-	"time"
-	//"fmt"
 	"log"
+	"time"
 
 	"gopkg.in/inconshreveable/log15.v2"
+	"gopkg.in/inconshreveable/log15.v2/stack"
 )
 
 // AsStdLog returns a *log.Logger from the given log15.Logger
@@ -89,4 +90,25 @@ func (w handlerWriter) Write(p []byte) (int, error) {
 	rec := log15.Record{Time: time.Now(), Lvl: log15.LvlInfo, Msg: string(p)}
 	err := w.handler.Log(&rec)
 	return len(p), err
+
+}
+
+// CallerFileHandler returns a Handler that adds the line number and file of
+// the calling function to the context with key "caller".
+//
+// Skips skip number of lines from the top of the stack.
+func CallerFileHandler(skip int, h log15.Handler) log15.Handler {
+	return log15.FuncHandler(func(r *log15.Record) error {
+		call := stack.Call(r.CallPC[0])
+		if skip > 0 {
+			callers := stack.Callers()
+			if len(callers) > skip {
+				call = callers[skip]
+			} else {
+				call = callers[len(callers)-1]
+			}
+		}
+		r.Ctx = append(r.Ctx, "caller", fmt.Sprint(call))
+		return h.Log(r)
+	})
 }
