@@ -1,4 +1,4 @@
-// +build posix
+// +build posix linux !windows
 
 package iohlp
 
