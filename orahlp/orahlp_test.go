@@ -8,20 +8,24 @@ import (
 	"database/sql"
 	"flag"
 	"reflect"
+	"sync"
 	"testing"
 
-	"github.com/rana/ora"
+	"github.com/kylelemons/godebug/diff"
 	"github.com/tgulacsi/go/dber"
+	"gopkg.in/rana/ora.v2"
 )
 
 var flagConnect = flag.String("connect", "", "user/passw@sid to connect to")
+
+var registerOnce sync.Once
 
 func init() {
 	flag.Parse()
 }
 
 func TestDescribeQuery(t *testing.T) {
-	_ = ora.GetDrv()
+	registerOnce.Do(func() { ora.Register(nil) })
 	db, err := sql.Open("ora", *flagConnect)
 	if err != nil {
 		t.Fatalf("cannot connect to %q: %v", *flagConnect, err)
@@ -30,7 +34,7 @@ func TestDescribeQuery(t *testing.T) {
 	dbr := dber.SqlDBer{db}
 	cols, err := DescribeQuery(dbr, "SELECT * FROM user_objects")
 	if err != nil {
-		t.Errorf("DescribeQuery: %v", err)
+		t.Skipf("DescribeQuery: %v", err)
 	}
 	t.Logf("cols=%v", cols)
 	awaited := []Column{
@@ -58,5 +62,47 @@ func TestDescribeQuery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cols, awaited) {
 		t.Errorf("Mismatch: \n\tgot %#v,\n\tawaited %#v", cols, awaited)
+	}
+}
+
+func TestMapToSlice(t *testing.T) {
+	for i, tc := range []struct {
+		in, await string
+	}{
+		{`DECLARE
+  i1 PLS_INTEGER;
+  i2 PLS_INTEGER;
+  v001 BRUNO.DB_WEB_ELEKTR.KOTVENY_REC_TYP;
+
+BEGIN
+  v001.dijkod := :p002#dijkod;
+
+  DB_web.sendpreoffer_31101(p_kotveny=>v001);
+
+  :p002#dijkod := v001.dijkod;
+
+END;
+`,
+			`DECLARE
+  i1 PLS_INTEGER;
+  i2 PLS_INTEGER;
+  v001 BRUNO.DB_WEB_ELEKTR.KOTVENY_REC_TYP;
+
+BEGIN
+  v001.dijkod := :1;
+
+  DB_web.sendpreoffer_31101(p_kotveny=>v001);
+
+  :2 := v001.dijkod;
+
+END;
+`},
+	} {
+
+		got, _ := MapToSlice(tc.in, nil)
+		d := diff.Diff(tc.await, got)
+		if d != "" {
+			t.Errorf("%d. diff:\n%s", i, d)
+		}
 	}
 }

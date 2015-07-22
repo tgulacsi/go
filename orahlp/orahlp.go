@@ -122,3 +122,40 @@ func GetVersion(db dber.Queryer) (Version, error) {
 	}
 	return v, nil
 }
+
+// MapToSlice modifies query for map (:paramname) to :%d placeholders + slice of params.
+//
+// Calls metParam for each parameter met, and returns the slice of their results.
+func MapToSlice(qry string, metParam func(string) interface{}) (string, []interface{}) {
+	if metParam == nil {
+		metParam = func(string) interface{} { return nil }
+	}
+	arr := make([]interface{}, 0, 16)
+	var buf bytes.Buffer
+	state, p, last := 0, 0, 0
+	for i, r := range qry {
+		switch {
+		case state == 0 && r == ':':
+			state++
+			p = i
+			// An identifier consists of a letter optionally followed by more letters, numerals, dollar signs, underscores, and number signs.
+			// http://docs.oracle.com/cd/B19306_01/appdev.102/b14261/fundamentals.htm#sthref309
+		case state == 1 &&
+			!('A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' ||
+				(i-p > 1 && ('0' <= r && r <= '9' || r == '$' || r == '_' || r == '#'))):
+			state = 0
+			if i-p <= 1 { // :=
+				continue
+			}
+			arr = append(arr, metParam(qry[p+1:i]))
+			param := fmt.Sprintf(":%d", len(arr))
+			buf.WriteString(qry[last:p])
+			buf.WriteString(param)
+			last = i
+		}
+	}
+	if last < len(qry)-1 {
+		buf.WriteString(qry[last:])
+	}
+	return buf.String(), arr
+}
