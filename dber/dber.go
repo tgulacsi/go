@@ -6,12 +6,16 @@
 // It even implements a wrapper for *sql.DB: SqlDBer.
 package dber
 
-import "database/sql"
+import (
+	"database/sql"
+	"io"
+)
 
 type DBer interface {
 	Begin() (Txer, error)
 	Queryer
 	Execer
+	io.Closer
 }
 
 type Execer interface {

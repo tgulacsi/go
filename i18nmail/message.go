@@ -104,6 +104,8 @@ func (h Header) Date() (time.Time, error) {
 }
 
 // AddressList parses the named header field as a list of addresses.
+//
+// FIXME(tgulacsi): use go1.5's mail.ParseAddressList.
 func (h Header) AddressList(key string) ([]*Address, error) {
 	hdr := h.Get(key)
 	if hdr == "" {
@@ -471,6 +473,8 @@ func (s *splitter) fieldsFunc(r rune) bool {
 
 // HeadDecode decodes mail header encoding (quopri or base64) such as
 // =?iso-8859-2?Q?MEN-261_K=D6BE_k=E1r.pdf?=
+//
+// FIXME(tgulacsi): use go1.5's mail.WordDecoder
 func HeadDecode(head string) string {
 	if head == "" {
 		return ""

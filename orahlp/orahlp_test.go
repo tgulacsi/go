@@ -25,13 +25,8 @@ func init() {
 }
 
 func TestDescribeQuery(t *testing.T) {
-	registerOnce.Do(func() { ora.Register(nil) })
-	db, err := sql.Open("ora", *flagConnect)
-	if err != nil {
-		t.Fatalf("cannot connect to %q: %v", *flagConnect, err)
-	}
-	defer db.Close()
-	dbr := dber.SqlDBer{db}
+	dbr := getConnection(t)
+	defer dbr.Close()
 	cols, err := DescribeQuery(dbr, "SELECT * FROM user_objects")
 	if err != nil {
 		t.Skipf("DescribeQuery: %v", err)
@@ -105,4 +100,25 @@ END;
 			t.Errorf("%d. diff:\n%s", i, d)
 		}
 	}
+}
+
+func TestGetCompileErrors(t *testing.T) {
+	dbr := getConnection(t)
+	defer dbr.Close()
+	errs, err := GetCompileErrors(dbr, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ce := range errs {
+		t.Logf("%s", ce.Error())
+	}
+}
+
+func getConnection(t *testing.T) dber.DBer {
+	registerOnce.Do(func() { ora.Register(nil) })
+	db, err := sql.Open("ora", *flagConnect)
+	if err != nil {
+		t.Fatalf("cannot connect to %q: %v", *flagConnect, err)
+	}
+	return dber.SqlDBer{db}
 }

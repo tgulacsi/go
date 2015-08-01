@@ -159,3 +159,46 @@ func MapToSlice(qry string, metParam func(string) interface{}) (string, []interf
 	}
 	return buf.String(), arr
 }
+
+// CompileError represents a compile-time error as in user_errors view.
+type CompileError struct {
+	Owner, Name, Type    string
+	Line, Position, Code int64
+	Text                 string
+	Warning              bool
+}
+
+func (ce CompileError) Error() string {
+	prefix := "ERROR "
+	if ce.Warning {
+		prefix = "WARN  "
+	}
+	return fmt.Sprintf("%s %s.%s %s %d:%d [%d] %s",
+		prefix, ce.Owner, ce.Name, ce.Type, ce.Line, ce.Position, ce.Code, ce.Text)
+}
+
+// GetCompileErrors returns the slice of the errors in user_errors.
+//
+// If all is false, only errors are returned; otherwise, warnings, too.
+func GetCompileErrors(queryer dber.Queryer, all bool) ([]CompileError, error) {
+	rows, err := queryer.Query(`
+	SELECT USER owner, name, type, line, position, message_number, text, attribute
+		FROM user_errors
+		ORDER BY name, sequence`)
+	if err != nil {
+		return nil, err
+	}
+	var errors []CompileError
+	var warn string
+	for rows.Next() {
+		var ce CompileError
+		if err = rows.Scan(&ce.Owner, &ce.Name, &ce.Type, &ce.Line, &ce.Position, &ce.Code, &ce.Text, &warn); err != nil {
+			return errors, err
+		}
+		ce.Warning = warn == "WARNING"
+		if !ce.Warning || all {
+			errors = append(errors, ce)
+		}
+	}
+	return errors, rows.Err()
+}
