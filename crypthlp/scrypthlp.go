@@ -46,11 +46,20 @@ func GenKey(password []byte, saltLen, keyLen int, timeout time.Duration,
 	n := int(int64(timeout)/int64(dur16384)) * 16384
 	for key.L2N = 14; n > (1 << key.L2N); key.L2N++ {
 	}
-	key.L2N--
-	for now := time.Now(); time.Since(now) < timeout; {
+	key.L2N -= 2
+	deadline := time.Now().Add(timeout)
+	for {
+		now := time.Now()
+		if now.After(deadline) {
+			break
+		}
 		key.L2N++
 		if key.Bytes, err = scrypt.Key(password, salt, 1<<key.L2N, key.R, key.P, keyLen); err != nil {
 			return key, err
+		}
+		dur := time.Since(now)
+		if now.Add(dur + 2*dur).After(deadline) {
+			break
 		}
 	}
 	return key, nil
