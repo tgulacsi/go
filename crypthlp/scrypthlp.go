@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	nRatio   map[time.Duration]int
-	nRatioMu sync.Mutex
+	dur16384   time.Duration
+	dur16384Mu sync.Mutex
 )
 
 // Salt creates a new random salt with the given length.
@@ -33,37 +33,43 @@ func GenKey(password []byte, saltLen, keyLen int, timeout time.Duration,
 	if err != nil {
 		return Key{}, err
 	}
-	N := 16384 >> 1
-	nRatioMu.Lock()
-	defer nRatioMu.Unlock()
-	if nRatio == nil {
-		nRatio = make(map[time.Duration]int)
-	} else if n, ok := nRatio[timeout]; ok {
-		N = n
+	key := Key{Salt: salt, R: 8, P: 1, L2N: 14}
+	dur16384Mu.Lock()
+	defer dur16384Mu.Unlock()
+	if dur16384 == 0 {
+		tim := time.Now()
+		if key.Bytes, err = scrypt.Key(password, salt, 1<<14, key.R, key.P, keyLen); err != nil {
+			return key, err
+		}
+		dur16384 = time.Since(tim)
 	}
-	key := Key{Salt: salt, R: 8, P: 1, N: N}
+	n := int(int64(timeout)/int64(dur16384)) * 16384
+	for key.L2N = 14; n > (1 << key.L2N); key.L2N++ {
+	}
+	key.L2N--
 	for now := time.Now(); time.Since(now) < timeout; {
-		key.N <<= 1
-		if key.Bytes, err = scrypt.Key(password, salt, key.N, key.R, key.P, keyLen); err != nil {
+		key.L2N++
+		if key.Bytes, err = scrypt.Key(password, salt, 1<<key.L2N, key.R, key.P, keyLen); err != nil {
 			return key, err
 		}
 	}
-	nRatio[timeout] = key.N
 	return key, nil
 }
 
 type Key struct {
-	Bytes   []byte `json:"-"`
-	Salt    []byte
-	N, R, P int
+	Bytes []byte `json:"-"`
+	Salt  []byte
+	L2N   uint
+	R, P  int
 }
 
 func (key Key) String() string {
 	type K struct {
 		Bytes, Salt []byte
-		N, R, P     int
+		L2N         uint
+		R, P        int
 	}
-	k := K{Bytes: key.Bytes, Salt: key.Salt, N: key.N, R: key.R, P: key.P}
+	k := K{Bytes: key.Bytes, Salt: key.Salt, L2N: key.L2N, R: key.R, P: key.P}
 	b, err := json.Marshal(k)
 	if err != nil {
 		return err.Error()
@@ -73,6 +79,6 @@ func (key Key) String() string {
 
 func (key *Key) Populate(password []byte, keyLen int) error {
 	var err error
-	key.Bytes, err = scrypt.Key(password, key.Salt, key.N, key.R, key.P, keyLen)
+	key.Bytes, err = scrypt.Key(password, key.Salt, 1<<key.L2N, key.R, key.P, keyLen)
 	return err
 }
