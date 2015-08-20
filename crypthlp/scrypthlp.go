@@ -7,7 +7,6 @@ package crypthlp
 import (
 	"crypto/rand"
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
@@ -40,7 +39,6 @@ func GenKey(password []byte, saltLen, keyLen int, timeout time.Duration,
 	dursMu.Lock()
 	defer dursMu.Unlock()
 	for i, d := range durs {
-		log.Printf("i=%d d=%s timeout=%s", i, d, timeout)
 		if d < timeout {
 			key.L2N = minL2N + uint(i)
 			continue
@@ -57,7 +55,6 @@ func GenKey(password []byte, saltLen, keyLen int, timeout time.Duration,
 		}
 		now2 := time.Now()
 		dur := now2.Sub(now)
-		log.Printf("durs=%#v n=%d", durs, key.L2N)
 		i := int(key.L2N - minL2N)
 		if len(durs) <= i {
 			if cap(durs) > i {
