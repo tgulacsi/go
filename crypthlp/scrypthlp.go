@@ -7,15 +7,18 @@ package crypthlp
 import (
 	"crypto/rand"
 	"encoding/json"
+	"log"
 	"sync"
 	"time"
 
 	"golang.org/x/crypto/scrypt"
 )
 
+const minL2N = 14
+
 var (
-	dur16384   time.Duration
-	dur16384Mu sync.Mutex
+	durs   = make([]time.Duration, 0, 8)
+	dursMu sync.Mutex
 )
 
 // Salt creates a new random salt with the given length.
@@ -33,25 +36,43 @@ func GenKey(password []byte, saltLen, keyLen int, timeout time.Duration,
 	if err != nil {
 		return Key{}, err
 	}
-	key := Key{Salt: salt, R: 8, P: 1, L2N: 14}
-	dur16384Mu.Lock()
-	defer dur16384Mu.Unlock()
-	if dur16384 == 0 {
-		tim := time.Now()
-		if key.Bytes, err = scrypt.Key(password, salt, 1<<14, key.R, key.P, keyLen); err != nil {
-			return key, err
+	key := Key{Salt: salt, R: 8, P: 1, L2N: minL2N}
+	dursMu.Lock()
+	defer dursMu.Unlock()
+	for i, d := range durs {
+		log.Printf("i=%d d=%s timeout=%s", i, d, timeout)
+		if d < timeout {
+			key.L2N = minL2N + uint(i)
+			continue
 		}
-		dur16384 = time.Since(tim)
+		if d > timeout {
+			key.L2N--
+		}
+		break
 	}
-	n := int(int64(timeout)/int64(dur16384)) * 16384
-	for key.L2N = 14; n > (1 << key.L2N); key.L2N++ {
-	}
-	key.L2N--
-	for now := time.Now(); time.Since(now) < timeout; {
-		key.L2N++
+	deadline := time.Now().Add(timeout)
+	for now := time.Now(); now.Before(deadline); {
 		if key.Bytes, err = scrypt.Key(password, salt, 1<<key.L2N, key.R, key.P, keyLen); err != nil {
 			return key, err
 		}
+		now2 := time.Now()
+		dur := now2.Sub(now)
+		log.Printf("durs=%#v n=%d", durs, key.L2N)
+		i := int(key.L2N - minL2N)
+		if len(durs) <= i {
+			if cap(durs) > i {
+				durs = durs[:i+1]
+			} else {
+				durs = append(durs, make([]time.Duration, len(durs))...)
+			}
+		}
+		durs[key.L2N-minL2N] = dur
+		now = now2
+
+		if now.Add(2 * dur).After(deadline) {
+			break
+		}
+		key.L2N++
 	}
 	return key, nil
 }
