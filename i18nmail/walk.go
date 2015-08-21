@@ -24,8 +24,8 @@ import (
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
-	"gopkg.in/kit.v0/log"
-	"gopkg.in/kit.v0/log/levels"
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/levels"
 )
 
 var (

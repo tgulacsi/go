@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"gopkg.in/inconshreveable/log15.v2/term"
-	"gopkg.in/kit.v0/log"
+	"github.com/go-kit/kit/log"
 	"gopkg.in/logfmt.v0"
 )
 
