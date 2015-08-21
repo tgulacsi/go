@@ -24,26 +24,30 @@ import (
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
-	"gopkg.in/inconshreveable/log15.v2"
+	"gopkg.in/kit.v0/log"
+	"gopkg.in/kit.v0/log/levels"
 )
 
-// TodoFunc is the type of the function called by Walk and WalkMultipart.
-type TodoFunc func(mp MailPart) error
-
 var (
-	// Log is discarded by default.
-	Log = log15.New("library", "i18nmail")
+	// Logger is the base logger, can be swapped - defaults to NopLogger.
+	Logger = new(log.SwapLogger)
 
 	// CheckEncoding is true if we should check Base64 encodings
 	CheckEncoding = true
 
 	// SaveBadInput is true if we should save bad input
 	SaveBadInput = false
+
+	// logger is the package-level logger.
+	logger = levels.New(log.NewContext(Logger).With("lib", "i18nmail"))
 )
 
 func init() {
-	Log.SetHandler(log15.DiscardHandler())
+	Logger.Swap(log.NewNopLogger())
 }
+
+// TodoFunc is the type of the function called by Walk and WalkMultipart.
+type TodoFunc func(mp MailPart) error
 
 // sequence is a global sequence for numbering mail parts.
 var sequence uint64
@@ -108,7 +112,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		return errgo.Notef(e, "WalkMail")
 	}
 	ct, params, decoder, e := getCT(msg.Header)
-	Log.Info("Walk message", "hsh", hsh, "headers", msg.Header)
+	logger.Info("msg", "Walk message", "hsh", hsh, "headers", msg.Header)
 	if e != nil {
 		return errgo.Notef(e, "WalkMail")
 	}
@@ -124,7 +128,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
-	Log.Debug("message", "sequence", child.Seq, "content-type", ct, "params", params)
+	logger.Debug("msg", "message", "sequence", child.Seq, "content-type", ct, "params", params)
 	if strings.HasPrefix(ct, "multipart/") {
 		return WalkMultipart(child, todo, dontDescend)
 	}
@@ -174,7 +178,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			Header: part.Header, Parent: &mp,
 			Level: mp.Level + 1, Seq: nextSeqInt()}
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		Log.Debug("multipart", "sequence", child.Seq, "content-type", ct, "params", params)
+		logger.Debug("msg", "multipart", "sequence", child.Seq, "content-type", ct, "params", params)
 		if !dontDescend && strings.HasPrefix(ct, "multipart/") {
 			if e = WalkMultipart(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
@@ -234,7 +238,7 @@ func getCT(
 			if CheckEncoding {
 				raw, e := ioutil.ReadAll(r)
 				if e != nil {
-					Log.Warn("cannot read data", "error", e)
+					logger.Warn("msg", "cannot read data", "error", e)
 					return bytes.NewReader(nil)
 				}
 				decoded := make([]byte, base64.StdEncoding.DecodedLen(len(raw)))
@@ -251,7 +255,7 @@ func getCT(
 							bad = string(raw[p:q])
 						}
 					}
-					Log.Error("base64 decoding", "raw", bad, "error", e)
+					logger.Error("msg", "base64 decoding", "raw", bad, "error", e)
 				}
 				// K-MT9461
 				return bytes.NewReader(decoded[:n])
@@ -269,7 +273,7 @@ func getCT(
 			return qprintable.NewDecoder(enc, br)
 		}
 	default:
-		Log.Warn("unknown transfer-encoding", "transfer-encoding", te)
+		logger.Warn("msg", "unknown transfer-encoding", "transfer-encoding", te)
 	}
 	return
 }
@@ -355,7 +359,7 @@ func (f *B64Filter) Read(b []byte) (int, error) {
 			continue
 		}
 		if c := f.decodeMap[b[i]]; c == 0xFF {
-			Log.Warn("invalid char: " + fmt.Sprintf("%c(%d) @ %d", b[i], b[i], f.n+i))
+			logger.Warn("msg", "invalid char: "+fmt.Sprintf("%c(%d) @ %d", b[i], b[i], f.n+i))
 			b[i] = '\n'
 		}
 	}
