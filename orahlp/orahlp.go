@@ -154,7 +154,7 @@ func MapToSlice(qry string, metParam func(string) interface{}) (string, []interf
 			last = i
 		}
 	}
-	if last < len(qry)-1 {
+	if last <= len(qry)-1 {
 		buf.WriteString(qry[last:])
 	}
 	return buf.String(), arr

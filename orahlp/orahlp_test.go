@@ -13,7 +13,7 @@ import (
 
 	"github.com/kylelemons/godebug/diff"
 	"github.com/tgulacsi/go/dber"
-	"gopkg.in/rana/ora.v2"
+	"gopkg.in/rana/ora.v3"
 )
 
 var flagConnect = flag.String("connect", "", "user/passw@sid to connect to")
@@ -64,6 +64,12 @@ func TestMapToSlice(t *testing.T) {
 	for i, tc := range []struct {
 		in, await string
 	}{
+		{`SELECT NVL(MAX(F_dazon), :dazon) FROM T_spl_level
+	         WHERE (F_spl_azon = :lev_azon OR
+			        F_ssz = 0 AND F_lev_azon = :lev_azon)`,
+			`SELECT NVL(MAX(F_dazon), :1) FROM T_spl_level
+	         WHERE (F_spl_azon = :2 OR
+			        F_ssz = 0 AND F_lev_azon = :3)`},
 		{`DECLARE
   i1 PLS_INTEGER;
   i2 PLS_INTEGER;
