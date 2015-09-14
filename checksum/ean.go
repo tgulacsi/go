@@ -4,23 +4,28 @@
 
 package checksum
 
-type Checksum interface {
+type Calculator interface {
 	Calculate(string) uint8
 }
 
-type Decorator interface {
+type Checksum interface {
+	Calculator
 	Decorate(string) string
 	Undecorate(string) string
-}
-
-type Checker interface {
 	IsValid(string) bool
 }
 
 var (
-	CDV     = check{csAppend{csCDV{}}}
-	EAN8    = check{csAppend{csEAN8{}}}
-	CvtEAN8 = check{csPrepend{csCvtEAN8{}}}
+	CDV     = checksum{Calculator: csCDV{}}
+	EAN8    = checksum{Calculator: csEAN8{}}
+	CvtEAN8 = checksum{Calculator: csCvtEAN8{}, Direction: dirPrepend}
+)
+
+type direction uint8
+
+const (
+	dirAppend = direction(iota)
+	dirPrepend
 )
 
 type csCDV struct{}
@@ -37,13 +42,6 @@ func (cs csCDV) Calculate(text string) uint8 {
 	}
 	return sum % 10
 }
-func (cs csCDV) Decorate(text string) string {
-	return text + string([]byte{'0' + cs.Calculate(text)})
-}
-func (cs csCDV) Undecorate(text string) string {
-	return text[:len(text)-1]
-}
-func (cs csCDV) IsValid(text string) bool { return text == cs.Decorate(cs.Undecorate(text)) }
 
 type csCvtEAN8 struct{}
 
@@ -55,12 +53,6 @@ func (cs csCvtEAN8) Calculate(text string) uint8 {
 		mul = 4 - mul
 	}
 	return sum
-}
-func (cs csCvtEAN8) Decorate(text string) string {
-	return string([]byte{cs.Calculate(text) + '0'}) + text
-}
-func (cs csCvtEAN8) Undecorate(text string) string {
-	return text[1:]
 }
 
 type csEAN8 struct{}
@@ -75,36 +67,24 @@ func (cs csEAN8) Calculate(text string) uint8 {
 	return (10 - sum) % 10
 }
 
-type ChecksumDecorator interface {
-	Checksum
-	Decorator
-}
-type check struct {
-	ChecksumDecorator
+type checksum struct {
+	Calculator
+	Direction direction
 }
 
-func (c check) IsValid(text string) bool {
+func (c checksum) IsValid(text string) bool {
 	return text == c.Decorate(c.Undecorate(text))
 }
 
-type csAppend struct {
-	Checksum
+func (c checksum) Decorate(text string) string {
+	if c.Direction == dirPrepend {
+		return string([]byte{c.Calculate(text) + '0'}) + text
+	}
+	return text + string([]byte{c.Calculate(text) + '0'})
 }
-
-func (cs csAppend) Decorate(text string) string {
-	return text + string([]byte{cs.Calculate(text) + '0'})
-}
-func (cs csAppend) Undecorate(text string) string {
+func (c checksum) Undecorate(text string) string {
+	if c.Direction == dirPrepend {
+		return text[1:]
+	}
 	return text[:len(text)-1]
-}
-
-type csPrepend struct {
-	Checksum
-}
-
-func (cs csPrepend) Decorate(text string) string {
-	return string([]byte{cs.Calculate(text) + '0'}) + text
-}
-func (cs csPrepend) Undecorate(text string) string {
-	return text[1:]
 }
