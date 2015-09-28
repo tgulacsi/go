@@ -18,128 +18,46 @@ package kithlp
 
 import (
 	"fmt"
-	"io"
-	"strings"
 	"time"
 
-	"gopkg.in/inconshreveable/log15.v2/term"
-	"github.com/go-kit/kit/log"
-	"gopkg.in/logfmt.v0"
+	"github.com/go-kit/kit/log/term"
 )
 
-// NewTerminalLogger returns a log.Logger which prouces nice colored logs,
-// but only if the Writer is a tty.
-// It is a copy of http://godoc.org/gopkg.in/inconshreveable/log15.v2/#TerminalFormat
-//
-// Otherwise it will return the alternate logger.
-func NewTerminalLogger(w io.Writer, alternate log.Logger) log.Logger {
-	var isTTY bool
-	if std, ok := w.(fder); ok {
-		isTTY = term.IsTty(std.Fd())
+var (
+	// DefaultLevelColors is the default colors, copied from gopkg.in/inconshreveable/log15.v2/format.go.
+	DefaultLevelColors = map[string]term.FgBgColor{
+		"crit":  {5, 0},
+		"error": {1, 0},
+		"warn":  {3, 0},
+		"info":  {2, 0},
+		"debug": {6, 0},
 	}
-	if !isTTY {
-		return alternate
+)
+
+// NewLevelColorer returns a function to be used in go-kit/kit/log/term.NewColorLogger.
+// If levelColors is nil, the DefaultLevelColors is used.
+func NewLevelColorer(
+	levelName string,
+	levelColors map[string]term.FgBgColor,
+) func(keyvals ...interface{}) term.FgBgColor {
+	if levelColors == nil {
+		levelColors = DefaultLevelColors
 	}
-	return &terminalLogger{
-		w:          w,
-		timeFormat: time.RFC3339,
-		msgKey:     "msg",
-		tsKey:      "ts",
-		levelKey:   "level",
+	return func(keyvals ...interface{}) term.FgBgColor {
+		var level string
 
-		debugValue: "debug",
-		infoValue:  "info",
-		warnValue:  "warn",
-		errorValue: "error",
-		critValue:  "crit",
-	}
-}
-
-type terminalLogger struct {
-	w io.Writer
-
-	msgKey     string
-	tsKey      string
-	levelKey   string
-	timeFormat string
-
-	debugValue string
-	infoValue  string
-	warnValue  string
-	errorValue string
-	critValue  string
-}
-
-func (l terminalLogger) Log(keyvals ...interface{}) error {
-	var ts, msg, level string
-
-	for i := 0; i < len(keyvals); i += 2 {
-		var found bool
-		switch keyvals[i] {
-		case l.msgKey:
-			if msg == "" {
-				msg = asString(keyvals[i+1])
-				found = true
-			}
-		case l.levelKey:
-			if level == "" {
+		for i := 0; i < len(keyvals); i += 2 {
+			if keyvals[i] == levelName {
 				level = asString(keyvals[i+1])
-				found = true
-			}
-		case l.tsKey:
-			if ts == "" {
-				ts = asTimeString(keyvals[i+1], l.timeFormat)
-				found = true
+				break
 			}
 		}
-		if found { // delete
-			if len(keyvals) == i-2 {
-				keyvals = keyvals[:i]
-			} else {
-				keyvals = append(keyvals[:i], keyvals[i+2:]...)
-			}
-			i -= 2
+
+		if level == "" {
+			level = "info"
 		}
+		return levelColors[level]
 	}
-
-	// copied from gopkg.in/inconshreveable/log15.v2/format.go
-	// ---8<---
-	var color = 0
-	switch level {
-	case l.critValue:
-		color = 35
-	case l.errorValue:
-		color = 31
-	case l.warnValue:
-		color = 33
-	case l.infoValue:
-		color = 32
-	case l.debugValue:
-		color = 36
-	}
-	if level == "" {
-		level = l.infoValue
-	}
-	lvl := strings.ToUpper(level)
-	if color > 0 {
-		fmt.Fprintf(l.w, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, ts, msg)
-	} else {
-		fmt.Fprintf(l.w, "[%s] [%s] %s ", lvl, ts, msg)
-	}
-	// --->8---
-
-	// copied from gopkg.in/kit.v0/log/logfmt_logger.go
-	// ---8<---
-	b, err := logfmt.MarshalKeyvals(keyvals...)
-	if err != nil {
-		return err
-	}
-	b = append(b, '\n')
-	if _, err := l.w.Write(b); err != nil {
-		return err
-	}
-	return nil
-	// --->8---
 }
 
 func asString(v interface{}) string {
