@@ -24,13 +24,13 @@ import (
 )
 
 var (
-	// DefaultLevelColors is the default colors, copied from gopkg.in/inconshreveable/log15.v2/format.go.
+	// DefaultLevelColors is the default colors.
 	DefaultLevelColors = map[string]term.FgBgColor{
-		"crit":  {5, 0},
-		"error": {1, 0},
-		"warn":  {3, 0},
-		"info":  {2, 0},
-		"debug": {6, 0},
+		"crit":  {term.Magenta, term.DarkGray},
+		"error": {term.Red, term.Default},
+		"warn":  {term.Yellow, term.Default},
+		"info":  {term.Default, term.Default},
+		"debug": {term.Green, term.Default},
 	}
 )
 
