@@ -12,6 +12,9 @@ import (
 
 // IdlePool is a pool of io.Closers.
 // Each element will be Closed on eviction.
+//
+// The backing store is a simple []io.Closer, which is treated as random store,
+// to achive uniform reuse.
 type IdlePool struct {
 	elems []io.Closer
 }
@@ -23,20 +26,20 @@ func NewIdlePool(size int) IdlePool {
 
 // Get returns a closer or nil, if no pool found.
 func (p IdlePool) Get() io.Closer {
-	n := len(p.elems)
-	i0 := rand.Intn(n)
-	for i := 0; i < n; i++ {
-		j := (i0 + i) % n
-		c := p.elems[j]
+	for i, c := range p.elems {
 		if c == nil {
 			continue
 		}
-		p.elems[j] = nil
+		p.elems[i] = nil
 		return c
 	}
 	return nil
 }
 
+// Put a new element into the store. The slot is chosen randomly.
+// If no empty slot is found, one (random) is Close()-d and this new
+// element is put there.
+// This way elements reused uniformly.
 func (p IdlePool) Put(c io.Closer) {
 	n := len(p.elems)
 	i0 := rand.Intn(n)
