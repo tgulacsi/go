@@ -50,3 +50,18 @@ func (p IdlePool) Put(c io.Closer) {
 	p.elems[i0].Close()
 	p.elems[i0] = c
 }
+
+// Close all elements.
+func (p IdlePool) Close() error {
+	var err error
+	for i, c := range p.elems {
+		p.elems[i] = nil
+		if c == nil {
+			continue
+		}
+		if closeErr := c.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}
+	return err
+}
