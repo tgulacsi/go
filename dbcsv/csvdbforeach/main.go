@@ -27,7 +27,7 @@ import (
 func main() {
 	flagSheet := flag.Int("sheet", 0, "Index of sheet to convert, zero based")
 	flagConnect := flag.String("connect", "$BRUNO_ID", "database connection string")
-	flagFunc := flag.String("code", "DBMS_OUTPUT.PUT_LINE", "function name to be called with each line")
+	flagFunc := flag.String("call", "DBMS_OUTPUT.PUT_LINE", "function name to be called with each line")
 	flagDelim := flag.String("d", ";", "Delimiter to use between fields")
 	flagCharset := flag.String("charset", "utf-8", "input charset")
 	flag.Usage = func() {
@@ -102,7 +102,7 @@ Usage:
 	defer ses.Close()
 
 	if err = dbExec(ses, *flagFunc, rows); err != nil {
-		log.Fatal("exec %q: %v", *flagFunc, err)
+		log.Fatalf("exec %q: %v", *flagFunc, err)
 	}
 }
 
@@ -120,16 +120,15 @@ func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 	}
 	sheet := xlFile.Sheets[sheetIndex]
 	var vals []string
-	n := 0
-	for _, row := range sheet.Rows {
-		if row != nil {
-			vals = vals[:0]
-			for _, cell := range row.Cells {
-				vals = append(vals, cell.String())
-			}
-			rows <- Row{Line: n, Values: vals}
-			n++
+	for n, row := range sheet.Rows {
+		if row == nil {
+			continue
 		}
+		vals = vals[:0]
+		for _, cell := range row.Cells {
+			vals = append(vals, cell.String())
+		}
+		rows <- Row{Line: n, Values: vals}
 	}
 	return nil
 }
@@ -194,6 +193,7 @@ func dbExec(ses *ora.Ses, fun string, rows <-chan Row) error {
 			}
 			v, err := conv(s)
 			if err != nil {
+				log.Printf("row=%#v", row)
 				return errgo.Notef(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
 			}
 			values = append(values, v)
@@ -228,7 +228,8 @@ func getQuery(ses *ora.Ses, fun string) (qry string, stmt *ora.Stmt, converters 
 	default:
 		return "", nil, nil, errgo.Newf("bad function name: %q", fun)
 	}
-	rset, err := ses.PrepAndQry(qry, fun)
+	qry += " ORDER BY sequence"
+	rset, err := ses.PrepAndQry(qry, params...)
 	if err != nil {
 		return "", nil, nil, errgo.Notef(err, qry)
 	}
@@ -239,12 +240,23 @@ func getQuery(ses *ora.Ses, fun string) (qry string, stmt *ora.Stmt, converters 
 	}
 	args := make([]Arg, 0, 32)
 	for rset.Next() {
-		args = append(args,
-			Arg{Name: rset.Row[0].(string), Type: rset.Row[1].(string), InOut: rset.Row[2].(string),
-				Length: int(rset.Row[3].(int64)), Precision: int(rset.Row[4].(int64)), Scale: int(rset.Row[5].(int64))})
+		arg := Arg{Name: rset.Row[0].(string), Type: rset.Row[1].(string), InOut: rset.Row[2].(string)}
+		if rset.Row[3] != nil {
+			arg.Length = int(rset.Row[3].(float64))
+			if rset.Row[4] != nil {
+				arg.Precision = int(rset.Row[4].(float64))
+				if rset.Row[5] != nil {
+					arg.Scale = int(rset.Row[5].(float64))
+				}
+			}
+		}
+		args = append(args, arg)
 	}
 	if rset.Err != nil {
 		return "", nil, nil, errgo.Notef(rset.Err, qry)
+	}
+	if len(args) == 0 {
+		return "", nil, nil, errgo.Newf("%q has no arguments!", fun)
 	}
 
 	qry = "BEGIN "
@@ -254,17 +266,16 @@ func getQuery(ses *ora.Ses, fun string) (qry string, stmt *ora.Stmt, converters 
 		args = args[1:]
 		i++
 	}
-	qry += fun + "("
 	vals := make([]string, 0, len(args))
-	converters = make([]ConvFunc, len(vals))
-	for _, arg := range args {
+	converters = make([]ConvFunc, cap(vals))
+	for i, arg := range args {
 		vals = append(vals, fmt.Sprintf("%s=>:%d", arg.Name, i))
 		if arg.Type == "DATE" {
 			converters[i] = strToDate
 		}
 		i++
 	}
-	qry += "); END;"
+	qry += fun + "(" + strings.Join(vals, ", ") + "); END;"
 	stmt, err = ses.Prep(qry)
 	return qry, stmt, converters, err
 }
@@ -283,7 +294,7 @@ func justNums(s string, maxLen int) string {
 	return strings.Map(
 		func(r rune) rune {
 			if maxLen >= 0 {
-				if i >= maxLen {
+				if i > maxLen {
 					return -1
 				}
 				i++
