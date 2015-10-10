@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/tgulacsi/go/orahlp"
 	"github.com/tgulacsi/go/text"
@@ -166,49 +167,53 @@ type Row struct {
 }
 
 func dbExec(ses *ora.Ses, fun string, rows <-chan Row) error {
-	qry, err := getQuery(ses, fun)
+	qry, stmt, converters, err := getQuery(ses, fun)
 	if err != nil {
 		return err
 	}
+	defer stmt.Close()
 
 	var (
 		tx     *ora.Tx
-		st     *ora.Stmt
 		values []interface{}
 	)
 
-	defer st.Close()
 	for row := range rows {
 		if tx == nil {
 			if tx, err = ses.StartTx(); err != nil {
 				return err
 			}
-			if st, err = ses.Prep(qry); err != nil {
-				st.Close()
-				tx.Rollback()
-				return err
-			}
 		}
 
 		values = values[:0]
-		for _, s := range row.Values {
-			values = append(values, s)
+		for i, s := range row.Values {
+			conv := converters[i]
+			if conv == nil {
+				values = append(values, s)
+				continue
+			}
+			v, err := conv(s)
+			if err != nil {
+				return errgo.Notef(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
+			}
+			values = append(values, v)
 		}
-		if _, err = st.Exe(values...); err != nil {
+		if _, err = stmt.Exe(values...); err != nil {
 			log.Printf("execute %q with row %d (%#v): %v", qry, row.Line, row.Values, err)
 			return err
 		}
 	}
 	if tx != nil {
-		st.Close()
 		return tx.Commit()
 	}
 	return nil
 }
 
-func getQuery(ses *ora.Ses, fun string) (string, error) {
+type ConvFunc func(string) (interface{}, error)
+
+func getQuery(ses *ora.Ses, fun string) (qry string, stmt *ora.Stmt, converters []ConvFunc, err error) {
 	parts := strings.Split(fun, ".")
-	qry := "SELECT argument_name, data_type, in_out, data_length, data_precision, data_scale FROM "
+	qry = "SELECT argument_name, data_type, in_out, data_length, data_precision, data_scale FROM "
 	params := make([]interface{}, 0, 3)
 	switch len(parts) {
 	case 1:
@@ -221,11 +226,11 @@ func getQuery(ses *ora.Ses, fun string) (string, error) {
 		qry += "all_arguments WHERE owner = UPPER(:1) AND package_name = UPPER(:2) AND object_name = UPPER(:3)"
 		params = append(params, parts[0], parts[1], parts[2])
 	default:
-		return "", errgo.Newf("bad function name: %q", fun)
+		return "", nil, nil, errgo.Newf("bad function name: %q", fun)
 	}
 	rset, err := ses.PrepAndQry(qry, fun)
 	if err != nil {
-		return "", errgo.Notef(err, qry)
+		return "", nil, nil, errgo.Notef(err, qry)
 	}
 
 	type Arg struct {
@@ -239,7 +244,7 @@ func getQuery(ses *ora.Ses, fun string) (string, error) {
 				Length: int(rset.Row[3].(int64)), Precision: int(rset.Row[4].(int64)), Scale: int(rset.Row[5].(int64))})
 	}
 	if rset.Err != nil {
-		return "", errgo.Notef(rset.Err, qry)
+		return "", nil, nil, errgo.Notef(rset.Err, qry)
 	}
 
 	qry = "BEGIN "
@@ -251,10 +256,42 @@ func getQuery(ses *ora.Ses, fun string) (string, error) {
 	}
 	qry += fun + "("
 	vals := make([]string, 0, len(args))
+	converters = make([]ConvFunc, len(vals))
 	for _, arg := range args {
 		vals = append(vals, fmt.Sprintf("%s=>:%d", arg.Name, i))
+		if arg.Type == "DATE" {
+			converters[i] = strToDate
+		}
 		i++
 	}
 	qry += "); END;"
-	return qry, nil
+	stmt, err = ses.Prep(qry)
+	return qry, stmt, converters, err
+}
+
+func strToDate(s string) (interface{}, error) {
+	if s == "" {
+		return nil, nil
+	}
+	if 8 <= len(s) && len(s) <= 10 {
+		return time.Parse("20060102", justNums(s, 8))
+	}
+	return time.Parse("20060102150405", justNums(s, 14))
+}
+func justNums(s string, maxLen int) string {
+	var i int
+	return strings.Map(
+		func(r rune) rune {
+			if maxLen >= 0 {
+				if i >= maxLen {
+					return -1
+				}
+				i++
+			}
+			if '0' <= r && r <= '9' {
+				return r
+			}
+			return -1
+		},
+		s)
 }
