@@ -28,9 +28,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rana/ora"
 	"github.com/tgulacsi/go/dber"
 	"github.com/tgulacsi/go/orahlp"
+	"gopkg.in/rana/ora.v3"
 
 	"gopkg.in/errgo.v1"
 )
@@ -214,7 +214,7 @@ func main() {
 			columns = flag.Args()[2:]
 		}
 	}
-	_ = ora.GetDrv()
+	ora.Register(nil)
 	//ora.Log = lg15.Log
 	//lg15.Log.SetHandler(log15.StderrHandler)
 	db, err := sql.Open("ora", *flagConnect)
