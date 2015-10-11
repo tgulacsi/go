@@ -27,7 +27,9 @@ import (
 func main() {
 	flagSheet := flag.Int("sheet", 0, "Index of sheet to convert, zero based")
 	flagConnect := flag.String("connect", "$BRUNO_ID", "database connection string")
+	flagCommit := flag.Int("commit-each", 0, "commit on every Nth record")
 	flagFunc := flag.String("call", "DBMS_OUTPUT.PUT_LINE", "function name to be called with each line")
+	flagFuncRetOk := flag.Int("call-ret-ok", 0, "OK return value")
 	flagDelim := flag.String("d", ";", "Delimiter to use between fields")
 	flagCharset := flag.String("charset", "utf-8", "input charset")
 	flag.Usage = func() {
@@ -101,7 +103,7 @@ Usage:
 	}
 	defer ses.Close()
 
-	if err = dbExec(ses, *flagFunc, rows); err != nil {
+	if err = dbExec(ses, *flagFunc, int64(*flagFuncRetOk), rows, *flagCommit); err != nil {
 		log.Fatalf("exec %q: %v", *flagFunc, err)
 	}
 }
@@ -165,17 +167,25 @@ type Row struct {
 	Values []string
 }
 
-func dbExec(ses *ora.Ses, fun string, rows <-chan Row) error {
+func dbExec(ses *ora.Ses, fun string, retOk int64, rows <-chan Row, commitEach int) error {
 	qry, stmt, converters, err := getQuery(ses, fun)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
+	isFunction := strings.HasPrefix(qry, "BEGIN :1 :=")
 
 	var (
-		tx     *ora.Tx
-		values []interface{}
+		tx       *ora.Tx
+		values   []interface{}
+		startIdx int
+		ret      int64
+		n        int
 	)
+	if isFunction {
+		values = append(values, &ret)
+		startIdx = 1
+	}
 
 	for row := range rows {
 		if tx == nil {
@@ -184,7 +194,7 @@ func dbExec(ses *ora.Ses, fun string, rows <-chan Row) error {
 			}
 		}
 
-		values = values[:0]
+		values = values[:startIdx]
 		for i, s := range row.Values {
 			conv := converters[i]
 			if conv == nil {
@@ -201,6 +211,19 @@ func dbExec(ses *ora.Ses, fun string, rows <-chan Row) error {
 		if _, err = stmt.Exe(values...); err != nil {
 			log.Printf("execute %q with row %d (%#v): %v", qry, row.Line, row.Values, err)
 			return err
+		}
+		if isFunction && values[0] != nil {
+			if ret != retOk {
+				tx.Rollback()
+				return errgo.Newf("function %q returned %v, wanted %v (line %d).", fun, ret, retOk, row.Line)
+			}
+		}
+		n++
+		if commitEach > 0 && n%commitEach == 0 {
+			if err = tx.Commit(); err != nil {
+				return err
+			}
+			tx = nil
 		}
 	}
 	if tx != nil {
