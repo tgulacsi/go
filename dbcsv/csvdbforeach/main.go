@@ -12,8 +12,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/tgulacsi/go/orahlp"
@@ -29,9 +31,12 @@ func main() {
 	flagConnect := flag.String("connect", "$BRUNO_ID", "database connection string")
 	flagCommit := flag.Int("commit-each", 0, "commit on every Nth record")
 	flagFunc := flag.String("call", "DBMS_OUTPUT.PUT_LINE", "function name to be called with each line")
+	flagFixParams := flag.String("fix", "p_file_name=>{{.FileName}}", "fix parameters to add; uses text/template")
 	flagFuncRetOk := flag.Int("call-ret-ok", 0, "OK return value")
 	flagDelim := flag.String("d", ";", "Delimiter to use between fields")
 	flagCharset := flag.String("charset", "utf-8", "input charset")
+	flagSkip := flag.Int("skip", 1, "skip first N rows")
+	flagColumns := flag.String("columns", "", "column numbers to use, separated by comma, in param order, starts with 1")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `%s
 
@@ -48,6 +53,30 @@ Usage:
 	if flag.NArg() != 1 {
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	var columns []int
+	for _, x := range strings.Split(*flagColumns, ",") {
+		i, err := strconv.Atoi(x)
+		if err != nil {
+			log.Fatal(err)
+		}
+		columns = append(columns, i)
+	}
+
+	ctxData := struct {
+		FileName string
+	}{FileName: flag.Arg(0)}
+	var fixParams [][2]string
+	var buf bytes.Buffer
+	for _, tup := range strings.Split(*flagFixParams, ",") {
+		parts := strings.SplitN(tup, "=>", 2)
+		tpl := template.Must(template.New(parts[0]).Parse(parts[1]))
+		buf.Reset()
+		if err := tpl.Execute(&buf, ctxData); err != nil {
+			log.Fatal(err)
+		}
+		fixParams = append(fixParams, [2]string{parts[0], buf.String()})
 	}
 
 	inp := os.Stdin
@@ -85,6 +114,23 @@ Usage:
 		go func() { defer close(rows); errch <- readCSV(rows, r, *flagDelim) }()
 	}
 
+	for i := 0; i < *flagSkip; i++ {
+		<-rows
+	}
+	if len(columns) > 0 {
+		filtered := make(chan Row, 8)
+		go func() {
+			defer close(filtered)
+			for row := range rows {
+				row2 := Row{Line: row.Line, Values: make([]string, len(columns))}
+				for i, j := range columns {
+					row2.Values[i] = row.Values[j]
+				}
+				filtered <- row2
+			}
+		}()
+	}
+
 	env, err := ora.OpenEnv(nil)
 	if err != nil {
 		log.Fatal(err)
@@ -103,7 +149,7 @@ Usage:
 	}
 	defer ses.Close()
 
-	if err = dbExec(ses, *flagFunc, int64(*flagFuncRetOk), rows, *flagCommit); err != nil {
+	if err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagCommit); err != nil {
 		log.Fatalf("exec %q: %v", *flagFunc, err)
 	}
 }
@@ -167,14 +213,12 @@ type Row struct {
 	Values []string
 }
 
-func dbExec(ses *ora.Ses, fun string, retOk int64, rows <-chan Row, commitEach int) error {
-	qry, stmt, converters, err := getQuery(ses, fun)
+func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, commitEach int) error {
+	st, err := getQuery(ses, fun, fixParams)
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
-	isFunction := strings.HasPrefix(qry, "BEGIN :1 :=")
-
+	defer st.Close()
 	var (
 		tx       *ora.Tx
 		values   []interface{}
@@ -182,10 +226,6 @@ func dbExec(ses *ora.Ses, fun string, retOk int64, rows <-chan Row, commitEach i
 		ret      int64
 		n        int
 	)
-	if isFunction {
-		values = append(values, &ret)
-		startIdx = 1
-	}
 
 	for row := range rows {
 		if tx == nil {
@@ -196,7 +236,7 @@ func dbExec(ses *ora.Ses, fun string, retOk int64, rows <-chan Row, commitEach i
 
 		values = values[:startIdx]
 		for i, s := range row.Values {
-			conv := converters[i]
+			conv := st.Converters[i]
 			if conv == nil {
 				values = append(values, s)
 				continue
@@ -208,11 +248,14 @@ func dbExec(ses *ora.Ses, fun string, retOk int64, rows <-chan Row, commitEach i
 			}
 			values = append(values, v)
 		}
-		if _, err = stmt.Exe(values...); err != nil {
-			log.Printf("execute %q with row %d (%#v): %v", qry, row.Line, row.Values, err)
+		for _, s := range st.FixParams {
+			values = append(values, s)
+		}
+		if _, err = st.Stmt.Exe(values...); err != nil {
+			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, row.Values, err)
 			return err
 		}
-		if isFunction && values[0] != nil {
+		if st.Returns && values[0] != nil {
 			if ret != retOk {
 				tx.Rollback()
 				return errgo.Newf("function %q returned %v, wanted %v (line %d).", fun, ret, retOk, row.Line)
@@ -234,9 +277,19 @@ func dbExec(ses *ora.Ses, fun string, retOk int64, rows <-chan Row, commitEach i
 
 type ConvFunc func(string) (interface{}, error)
 
-func getQuery(ses *ora.Ses, fun string) (qry string, stmt *ora.Stmt, converters []ConvFunc, err error) {
+type Statement struct {
+	Qry string
+	*ora.Stmt
+	Returns    bool
+	Converters []ConvFunc
+	ParamCount int
+	FixParams  []string
+}
+
+func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error) {
+	var st Statement
 	parts := strings.Split(fun, ".")
-	qry = "SELECT argument_name, data_type, in_out, data_length, data_precision, data_scale FROM "
+	qry := "SELECT argument_name, data_type, in_out, data_length, data_precision, data_scale FROM "
 	params := make([]interface{}, 0, 3)
 	switch len(parts) {
 	case 1:
@@ -249,12 +302,12 @@ func getQuery(ses *ora.Ses, fun string) (qry string, stmt *ora.Stmt, converters 
 		qry += "all_arguments WHERE owner = UPPER(:1) AND package_name = UPPER(:2) AND object_name = UPPER(:3)"
 		params = append(params, parts[0], parts[1], parts[2])
 	default:
-		return "", nil, nil, errgo.Newf("bad function name: %q", fun)
+		return st, errgo.Newf("bad function name: %q", fun)
 	}
 	qry += " ORDER BY sequence"
 	rset, err := ses.PrepAndQry(qry, params...)
 	if err != nil {
-		return "", nil, nil, errgo.Notef(err, qry)
+		return st, errgo.Notef(err, qry)
 	}
 
 	type Arg struct {
@@ -276,31 +329,38 @@ func getQuery(ses *ora.Ses, fun string) (qry string, stmt *ora.Stmt, converters 
 		args = append(args, arg)
 	}
 	if rset.Err != nil {
-		return "", nil, nil, errgo.Notef(rset.Err, qry)
+		return st, errgo.Notef(rset.Err, qry)
 	}
 	if len(args) == 0 {
-		return "", nil, nil, errgo.Newf("%q has no arguments!", fun)
+		return st, errgo.Newf("%q has no arguments!", fun)
 	}
 
-	qry = "BEGIN "
+	st.Qry = "BEGIN "
 	i := 0
 	if args[0].Name == "" { // function
-		qry += ":1 := "
+		st.Qry += ":1 := "
 		args = args[1:]
+		st.Returns = true
 		i++
 	}
 	vals := make([]string, 0, len(args))
-	converters = make([]ConvFunc, cap(vals))
-	for i, arg := range args {
+	st.Converters = make([]ConvFunc, cap(vals))
+	for j, arg := range args {
 		vals = append(vals, fmt.Sprintf("%s=>:%d", arg.Name, i))
 		if arg.Type == "DATE" {
-			converters[i] = strToDate
+			st.Converters[j] = strToDate
 		}
 		i++
 	}
-	qry += fun + "(" + strings.Join(vals, ", ") + "); END;"
-	stmt, err = ses.Prep(qry)
-	return qry, stmt, converters, err
+	for _, p := range fixParams {
+		vals = append(vals, fmt.Sprintf("%s=>%d", p[0], i))
+		st.FixParams = append(st.FixParams, p[1])
+		i++
+	}
+	st.ParamCount = i
+	st.Qry += fun + "(" + strings.Join(vals, ", ") + "); END;"
+	st.Stmt, err = ses.Prep(qry)
+	return st, err
 }
 
 func strToDate(s string) (interface{}, error) {
