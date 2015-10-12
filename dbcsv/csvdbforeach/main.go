@@ -62,7 +62,7 @@ Usage:
 			if err != nil {
 				log.Fatalf("column %q: %v", x, err)
 			}
-			columns = append(columns, i)
+			columns = append(columns, i-1)
 		}
 	}
 
@@ -111,27 +111,50 @@ Usage:
 		log.Fatal("read %q: %v", inp, err)
 	}
 	if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
-		go func() { defer close(rows); errch <- readXLSXFile(rows, flag.Arg(0), *flagSheet) }()
+		go func(rows chan<- Row) { defer close(rows); errch <- readXLSXFile(rows, flag.Arg(0), *flagSheet) }(rows)
 	} else {
 		r := text.NewReader(inp, text.GetEncoding(*flagCharset))
-		go func() { defer close(rows); errch <- readCSV(rows, r, *flagDelim) }()
+		go func(rows chan<- Row) { defer close(rows); errch <- readCSV(rows, r, *flagDelim) }(rows)
+	}
+
+	// filter out empty rows
+	{
+		filtered := make(chan Row, 8)
+		go func(filtered chan<- Row, rows <-chan Row) {
+			defer close(filtered)
+			for row := range rows {
+				for _, s := range row.Values {
+					if s != "" {
+						filtered <- row
+						break
+					}
+				}
+			}
+		}(filtered, rows)
+		rows = filtered
 	}
 
 	for i := 0; i < *flagSkip; i++ {
 		<-rows
 	}
 	if len(columns) > 0 {
+		// change column order
 		filtered := make(chan Row, 8)
-		go func() {
+		go func(filtered chan<- Row, rows <-chan Row) {
 			defer close(filtered)
 			for row := range rows {
 				row2 := Row{Line: row.Line, Values: make([]string, len(columns))}
 				for i, j := range columns {
-					row2.Values[i] = row.Values[j]
+					if j < len(row.Values) {
+						row2.Values[i] = row.Values[j]
+					} else {
+						row2.Values[i] = ""
+					}
 				}
 				filtered <- row2
 			}
-		}()
+		}(filtered, rows)
+		rows = filtered
 	}
 
 	env, err := ora.OpenEnv(nil)
@@ -305,17 +328,21 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 			}
 			values = append(values, v)
 		}
+		for i := len(values) + 1; i < st.ParamCount-len(st.FixParams); i++ {
+			values = append(values, "")
+		}
 		for _, s := range st.FixParams {
 			values = append(values, s)
 		}
 		if _, err = stmt.Exe(values...); err != nil {
+			log.Printf("values=%d ParamCount=%d", len(values), st.ParamCount)
 			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
-			return n, err
+			return n, errgo.Notef(err, "qry=%q params=%#v", st.Qry, values)
 		}
 		if st.Returns && values[0] != nil {
 			if ret != retOk {
 				tx.Rollback()
-				return n, errgo.Newf("function %q returned %v, wanted %v (line %d).", fun, ret, retOk, row.Line)
+				return n, errgo.Newf("function %q returned %v, wanted %v (line %d %q).", fun, ret, retOk, row.Line, row.Values)
 			}
 		}
 		n++
