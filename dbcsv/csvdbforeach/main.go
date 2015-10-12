@@ -1,4 +1,4 @@
-// Copyright 2011-2015, The xlsx2csv Authors.
+// Copyright 2011-2015, Tamás Gulácsi.
 // All rights reserved.
 // For details, see the LICENSE file.
 
@@ -56,12 +56,14 @@ Usage:
 	}
 
 	var columns []int
-	for _, x := range strings.Split(*flagColumns, ",") {
-		i, err := strconv.Atoi(x)
-		if err != nil {
-			log.Fatal(err)
+	if *flagColumns != "" {
+		for _, x := range strings.Split(*flagColumns, ",") {
+			i, err := strconv.Atoi(x)
+			if err != nil {
+				log.Fatalf("column %q: %v", x, err)
+			}
+			columns = append(columns, i)
 		}
-		columns = append(columns, i)
 	}
 
 	ctxData := struct {
@@ -97,6 +99,7 @@ Usage:
 		defer errWg.Done()
 		for err := range errch {
 			if err != nil {
+				log.Printf("ERROR: %v", err)
 				errs = append(errs, err.Error())
 			}
 		}
@@ -143,16 +146,48 @@ Usage:
 		log.Fatal(err)
 	}
 	defer srv.Close()
+
 	ses, err := srv.OpenSes(&ora.SesCfg{Username: username, Password: password})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer ses.Close()
 
-	if err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagCommit); err != nil {
+	var n int
+	start := time.Now()
+	if n, err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagCommit); err != nil {
 		log.Fatalf("exec %q: %v", *flagFunc, err)
 	}
+	d := time.Since(start)
+	close(errch)
+	if len(errs) > 0 {
+		log.Fatal("ERRORS:\n\t%s", strings.Join(errs, "\n\t"))
+	}
+	log.Printf("Processed %d rows in %s.", n, d)
 }
+
+const (
+	dateFormat     = "20060102"
+	dateTimeFormat = "20060102150405"
+)
+
+var timeReplacer = strings.NewReplacer(
+	"yyyy", "2006",
+	"yy", "06",
+	"dd", "02",
+	"d", "2",
+	"mmm", "Jan",
+	"mmss", "0405",
+	"ss", "05",
+	"hh", "15",
+	"h", "3",
+	"mm:", "04:",
+	":mm", ":04",
+	"mm", "01",
+	"am/pm", "pm",
+	"m/", "1/",
+	".0", ".9999",
+)
 
 func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 	xlFile, err := xlsx.OpenFile(filename)
@@ -167,16 +202,27 @@ func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 		return errgo.Newf("No sheet %d available, please select a sheet between 0 and %d\n", sheetIndex, sheetLen-1)
 	}
 	sheet := xlFile.Sheets[sheetIndex]
-	var vals []string
-	for n, row := range sheet.Rows {
+	n := 0
+	for _, row := range sheet.Rows {
 		if row == nil {
 			continue
 		}
-		vals = vals[:0]
+		vals := make([]string, 0, len(row.Cells))
 		for _, cell := range row.Cells {
-			vals = append(vals, cell.String())
+			numFmt := cell.GetNumberFormat()
+			if strings.Contains(numFmt, "yy") || strings.Contains(numFmt, "mm") || strings.Contains(numFmt, "dd") {
+				goFmt := timeReplacer.Replace(numFmt)
+				dt, err := time.Parse(goFmt, cell.String())
+				if err != nil {
+					return errgo.Notef(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
+				}
+				vals = append(vals, dt.Format(dateFormat))
+			} else {
+				vals = append(vals, cell.String())
+			}
 		}
 		rows <- Row{Line: n, Values: vals}
+		n++
 	}
 	return nil
 }
@@ -213,24 +259,35 @@ type Row struct {
 	Values []string
 }
 
-func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, commitEach int) error {
+func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, commitEach int) (int, error) {
 	st, err := getQuery(ses, fun, fixParams)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	defer st.Close()
 	var (
+		stmt     *ora.Stmt
 		tx       *ora.Tx
 		values   []interface{}
 		startIdx int
 		ret      int64
 		n        int
 	)
+	if st.Returns {
+		values = append(values, &ret)
+		startIdx = 1
+	}
 
 	for row := range rows {
 		if tx == nil {
 			if tx, err = ses.StartTx(); err != nil {
-				return err
+				return n, err
+			}
+			if stmt != nil {
+				stmt.Close()
+			}
+			if stmt, err = ses.Prep(st.Qry); err != nil {
+				tx.Rollback()
+				return n, err
 			}
 		}
 
@@ -244,42 +301,44 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 			v, err := conv(s)
 			if err != nil {
 				log.Printf("row=%#v", row)
-				return errgo.Notef(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
+				return n, errgo.Notef(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
 			}
 			values = append(values, v)
 		}
 		for _, s := range st.FixParams {
 			values = append(values, s)
 		}
-		if _, err = st.Stmt.Exe(values...); err != nil {
-			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, row.Values, err)
-			return err
+		if _, err = stmt.Exe(values...); err != nil {
+			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
+			return n, err
 		}
 		if st.Returns && values[0] != nil {
 			if ret != retOk {
 				tx.Rollback()
-				return errgo.Newf("function %q returned %v, wanted %v (line %d).", fun, ret, retOk, row.Line)
+				return n, errgo.Newf("function %q returned %v, wanted %v (line %d).", fun, ret, retOk, row.Line)
 			}
 		}
 		n++
 		if commitEach > 0 && n%commitEach == 0 {
 			if err = tx.Commit(); err != nil {
-				return err
+				return n, err
 			}
 			tx = nil
 		}
 	}
-	if tx != nil {
-		return tx.Commit()
+	if stmt != nil {
+		stmt.Close()
 	}
-	return nil
+	if tx != nil {
+		return n, tx.Commit()
+	}
+	return n, nil
 }
 
 type ConvFunc func(string) (interface{}, error)
 
 type Statement struct {
-	Qry string
-	*ora.Stmt
+	Qry        string
 	Returns    bool
 	Converters []ConvFunc
 	ParamCount int
@@ -336,30 +395,39 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 	}
 
 	st.Qry = "BEGIN "
-	i := 0
+	i := 1
 	if args[0].Name == "" { // function
-		st.Qry += ":1 := "
+		st.Qry += ":x1 := "
 		args = args[1:]
 		st.Returns = true
 		i++
 	}
+	fixParamNames := make([]string, len(fixParams))
+	for j, x := range fixParams {
+		fixParamNames[j] = strings.ToUpper(x[0])
+	}
 	vals := make([]string, 0, len(args))
 	st.Converters = make([]ConvFunc, cap(vals))
+ArgLoop:
 	for j, arg := range args {
-		vals = append(vals, fmt.Sprintf("%s=>:%d", arg.Name, i))
+		for _, x := range fixParamNames {
+			if x == arg.Name {
+				continue ArgLoop
+			}
+		}
+		vals = append(vals, fmt.Sprintf("%s=>:x%d", strings.ToLower(arg.Name), i))
 		if arg.Type == "DATE" {
 			st.Converters[j] = strToDate
 		}
 		i++
 	}
 	for _, p := range fixParams {
-		vals = append(vals, fmt.Sprintf("%s=>%d", p[0], i))
+		vals = append(vals, fmt.Sprintf("%s=>:x%d", p[0], i))
 		st.FixParams = append(st.FixParams, p[1])
 		i++
 	}
 	st.ParamCount = i
 	st.Qry += fun + "(" + strings.Join(vals, ", ") + "); END;"
-	st.Stmt, err = ses.Prep(qry)
 	return st, err
 }
 
@@ -368,9 +436,9 @@ func strToDate(s string) (interface{}, error) {
 		return nil, nil
 	}
 	if 8 <= len(s) && len(s) <= 10 {
-		return time.Parse("20060102", justNums(s, 8))
+		return time.Parse(dateFormat, justNums(s, 8))
 	}
-	return time.Parse("20060102150405", justNums(s, 14))
+	return time.Parse(dateTimeFormat, justNums(s, 14))
 }
 func justNums(s string, maxLen int) string {
 	var i int
@@ -380,9 +448,9 @@ func justNums(s string, maxLen int) string {
 				if i > maxLen {
 					return -1
 				}
-				i++
 			}
 			if '0' <= r && r <= '9' {
+				i++
 				return r
 			}
 			return -1

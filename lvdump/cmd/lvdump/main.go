@@ -8,28 +8,18 @@ package main
 
 import (
 	"flag"
-	"os"
 
-	"github.com/tgulacsi/go/loghlp"
 	"github.com/tgulacsi/go/lvdump"
-	"github.com/tgulacsi/go/term"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var Log = lvdump.Log
 
 func main() {
-	Log.SetHandler(log15.StderrHandler)
-	stderr, err := term.MaskOut(os.Stderr, term.GetTTYEncoding())
-	if err != nil {
-		Log.Crit("mask stderr", "encoding", term.GetTTYEncoding(), "error", err)
-		os.Exit(1)
-	}
-	loghlp.UseWriter(stderr)
-	Log.SetHandler(log15.StderrHandler)
+	Log.SetHandler(log15.CallerFileHandler(log15.StderrHandler))
 
 	flag.Parse()
 	if err := lvdump.Dump(flag.Arg(0)); err != nil {
-		Log.Error("Dump", "src", flag.Arg(0), "error")
+		Log.Error("Dump", "src", flag.Arg(0), "error", err)
 	}
 }
