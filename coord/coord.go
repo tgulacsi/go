@@ -41,7 +41,7 @@ type Location struct {
 	Lng     float64 `json:"lng"`
 }
 
-func GetCoord(ctx context.Context, address string) (Location, error) {
+func Get(ctx context.Context, address string) (Location, error) {
 	var loc Location
 	select {
 	case <-ctx.Done():

@@ -25,11 +25,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/context"
+	"golang.org/x/net/context/ctxhttp"
 
 	"gopkg.in/errgo.v1"
 )
@@ -69,9 +74,10 @@ func init() {
 }
 
 func GetPDF(
+	ctx context.Context,
 	username, password string,
 	opt Options,
-) (string, io.ReadCloser, error) {
+) (rc io.ReadCloser, fileName, mimeType string, err error) {
 	params := url.Values(map[string][]string{
 		"address":   {opt.Address},
 		"lat":       {fmt.Sprintf("%.5f", opt.Lat)},
@@ -88,16 +94,21 @@ func GetPDF(
 	meURL := macroExpertURL + "?" + params.Encode()
 	req, err := http.NewRequest("GET", meURL, nil)
 	if err != nil {
-		return "", nil, errgo.Notef(err, "url=%q", meURL)
+		return nil, "", "", errgo.Notef(err, "url=%q", meURL)
 	}
 	req.SetBasicAuth(username, password)
-	resp, err := client.Do(req)
+	select {
+	case <-ctx.Done():
+		return nil, "", "", ctx.Err()
+	default:
+	}
+	resp, err := ctxhttp.Do(ctx, client, req)
 	if err != nil {
-		return "", nil, err
+		return nil, "", "", err
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
-		return "", nil, errgo.Newf("9999: egyéb hiba")
+		return nil, "", "", errgo.Newf("9999: egyéb hiba")
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -106,23 +117,40 @@ func GetPDF(
 		if err := xml.NewDecoder(io.TeeReader(resp.Body, &buf)).Decode(&mr); err != nil {
 			_, _ = io.Copy(&buf, resp.Body)
 			resp.Body.Close()
-			return "", nil, errgo.Notef(err, "parse %q", buf.String())
+			return nil, "", "", errgo.Notef(err, "parse %q", buf.String())
 		}
-		return "", nil, mr
+		return nil, "", "", mr
 	}
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
 		buf, _ := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
-		return "", nil, errgo.Newf("9998: %s", buf)
+		return nil, "", "", errgo.Newf("9998: %s", buf)
+	}
+	var fn string
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if _, params, err := mime.ParseMediaType(cd); err == nil {
+			fn = params["filename"]
+		}
+	}
+	if fn == "" {
+		fn = "macroexpert-villamvilag-" + url.QueryEscape(opt.Address) + ".pdf"
 	}
 
-	return ct, resp.Body, nil
+	return resp.Body, fn, ct, nil
 }
 
 type meResponse struct {
 	XMLName xml.Name `xml:"Response"`
 	Code    string   `xml:"ResponseCode"`
 	Text    string   `xml:"ResponseText"`
+}
+
+func (mr meResponse) ErrNum() int {
+	n, err := strconv.Atoi(strings.TrimPrefix("ERR_", mr.Code))
+	if err != nil {
+		return 9999
+	}
+	return n
 }
 
 func (mr meResponse) Error() string { return fmt.Sprintf("%s: %s", mr.Code, mr.Text) }

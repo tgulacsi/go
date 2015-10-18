@@ -31,7 +31,7 @@ func TestGetCoord(t *testing.T) {
 		{"XXXXXXX utca", true},
 	} {
 
-		loc, err := GetCoord(context.Background(), tc.Address)
+		loc, err := Get(context.Background(), tc.Address)
 		t.Logf("%#v [error=%v]", loc, err)
 		if tc.WantErr && err == nil {
 			t.Errorf("%d. want error for %q.", i, tc.Address)
