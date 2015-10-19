@@ -23,10 +23,12 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 
+	"gopkg.in/errgo.v1"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -57,8 +59,26 @@ type staticParams struct {
 	CallbackPath               string
 }
 
+func (in Interactive) RenderHTML(w io.Writer, address, callbackURL string) error {
+	sp := staticParams{
+		Address:        address,
+		DefaultAddress: in.DefaultAddress,
+		Title:          in.Title,
+		MapCenterLat:   fmt.Sprintf("%+f", in.MapCenter.Lat),
+		MapCenterLng:   fmt.Sprintf("%+f", in.MapCenter.Lng),
+		LocLat:         fmt.Sprintf("%+f", in.Location.Lat),
+		LocLng:         fmt.Sprintf("%+f", in.Location.Lng),
+		CallbackPath:   callbackURL,
+	}
+	if err := tmpl.Execute(w, sp); err != nil {
+		return errgo.Notef(err, "with %#v", sp)
+	}
+	return nil
+}
+
 func (in *Interactive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	id := genID()
+	vals := r.URL.Query()
+	id := vals.Get("id")
 	in.inProgressMu.Lock()
 	if in.inProgress == nil {
 		in.inProgress = make(map[string]struct{}, 8)
@@ -76,18 +96,8 @@ func (in *Interactive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if in.Title == "" {
 		in.Title = DefaultTitle
 	}
-	vals := r.URL.Query()
-	sp := staticParams{
-		Address:      vals.Get("address"),
-		Title:        in.Title,
-		MapCenterLat: fmt.Sprintf("%+f", in.MapCenter.Lat),
-		MapCenterLng: fmt.Sprintf("%+f", in.MapCenter.Lng),
-		LocLat:       fmt.Sprintf("%+f", in.Location.Lat),
-		LocLng:       fmt.Sprintf("%+f", in.Location.Lng),
-		CallbackPath: in.BaseURL + "/set?id=" + id,
-	}
-	if err := tmpl.Execute(w, sp); err != nil {
-		Log.Error("template with %#v: %v", sp, err)
+	if err := in.RenderHTML(w, vals.Get("address"), in.BaseURL+"/?id="+url.QueryEscape(id)); err != nil {
+		Log.Error("RenderHTML: %v", err)
 	}
 }
 func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +124,7 @@ func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
 	if in.Set == nil {
 		return
 	}
-	if err := in.Set(mp.ID, mp.Location); err != nil {
+	if err := in.Set(id, Location{Lat: lat, Lng: lng}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
