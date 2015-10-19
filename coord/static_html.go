@@ -124,21 +124,13 @@ function initialize() {
   var request = {
     location: new google.maps.LatLng({{.LocLat}}, {{.LocLng}}),
     radius: 257 * 1000,
-    query: QueryParameters.address
+    query: "{{.Address}}"
   }
   var service = new google.maps.places.PlacesService(map);
   service.textSearch(request, callback);
-  input.value = QueryParameters.address == "" ? "{{.DefaultAddress}}" : QueryParameters.address;
+  input.value = "{{.Address}}";
 
   infowindow = new google.maps.InfoWindow();
-  var i = 0;
-  for (var key in QueryParameters) {
-    if (key == "lat" || key == "lng") {
-      continue;
-    }
-    cbPath += (i == 0 ? "?" : "&") + key + "=" + encodeURIComponent(QueryParameters[key]);
-    i++;
-  }
   console.log( "cbPath=" + cbPath );
 
   var searchBox = new google.maps.places.SearchBox(

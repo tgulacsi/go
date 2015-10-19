@@ -17,16 +17,12 @@ limitations under the License.
 package coord
 
 import (
-	//"crypto/hmac"
-	//"crypto/rand"
-	//"crypto/sha256"
-	//"encoding/base64"
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
-	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,11 +46,11 @@ type Interactive struct {
 	BaseURL        string
 	NoDirect       bool
 
-	Locations map[string]Location // setted locations
-	sync.Mutex
+	inProgress   map[string]struct{} // location set in progress
+	inProgressMu sync.Mutex
 }
 type staticParams struct {
-	Title                      string
+	Address, Title             string
 	MapCenterLat, MapCenterLng string
 	LocLat, LocLng             string
 	DefaultAddress             string
@@ -62,12 +58,15 @@ type staticParams struct {
 }
 
 func (in *Interactive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	in.Lock()
-	if in.Locations == nil {
-		in.Locations = make(map[string]Location)
+	id := genID()
+	in.inProgressMu.Lock()
+	if in.inProgress == nil {
+		in.inProgress = make(map[string]struct{}, 8)
 	}
-	in.Unlock()
-	if strings.HasSuffix(r.URL.Path, "/_koord/set") {
+	in.inProgress[id] = struct{}{}
+	in.inProgressMu.Unlock()
+
+	if strings.HasSuffix(r.URL.Path, "/set") {
 		in.serveSet(w, r)
 		return
 	}
@@ -77,33 +76,40 @@ func (in *Interactive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if in.Title == "" {
 		in.Title = DefaultTitle
 	}
+	vals := r.URL.Query()
 	sp := staticParams{
-		Title:          in.Title,
-		MapCenterLat:   fmt.Sprintf("%+f", in.MapCenter.Lat),
-		MapCenterLng:   fmt.Sprintf("%+f", in.MapCenter.Lng),
-		LocLat:         fmt.Sprintf("%+f", in.Location.Lat),
-		LocLng:         fmt.Sprintf("%+f", in.Location.Lng),
-		DefaultAddress: in.DefaultAddress,
-		CallbackPath:   path.Join(in.BaseURL, "_koord", "set"),
+		Address:      vals.Get("address"),
+		Title:        in.Title,
+		MapCenterLat: fmt.Sprintf("%+f", in.MapCenter.Lat),
+		MapCenterLng: fmt.Sprintf("%+f", in.MapCenter.Lng),
+		LocLat:       fmt.Sprintf("%+f", in.Location.Lat),
+		LocLng:       fmt.Sprintf("%+f", in.Location.Lng),
+		CallbackPath: in.BaseURL + "/set?id=" + id,
 	}
 	if err := tmpl.Execute(w, sp); err != nil {
 		Log.Error("template with %#v: %v", sp, err)
 	}
 }
 func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
-	var mp macParams
-	if err := mp.ParseQuery(r.URL.Query()); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if !mp.Check() {
-		http.Error(w, "bad mac", http.StatusBadRequest)
+	vals := r.URL.Query()
+	id := vals.Get("id")
+	in.inProgressMu.Lock()
+	_, ok := in.inProgress[id]
+	in.inProgressMu.Unlock()
+	if id == "" || !ok {
+		http.Error(w, "id is required", http.StatusBadRequest)
 		return
 	}
 
-	in.Lock()
-	in.Locations[mp.ID] = mp.Location
-	in.Unlock()
+	lat, lng, err := parseLatLng(vals.Get("lat"), vals.Get("lng"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	in.inProgressMu.Lock()
+	delete(in.inProgress, id)
+	in.inProgressMu.Unlock()
 
 	if in.Set == nil {
 		return
@@ -114,75 +120,27 @@ func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-const (
-	keyLength   = 32
-	nonceLength = 8
-)
-
-var (
-	macKey []byte
-	tmpl   *template.Template
-)
+var tmpl *template.Template
 
 func init() {
 	Log.SetHandler(log15.DiscardHandler())
 
-	macKey = make([]byte, keyLength)
-	if _, err := rand.Read(macKey); err != nil {
-		panic(err)
-	}
 	tmpl = template.Must(template.New("gmapsHTML").Parse(gmapsHTML))
 }
 
-type macParams struct {
-	Location
-	ID string
-	//Nonce []byte
-	//MAC   []byte
-}
-
-func (mp *macParams) ParseQuery(vals url.Values) error {
-	mp.ID = vals.Get("id")
-	latS, lngS := vals.Get("lat"), vals.Get("lng")
-	var err error
-	//mp.Nonce, err = base64.URLEncoding.DecodeString(vals.Get("nonce"))
-	//if err != nil {
-	//return err
-	//}
-	//mp.MAC, err = base64.URLEncoding.DecodeString(vals.Get("mac"))
-	//if err != nil {
-	//return err
-	//}
-	if mp.Lat, err = strconv.ParseFloat(latS, 64); err != nil {
-		return err
+func genID() string {
+	buf := make([]byte, 32)
+	n, _ := io.ReadAtLeast(rand.Reader, buf, len(buf)/2)
+	if n == 0 {
+		n = 1
 	}
-	if mp.Lng, err = strconv.ParseFloat(lngS, 64); err != nil {
-		return err
+	return base64.URLEncoding.EncodeToString(buf[:n])
+}
+func parseLatLng(latS, lngS string) (float64, float64, error) {
+	lat, err := strconv.ParseFloat(latS, 64)
+	if err != nil {
+		return lat, 0, err
 	}
-	return nil
-}
-
-func (mp macParams) Check() bool {
-	//return hmac.Equal(mp.generate(nil), mp.MAC)
-	return true
-}
-
-func (mp macParams) generate(mac []byte) []byte {
-	//mc := hmac.New(sha256.New, macKey)
-	//io.WriteString(mc,
-	//"id="+url.QueryEscape(mp.ID)+
-	//"&lat="+url.QueryEscape(fmt.Sprintf("%+f", mp.Lat))+
-	//"&lng="+url.QueryEscape(fmt.Sprintf("%+f", mp.Lng))+
-	//"&nonce="+base64.URLEncoding.EncodeToString(mp.Nonce),
-	//)
-	//return mc.Sum(mac)
-	return nil
-}
-
-func (mp *macParams) Generate() {
-	//if mp.Nonce == nil {
-	//mp.Nonce = make([]byte, nonceLength)
-	//_, _ = rand.Read(mp.Nonce)
-	//}
-	//mp.MAC = mp.generate(mp.MAC[:0])
+	lng, err := strconv.ParseFloat(lngS, 64)
+	return lat, lng, err
 }
