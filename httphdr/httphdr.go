@@ -33,7 +33,7 @@ func ContentDisposition(dispType string, filename string) string {
 		bPool.Put(b)
 	}()
 	b.WriteString(dispType)
-	b.WriteString(` filename="`)
+	b.WriteString(`; filename="`)
 	justLatin := true
 	start := b.Len()
 	for _, r := range filename {
