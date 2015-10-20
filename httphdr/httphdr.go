@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"unicode"
 )
 
 var bPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 128)) }}
@@ -37,7 +38,7 @@ func ContentDisposition(dispType string, filename string) string {
 	justLatin := true
 	start := b.Len()
 	for _, r := range filename {
-		if r < 0x80 {
+		if r < unicode.MaxLatin1 && r != '"' && !unicode.IsControl(r) && !unicode.IsSpace(r) {
 			b.WriteByte(byte(r))
 		} else {
 			fmt.Fprintf(b, "%%%x", r)
