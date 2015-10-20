@@ -37,7 +37,14 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 
 	"gopkg.in/errgo.v1"
+	"gopkg.in/inconshreveable/log15.v2"
 )
+
+var Log = log15.New("lib", "mevv")
+
+func init() {
+	Log.SetHandler(log15.DiscardHandler())
+}
 
 const macroExpertURL = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
 
@@ -102,13 +109,17 @@ func GetPDF(
 		return nil, "", "", ctx.Err()
 	default:
 	}
+	Log.Info("Get", "url", req.URL)
 	resp, err := ctxhttp.Do(ctx, client, req)
 	if err != nil {
-		return nil, "", "", err
+		return nil, "", "", errgo.Notef(err, "Do %#v", req)
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
-		return nil, "", "", errgo.Newf("9999: egyéb hiba")
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			return nil, "", "", errgo.Newf("Authentication error: %s", resp.Status)
+		}
+		return nil, "", "", errgo.Newf("%s: egyéb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -124,7 +135,7 @@ func GetPDF(
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
 		buf, _ := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, "", "", errgo.Newf("9998: %s", buf)
+		return nil, "", "", errgo.Newf("998: %s", buf)
 	}
 	var fn string
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {

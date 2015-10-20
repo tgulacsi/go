@@ -97,7 +97,7 @@ func (in *Interactive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		in.Title = DefaultTitle
 	}
 	if err := in.RenderHTML(w, vals.Get("address"), in.BaseURL+"/?id="+url.QueryEscape(id)); err != nil {
-		Log.Error("RenderHTML: %v", err)
+		Log.Error("RenderHTML", "error", err)
 	}
 }
 func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
