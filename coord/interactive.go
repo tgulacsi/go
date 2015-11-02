@@ -20,13 +20,13 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
+	"text/template" // yes, no need for context-aware escapes
 
 	"gopkg.in/errgo.v1"
 	"gopkg.in/inconshreveable/log15.v2"

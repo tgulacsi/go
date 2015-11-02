@@ -8,6 +8,7 @@ package pools
 import (
 	"io"
 	"math/rand"
+	"sync"
 )
 
 // IdlePool is a pool of io.Closers.
@@ -17,15 +18,19 @@ import (
 // to achive uniform reuse.
 type IdlePool struct {
 	elems []io.Closer
+
+	sync.Mutex
 }
 
 // NewIdlePool returns an IdlePool.
-func NewIdlePool(size int) IdlePool {
-	return IdlePool{make([]io.Closer, size)}
+func NewIdlePool(size int) *IdlePool {
+	return &IdlePool{elems: make([]io.Closer, size)}
 }
 
 // Get returns a closer or nil, if no pool found.
-func (p IdlePool) Get() io.Closer {
+func (p *IdlePool) Get() io.Closer {
+	p.Lock()
+	defer p.Unlock()
 	for i, c := range p.elems {
 		if c == nil {
 			continue
@@ -40,7 +45,9 @@ func (p IdlePool) Get() io.Closer {
 // If no empty slot is found, one (random) is Close()-d and this new
 // element is put there.
 // This way elements reused uniformly.
-func (p IdlePool) Put(c io.Closer) {
+func (p *IdlePool) Put(c io.Closer) {
+	p.Lock()
+	defer p.Unlock()
 	n := len(p.elems)
 	i0 := rand.Intn(n)
 	for i := 0; i < n; i++ {
@@ -55,7 +62,9 @@ func (p IdlePool) Put(c io.Closer) {
 }
 
 // Close all elements.
-func (p IdlePool) Close() error {
+func (p *IdlePool) Close() error {
+	p.Lock()
+	defer p.Unlock()
 	var err error
 	for i, c := range p.elems {
 		p.elems[i] = nil
