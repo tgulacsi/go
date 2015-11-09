@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/tgulacsi/go/pools"
 )
@@ -37,5 +38,18 @@ func TestIdlePool(t *testing.T) {
 	e = p.Get()
 	if e != d {
 		t.Errorf("want %v, got %v", d, e)
+	}
+	p.Put(e)
+
+	p.Evict(1 * time.Minute)
+	e = p.Get()
+	if e != d {
+		t.Errorf("nil eviction, wanted %v, got %v", d, e)
+	}
+
+	p.Evict(0) // empty pool
+	e = p.Get()
+	if e != nil {
+		t.Errorf("wanted nil, got %v", e)
 	}
 }
