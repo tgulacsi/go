@@ -53,10 +53,10 @@ func main() {
 
 	flagSheet := flag.Int("sheet", 0, "Index of sheet to convert, zero based")
 	flagConnect := flag.String("connect", "$BRUNO_ID", "database connection string")
-	flagCommit := flag.Int("commit-each", 0, "commit on every Nth record")
 	flagFunc := flag.String("call", "DBMS_OUTPUT.PUT_LINE", "function name to be called with each line")
 	flagFixParams := flag.String("fix", "p_file_name=>{{.FileName}}", "fix parameters to add; uses text/template")
 	flagFuncRetOk := flag.Int("call-ret-ok", 0, "OK return value")
+	flagOneTx := flag.Bool("one-tx", true, "one transaction, or commit after each row")
 	flagDelim := flag.String("d", ";", "Delimiter to use between fields")
 	flagCharset := flag.String("charset", "utf-8", "input charset")
 	flagSkip := flag.Int("skip", 1, "skip first N rows")
@@ -206,7 +206,7 @@ Usage:
 
 	var n int
 	start := time.Now()
-	n, err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagCommit)
+	n, err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagOneTx)
 	bw.Flush()
 	if err != nil {
 		log.Fatalf("exec %q: %v", *flagFunc, err)

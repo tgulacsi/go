@@ -5,6 +5,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"log"
 	"reflect"
@@ -16,7 +18,7 @@ import (
 	"gopkg.in/rana/ora.v3"
 )
 
-func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, commitEach int) (int, error) {
+func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, oneTx bool) (int, error) {
 	st, err := getQuery(ses, fun, fixParams)
 	if err != nil {
 		return 0, err
@@ -28,6 +30,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 		startIdx int
 		ret      int64
 		n        int
+		buf      bytes.Buffer
 	)
 	if st.Returns {
 		values = append(values, &ret)
@@ -75,15 +78,23 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 		}
 		if st.Returns && values[0] != nil {
 			out := strings.Join(deref(st.FixParams), ", ")
-			fmt.Fprintf(stdout, "%d: %s\n", ret, out)
+			fmt.Fprintf(stderr, "%d: %s\t%s\n", ret, out, row.Values)
 			if ret != retOk {
 				tx.Rollback()
-				return n, errgo.Newf("returned %v (%s) for line %d (%q).",
-					ret, out, row.Line, row.Values)
+				tx = nil
+				buf.Reset()
+				cw := csv.NewWriter(&buf)
+				cw.Write(append([]string{fmt.Sprintf("%d", ret), out}, row.Values...))
+				cw.Flush()
+				stdout.Write(buf.Bytes())
+				if oneTx {
+					return n, errgo.Newf("returned %v (%s) for line %d (%q).",
+						ret, out, row.Line, row.Values)
+				}
 			}
 		}
 		n++
-		if commitEach > 0 && n%commitEach == 0 {
+		if oneTx {
 			if err = tx.Commit(); err != nil {
 				return n, err
 			}
