@@ -76,6 +76,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
 			return n, errgo.Notef(err, "qry=%q params=%#v", st.Qry, values)
 		}
+		n++
 		if st.Returns && values[0] != nil {
 			out := strings.Join(deref(st.FixParams), ", ")
 			fmt.Fprintf(stderr, "%d: %s\t%s\n", ret, out, row.Values)
@@ -92,9 +93,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 						ret, out, row.Line, row.Values)
 				}
 			}
-		}
-		n++
-		if oneTx {
+		} else if !oneTx {
 			if err = tx.Commit(); err != nil {
 				return n, err
 			}
