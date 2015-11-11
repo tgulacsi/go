@@ -1,5 +1,5 @@
 /*
-copyright 2015 tamás gulácsi
+Copyright 2015 Tamás Gulácsi
 
 licensed under the apache license, version 2.0 (the "license");
 you may not use this file except in compliance with the license.
@@ -40,7 +40,7 @@ func (se StatusError) Error() string {
 	return se.Err.Error()
 }
 
-func (se StatusError) Status() int {
+func (se StatusError) StatusCode() int {
 	return se.Code
 }
 

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
 	"flag"
@@ -19,14 +20,37 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/orahlp"
-	"github.com/tgulacsi/go/text"
+
+	"golang.org/x/text/encoding/htmlindex"
+	"golang.org/x/text/transform"
 
 	"github.com/tealeg/xlsx"
 	"gopkg.in/errgo.v1"
 	"gopkg.in/rana/ora.v3"
 )
 
+var (
+	stdout = io.Writer(os.Stdout)
+	stderr = io.Writer(os.Stderr)
+)
+
 func main() {
+	if lang := os.Getenv("LANG"); lang != "" {
+		if i := strings.LastIndex(lang, "."); i >= 0 {
+			lang = lang[i+1:]
+			enc, err := htmlindex.Get(lang)
+			if err != nil {
+				log.Fatalf("Get encoding for %q: %v", lang, err)
+			}
+			stdout = transform.NewWriter(stdout, enc.NewEncoder())
+			stderr = transform.NewWriter(stderr, enc.NewEncoder())
+			log.SetOutput(stderr)
+		}
+	}
+	bw := bufio.NewWriter(stdout)
+	defer bw.Flush()
+	stdout = bw
+
 	flagSheet := flag.Int("sheet", 0, "Index of sheet to convert, zero based")
 	flagConnect := flag.String("connect", "$BRUNO_ID", "database connection string")
 	flagCommit := flag.Int("commit-each", 0, "commit on every Nth record")
@@ -40,8 +64,8 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `%s
 
-	The specified code will be called with the cells as (string) arguments,
-	for each row.
+	The specified code will be called with the cells as (string) arguments
+	(except dates, where DATE will be provided), for each row.
 
 Usage:
 	%s [flags] <xlsx-or-csv-to-be-read>
@@ -113,7 +137,11 @@ Usage:
 	if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
 		go func(rows chan<- Row) { defer close(rows); errch <- readXLSXFile(rows, flag.Arg(0), *flagSheet) }(rows)
 	} else {
-		r := text.NewReader(inp, text.GetEncoding(*flagCharset))
+		enc, err := htmlindex.Get(*flagCharset)
+		if err != nil {
+			log.Fatalf("Get encoding for name %q: %v", *flagCharset, err)
+		}
+		r := transform.NewReader(inp, enc.NewDecoder())
 		go func(rows chan<- Row) { defer close(rows); errch <- readCSV(rows, r, *flagDelim) }(rows)
 	}
 
@@ -178,7 +206,9 @@ Usage:
 
 	var n int
 	start := time.Now()
-	if n, err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagCommit); err != nil {
+	n, err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagCommit)
+	bw.Flush()
+	if err != nil {
 		log.Fatalf("exec %q: %v", *flagFunc, err)
 	}
 	d := time.Since(start)
@@ -280,207 +310,4 @@ func readCSV(rows chan<- Row, r io.Reader, delim string) error {
 type Row struct {
 	Line   int
 	Values []string
-}
-
-func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, commitEach int) (int, error) {
-	st, err := getQuery(ses, fun, fixParams)
-	if err != nil {
-		return 0, err
-	}
-	var (
-		stmt     *ora.Stmt
-		tx       *ora.Tx
-		values   []interface{}
-		startIdx int
-		ret      int64
-		n        int
-	)
-	if st.Returns {
-		values = append(values, &ret)
-		startIdx = 1
-	}
-
-	for row := range rows {
-		if tx == nil {
-			if tx, err = ses.StartTx(); err != nil {
-				return n, err
-			}
-			if stmt != nil {
-				stmt.Close()
-			}
-			if stmt, err = ses.Prep(st.Qry); err != nil {
-				tx.Rollback()
-				return n, err
-			}
-		}
-
-		values = values[:startIdx]
-		for i, s := range row.Values {
-			conv := st.Converters[i]
-			if conv == nil {
-				values = append(values, s)
-				continue
-			}
-			v, err := conv(s)
-			if err != nil {
-				log.Printf("row=%#v", row)
-				return n, errgo.Notef(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
-			}
-			values = append(values, v)
-		}
-		for i := len(values) + 1; i < st.ParamCount-len(st.FixParams); i++ {
-			values = append(values, "")
-		}
-		for _, s := range st.FixParams {
-			values = append(values, s)
-		}
-		if _, err = stmt.Exe(values...); err != nil {
-			log.Printf("values=%d ParamCount=%d", len(values), st.ParamCount)
-			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
-			return n, errgo.Notef(err, "qry=%q params=%#v", st.Qry, values)
-		}
-		if st.Returns && values[0] != nil {
-			if ret != retOk {
-				tx.Rollback()
-				return n, errgo.Newf("function %q returned %v, wanted %v (line %d %q).", fun, ret, retOk, row.Line, row.Values)
-			}
-		}
-		n++
-		if commitEach > 0 && n%commitEach == 0 {
-			if err = tx.Commit(); err != nil {
-				return n, err
-			}
-			tx = nil
-		}
-	}
-	if stmt != nil {
-		stmt.Close()
-	}
-	if tx != nil {
-		return n, tx.Commit()
-	}
-	return n, nil
-}
-
-type ConvFunc func(string) (interface{}, error)
-
-type Statement struct {
-	Qry        string
-	Returns    bool
-	Converters []ConvFunc
-	ParamCount int
-	FixParams  []string
-}
-
-func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error) {
-	var st Statement
-	parts := strings.Split(fun, ".")
-	qry := "SELECT argument_name, data_type, in_out, data_length, data_precision, data_scale FROM "
-	params := make([]interface{}, 0, 3)
-	switch len(parts) {
-	case 1:
-		qry += "user_arguments WHERE object_name = UPPER(:1)"
-		params = append(params, fun)
-	case 2:
-		qry += "user_arguments WHERE package_name = UPPER(:1) AND object_name = UPPER(:2)"
-		params = append(params, parts[0], parts[1])
-	case 3:
-		qry += "all_arguments WHERE owner = UPPER(:1) AND package_name = UPPER(:2) AND object_name = UPPER(:3)"
-		params = append(params, parts[0], parts[1], parts[2])
-	default:
-		return st, errgo.Newf("bad function name: %q", fun)
-	}
-	qry += " ORDER BY sequence"
-	rset, err := ses.PrepAndQry(qry, params...)
-	if err != nil {
-		return st, errgo.Notef(err, qry)
-	}
-
-	type Arg struct {
-		Name, Type, InOut        string
-		Length, Precision, Scale int
-	}
-	args := make([]Arg, 0, 32)
-	for rset.Next() {
-		arg := Arg{Name: rset.Row[0].(string), Type: rset.Row[1].(string), InOut: rset.Row[2].(string)}
-		if rset.Row[3] != nil {
-			arg.Length = int(rset.Row[3].(float64))
-			if rset.Row[4] != nil {
-				arg.Precision = int(rset.Row[4].(float64))
-				if rset.Row[5] != nil {
-					arg.Scale = int(rset.Row[5].(float64))
-				}
-			}
-		}
-		args = append(args, arg)
-	}
-	if rset.Err != nil {
-		return st, errgo.Notef(rset.Err, qry)
-	}
-	if len(args) == 0 {
-		return st, errgo.Newf("%q has no arguments!", fun)
-	}
-
-	st.Qry = "BEGIN "
-	i := 1
-	if args[0].Name == "" { // function
-		st.Qry += ":x1 := "
-		args = args[1:]
-		st.Returns = true
-		i++
-	}
-	fixParamNames := make([]string, len(fixParams))
-	for j, x := range fixParams {
-		fixParamNames[j] = strings.ToUpper(x[0])
-	}
-	vals := make([]string, 0, len(args))
-	st.Converters = make([]ConvFunc, cap(vals))
-ArgLoop:
-	for j, arg := range args {
-		for _, x := range fixParamNames {
-			if x == arg.Name {
-				continue ArgLoop
-			}
-		}
-		vals = append(vals, fmt.Sprintf("%s=>:x%d", strings.ToLower(arg.Name), i))
-		if arg.Type == "DATE" {
-			st.Converters[j] = strToDate
-		}
-		i++
-	}
-	for _, p := range fixParams {
-		vals = append(vals, fmt.Sprintf("%s=>:x%d", p[0], i))
-		st.FixParams = append(st.FixParams, p[1])
-		i++
-	}
-	st.ParamCount = i
-	st.Qry += fun + "(" + strings.Join(vals, ", ") + "); END;"
-	return st, err
-}
-
-func strToDate(s string) (interface{}, error) {
-	if s == "" {
-		return nil, nil
-	}
-	if 8 <= len(s) && len(s) <= 10 {
-		return time.Parse(dateFormat, justNums(s, 8))
-	}
-	return time.Parse(dateTimeFormat, justNums(s, 14))
-}
-func justNums(s string, maxLen int) string {
-	var i int
-	return strings.Map(
-		func(r rune) rune {
-			if maxLen >= 0 {
-				if i > maxLen {
-					return -1
-				}
-			}
-			if '0' <= r && r <= '9' {
-				i++
-				return r
-			}
-			return -1
-		},
-		s)
 }
