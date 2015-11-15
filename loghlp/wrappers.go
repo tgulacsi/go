@@ -112,3 +112,19 @@ func CallerFileHandler(skip int, h log15.Handler) log15.Handler {
 		return h.Log(r)
 	})
 }
+
+type KitLogger struct {
+	log15.Logger
+}
+
+func (kl KitLogger) Log(keyvals ...interface{}) error {
+	if len(keyvals)%2 == 0 {
+		keyvals = keyvals[1:]
+	}
+	msg, ok := keyvals[0].(string)
+	if !ok {
+		msg = fmt.Sprintf("%v", keyvals[0])
+	}
+	kl.Logger.Info(msg, keyvals[1:]...)
+	return nil
+}
