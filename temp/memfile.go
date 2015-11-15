@@ -23,6 +23,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"gopkg.in/errgo.v1"
 )
 
 var MaxInMemorySlurp = 4 << 20 // 4MB.  *shrug*.
@@ -47,13 +49,10 @@ type ReadSeekCloser interface {
 // MakeReadSeekCloser makes an io.ReadSeeker + io.Closer by reading the whole reader
 // If the given Reader is a Closer, too, than that Close will be called
 func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
-	if rc, ok := r.(io.Closer); ok {
-		defer rc.Close()
-	}
 	ms := NewMemorySlurper(blobRef)
 	n, err := io.Copy(ms, r)
 	if err != nil {
-		return nil, err
+		return nil, errgo.Notef(err, "copy from %v to %v", r, ms)
 	}
 
 	if fh, ok := r.(*os.File); ok {
@@ -103,21 +102,26 @@ func NewMemorySlurper(blobRef string) *memorySlurper {
 	}
 }
 
-func (ms *memorySlurper) prepareRead() {
+func (ms *memorySlurper) prepareRead() error {
 	if ms.reading {
-		return
+		return nil
 	}
 	ms.reading = true
 	if ms.file != nil {
-		ms.file.Seek(0, 0)
+		if _, err := ms.file.Seek(0, 0); err != nil {
+			return errgo.Notef(err, "file=%v", ms.file)
+		}
 	} else {
 		ms.mem = bytes.NewReader(ms.buf.Bytes())
 		ms.buf = nil
 	}
+	return nil
 }
 
 func (ms *memorySlurper) Read(p []byte) (n int, err error) {
-	ms.prepareRead()
+	if err := ms.prepareRead(); err != nil {
+		return 0, err
+	}
 	if ms.file != nil {
 		return ms.file.Read(p)
 	}
@@ -125,7 +129,9 @@ func (ms *memorySlurper) Read(p []byte) (n int, err error) {
 }
 
 func (ms *memorySlurper) ReadAt(p []byte, off int64) (n int, err error) {
-	ms.prepareRead()
+	if err := ms.prepareRead(); err != nil {
+		return 0, err
+	}
 	if ms.file != nil {
 		return ms.file.ReadAt(p, off)
 	}
@@ -133,12 +139,8 @@ func (ms *memorySlurper) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (ms *memorySlurper) Seek(offset int64, whence int) (int64, error) {
-	if !ms.reading {
-		ms.reading = true
-		if ms.file == nil {
-			ms.mem = bytes.NewReader(ms.buf.Bytes())
-			ms.buf = nil
-		}
+	if err := ms.prepareRead(); err != nil {
+		return 0, err
 	}
 	if ms.file != nil {
 		return ms.file.Seek(offset, whence)
