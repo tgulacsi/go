@@ -21,11 +21,11 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/levels"
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/levels"
 )
 
 var (
@@ -37,6 +37,9 @@ var (
 
 	// SaveBadInput is true if we should save bad input
 	SaveBadInput = false
+
+	// ErrStop
+	ErrStopWalk = errgo.New("Stop the walk")
 
 	// logger is the package-level logger.
 	logger = levels.New(log.NewContext(Logger).With("lib", "i18nmail"))
@@ -58,6 +61,8 @@ func nextSeq() uint64 {
 func nextSeqInt() int {
 	return int(nextSeq() % uint64(1<<31))
 }
+
+func errIsStopWalk(err error) bool { return err == ErrStopWalk }
 
 // HashKeyName is the header key name for the hash
 const HashKeyName = "X-HashOfFullMessage"
@@ -137,7 +142,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 			child.Body = decoder(child.Body)
 		}
 		if e = Walk(child, todo, dontDescend); e != nil {
-			return errgo.Notef(e, "WalkMail descending")
+			return e
 		}
 		return nil
 	}
@@ -146,7 +151,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		child.Body = decoder(child.Body)
 	}
 	if e = todo(child); e != nil {
-		return errgo.Notef(e, "todo")
+		return e
 	}
 	return nil
 }
@@ -183,13 +188,13 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			if e = WalkMultipart(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				data, _ := br.Peek(1024)
-				return fmt.Errorf("error while descending: %s\ndata=%s", e, data)
+				return errgo.NoteMask(e, fmt.Sprintf("descending data=%s", data), errIsStopWalk)
 			}
 		} else if !dontDescend && strings.HasPrefix(ct, "message/") {
 			if e = Walk(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				data, _ := br.Peek(1024)
-				return fmt.Errorf("error while descending: %s\ndata=%s", e, data)
+				return errgo.NoteMask(e, fmt.Sprintf("descending data=%s", data), errIsStopWalk)
 			}
 		} else {
 			child.Header.Add("X-FileName", safeFn(HeadDecode(part.FileName()), true))
@@ -201,7 +206,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		part, e = parts.NextPart()
 	}
 	if e != nil && e != io.EOF && !strings.HasSuffix(e.Error(), " EOF") {
-		return fmt.Errorf("error reading parts: %v", e)
+		return errgo.NoteMask(e, "reading parts", errIsStopWalk)
 	}
 	return nil
 }
