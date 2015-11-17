@@ -11,7 +11,11 @@ import (
 )
 
 // walk recursively descends path, calling w.
-func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
+func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc, followSymlinks bool) error {
+	stat := os.Lstat
+	if followSymlinks {
+		stat = os.Stat
+	}
 	err := walkFn(path, info, nil)
 	if err != nil {
 		if info.IsDir() && err == filepath.SkipDir {
@@ -35,13 +39,13 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc) error {
 		}
 		for _, name := range names.names {
 			filename := filepath.Join(path, name)
-			fileInfo, err := os.Lstat(filename)
+			fileInfo, err := stat(filename)
 			if err != nil {
 				if err := walkFn(filename, fileInfo, err); err != nil && err != filepath.SkipDir {
 					return err
 				}
 			} else {
-				err = walk(filename, fileInfo, walkFn)
+				err = walk(filename, fileInfo, walkFn, followSymlinks)
 				if err != nil {
 					if !fileInfo.IsDir() || err != filepath.SkipDir {
 						return err
@@ -63,7 +67,20 @@ func Walk(root string, walkFn filepath.WalkFunc) error {
 	if err != nil {
 		return walkFn(root, nil, err)
 	}
-	return walk(root, info, walkFn)
+	return walk(root, info, walkFn, false)
+}
+
+// WalkWithSymlinks walks the file tree rooted at root, calling walkFn for each file or
+// directory in the tree, including root. All errors that arise visiting files
+// and directories are filtered by walkFn. The files are walked UNORDERED,
+// which makes the output undeterministic!
+// WalkWithSymlinks does follow symbolic links!
+func WalkWithSymlinks(root string, walkFn filepath.WalkFunc) error {
+	info, err := os.Stat(root)
+	if err != nil {
+		return walkFn(root, nil, err)
+	}
+	return walk(root, info, walkFn, true)
 }
 
 // readDirNames reads the directory named by dirname and returns
