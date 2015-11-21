@@ -19,7 +19,7 @@ type httpError struct {
 }
 
 // Code returns the error's accompanied StatusCode.
-func (he httpError) Code() int {
+func (he httpError) StatusCode() int {
 	return he.code
 }
 func (he httpError) Cause() error {

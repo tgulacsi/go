@@ -19,6 +19,7 @@ package httpctxhlp
 
 import (
 	"net/http"
+	"time"
 
 	"golang.org/x/net/context"
 	"gopkg.in/inconshreveable/log15.v2"
@@ -49,8 +50,11 @@ func AddLogger(Log log15.Logger, h httpctx.Handler) httpctx.Handler {
 				ctx = context.WithValue(ctx, "logger", Log)
 			}
 			w.Header().Set("X-Req-Id", id)
-			err := h.ServeHTTPContext(ctx, w, r)
-			Log.Info("served", "path", r.URL.Path, "error", err)
+			start := time.Now()
+			sr := &StatusRecorder{ResponseWriter: w}
+			err := h.ServeHTTPContext(ctx, sr, r)
+			d := time.Since(start)
+			Log.Info("served", "path", r.URL.Path, "duration", d, "status", sr.StatusCode, "error", err)
 			return err
 		})
 }
@@ -70,4 +74,14 @@ func GetLogger(Log log15.Logger, ctx context.Context) (log15.Logger, context.Con
 	}
 	Log = Log.New("reqid", id)
 	return Log, context.WithValue(ctx, "logger", Log)
+}
+
+type StatusRecorder struct {
+	http.ResponseWriter
+	StatusCode int
+}
+
+func (sr *StatusRecorder) WriteHeader(code int) {
+	sr.StatusCode = code
+	sr.ResponseWriter.WriteHeader(code)
 }
