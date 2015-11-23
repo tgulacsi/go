@@ -23,12 +23,17 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"mime"
+	"net/mail"
 	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tgulacsi/go/text"
+	//"golang.org/x/text/encoding/ianaindex"
+	"golang.org/x/text/encoding/htmlindex"
+	"golang.org/x/text/transform"
 )
 
 var debug = debugT(false)
@@ -104,8 +109,6 @@ func (h Header) Date() (time.Time, error) {
 }
 
 // AddressList parses the named header field as a list of addresses.
-//
-// FIXME(tgulacsi): use go1.5's mail.ParseAddressList.
 func (h Header) AddressList(key string) ([]*Address, error) {
 	hdr := h.Get(key)
 	if hdr == "" {
@@ -133,12 +136,26 @@ type Address struct {
 
 // Parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
 func ParseAddress(address string) (*Address, error) {
-	return newAddrParser(address).parseAddress()
+	//return newAddrParser(address).parseAddress()
+	maddr, err := AddressParser.Parse(address)
+	if maddr == nil {
+		return nil, err
+	}
+	return &Address{Name: maddr.Name, Address: maddr.Address}, err
 }
 
 // ParseAddressList parses the given string as a list of addresses.
 func ParseAddressList(list string) ([]*Address, error) {
-	return newAddrParser(list).parseAddressList()
+	//return newAddrParser(list).parseAddressList()
+	al, err := AddressParser.ParseList(list)
+	if al == nil {
+		return nil, err
+	}
+	aL := make([]*Address, len(al))
+	for i, a := range al {
+		aL[i] = &Address{Name: a.Name, Address: a.Address}
+	}
+	return aL, err
 }
 
 // String formats the address as a valid RFC 5322 address.
@@ -186,6 +203,18 @@ func (a *Address) String() string {
 	b.WriteString(s)
 	return b.String()
 }
+
+var WordDecoder = &mime.WordDecoder{
+	CharsetReader: func(charset string, input io.Reader) (io.Reader, error) {
+		//enc, err := ianaindex.MIME.Get(charset)
+		enc, err := htmlindex.Get(charset)
+		if err != nil {
+			return input, err
+		}
+		return transform.NewReader(input, enc.NewDecoder()), nil
+	},
+}
+var AddressParser = &mail.AddressParser{WordDecoder: WordDecoder}
 
 type addrParser []byte
 
@@ -473,24 +502,16 @@ func (s *splitter) fieldsFunc(r rune) bool {
 
 // HeadDecode decodes mail header encoding (quopri or base64) such as
 // =?iso-8859-2?Q?MEN-261_K=D6BE_k=E1r.pdf?=
-//
-// FIXME(tgulacsi): use go1.5's mail.WordDecoder
 func HeadDecode(head string) string {
 	if head == "" {
 		return ""
 	}
-
-	res := make([]string, 0, 4)
-	var err error
-	for _, word := range strings.FieldsFunc(head, new(splitter).fieldsFunc) {
-		if strings.HasPrefix(word, "=?") && strings.HasSuffix(word, "?=") {
-			if word, err = DecodeRFC2047Word(word); err != nil {
-				log.Println("HeadDecode", "word", word, "error", err)
-			}
-		}
-		res = append(res, word)
+	res, err := WordDecoder.DecodeHeader(head)
+	if err != nil {
+		log.Println("HeadDecode", "head", head, "error", err)
+		return head
 	}
-	return strings.Join(res, "")
+	return res
 }
 
 func DecodeRFC2047Word(s string) (string, error) {
