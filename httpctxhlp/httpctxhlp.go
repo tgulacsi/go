@@ -28,8 +28,6 @@ import (
 	"github.com/spkg/httpctx"
 )
 
-var uuid = shortuuid.New()
-
 func AddLogger(Log log15.Logger, h httpctx.Handler) httpctx.Handler {
 	return httpctx.HandlerFunc(
 		func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
@@ -39,7 +37,7 @@ func AddLogger(Log log15.Logger, h httpctx.Handler) httpctx.Handler {
 				id, _ = idI.(string)
 			}
 			if id == "" {
-				id = uuid.UUID("")
+				id = shortuuid.New()
 				ctx = context.WithValue(ctx, "reqid", id)
 			}
 			Log := Log
@@ -69,7 +67,7 @@ func GetLogger(Log log15.Logger, ctx context.Context) (log15.Logger, context.Con
 		id, _ = idI.(string)
 	}
 	if id == "" {
-		id = uuid.UUID("")
+		id = shortuuid.New()
 		ctx = context.WithValue(ctx, "reqid", id)
 	}
 	Log = Log.New("reqid", id)
