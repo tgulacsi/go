@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -19,14 +18,11 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/extrame/xls"
 	"github.com/tgulacsi/go/orahlp"
 
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 
-	"github.com/tealeg/xlsx"
-	"gopkg.in/errgo.v1"
 	"gopkg.in/rana/ora.v3"
 )
 
@@ -135,21 +131,29 @@ Usage:
 	if _, err := io.ReadFull(inp, b[:]); err != nil {
 		log.Fatal("read %q: %v", inp, err)
 	}
+	var R func(rows chan<- Row, inp io.Reader, inpfn string) error
 	if bytes.Equal(b[:], []byte{0xcf, 0xd0, 0xe0, 0x11}) { // OLE2
-		go func(rows chan<- Row) {
-			defer close(rows)
-			errch <- readXLSFile(rows, flag.Arg(0), *flagCharset, *flagSheet)
-		}(rows)
+		R = func(rows chan<- Row, _ io.Reader, fn string) error {
+			return readXLSFile(rows, fn, *flagCharset, *flagSheet)
+		}
 	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
-		go func(rows chan<- Row) { defer close(rows); errch <- readXLSXFile(rows, flag.Arg(0), *flagSheet) }(rows)
+		R = func(rows chan<- Row, _ io.Reader, fn string) error {
+			return readXLSXFile(rows, fn, *flagSheet)
+		}
 	} else {
 		enc, err := htmlindex.Get(*flagCharset)
 		if err != nil {
 			log.Fatalf("Get encoding for name %q: %v", *flagCharset, err)
 		}
-		r := transform.NewReader(inp, enc.NewDecoder())
-		go func(rows chan<- Row) { defer close(rows); errch <- readCSV(rows, r, *flagDelim) }(rows)
+		R = func(rows chan<- Row, inp io.Reader, _ string) error {
+			r := transform.NewReader(inp, enc.NewDecoder())
+			return readCSV(rows, r, *flagDelim)
+		}
 	}
+	go func(rows chan<- Row) {
+		defer close(rows)
+		errch <- R(rows, inp, flag.Arg(0))
+	}(rows)
 
 	// filter out empty rows
 	{
@@ -223,117 +227,4 @@ Usage:
 		log.Fatal("ERRORS:\n\t%s", strings.Join(errs, "\n\t"))
 	}
 	log.Printf("Processed %d rows in %s.", n, d)
-}
-
-const (
-	dateFormat     = "20060102"
-	dateTimeFormat = "20060102150405"
-)
-
-var timeReplacer = strings.NewReplacer(
-	"yyyy", "2006",
-	"yy", "06",
-	"dd", "02",
-	"d", "2",
-	"mmm", "Jan",
-	"mmss", "0405",
-	"ss", "05",
-	"hh", "15",
-	"h", "3",
-	"mm:", "04:",
-	":mm", ":04",
-	"mm", "01",
-	"am/pm", "pm",
-	"m/", "1/",
-	".0", ".9999",
-)
-
-func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
-	xlFile, err := xlsx.OpenFile(filename)
-	if err != nil {
-		return errgo.Notef(err, "open %q", filename)
-	}
-	sheetLen := len(xlFile.Sheets)
-	switch {
-	case sheetLen == 0:
-		return errgo.New("This XLSX file contains no sheets.")
-	case sheetIndex >= sheetLen:
-		return errgo.Newf("No sheet %d available, please select a sheet between 0 and %d\n", sheetIndex, sheetLen-1)
-	}
-	sheet := xlFile.Sheets[sheetIndex]
-	n := 0
-	for _, row := range sheet.Rows {
-		if row == nil {
-			continue
-		}
-		vals := make([]string, 0, len(row.Cells))
-		for _, cell := range row.Cells {
-			numFmt := cell.GetNumberFormat()
-			if strings.Contains(numFmt, "yy") || strings.Contains(numFmt, "mm") || strings.Contains(numFmt, "dd") {
-				goFmt := timeReplacer.Replace(numFmt)
-				dt, err := time.Parse(goFmt, cell.String())
-				if err != nil {
-					return errgo.Notef(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
-				}
-				vals = append(vals, dt.Format(dateFormat))
-			} else {
-				vals = append(vals, cell.String())
-			}
-		}
-		rows <- Row{Line: n, Values: vals}
-		n++
-	}
-	return nil
-}
-func readXLSFile(rows chan<- Row, filename string, charset string, sheetIndex int) error {
-	wb, err := xls.Open(filename, charset)
-	if err != nil {
-		return errgo.Notef(err, "open %q", filename)
-	}
-	sheet := wb.GetSheet(sheetIndex)
-	if sheet == nil {
-		return errgo.Newf("This XLS file does not contain sheet no %d!", sheetIndex)
-	}
-	var maxWidth int
-	for n, row := range sheet.Rows {
-		if row == nil {
-			continue
-		}
-		vals := make([]string, maxWidth)
-		for _, col := range row.Cols {
-			if len(vals) <= int(col.LastCol()) {
-				maxWidth = int(col.LastCol()) + 1
-				vals = append(vals, make([]string, maxWidth-len(vals))...)
-			}
-			off := int(col.FirstCol())
-			for i, s := range col.String(wb) {
-				vals[off+i] = s
-			}
-		}
-		rows <- Row{Line: int(n), Values: vals}
-	}
-	return nil
-}
-
-func readCSV(rows chan<- Row, r io.Reader, delim string) error {
-	cr := csv.NewReader(r)
-	cr.Comma = ([]rune(delim))[0]
-	n := 0
-	for {
-		row, err := cr.Read()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-		rows <- Row{Line: n, Values: row}
-		n++
-	}
-	return nil
-}
-
-type Row struct {
-	Line   int
-	Values []string
 }
