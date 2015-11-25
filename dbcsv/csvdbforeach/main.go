@@ -19,6 +19,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/extrame/xls"
 	"github.com/tgulacsi/go/orahlp"
 
 	"golang.org/x/text/encoding/htmlindex"
@@ -68,7 +69,7 @@ func main() {
 	(except dates, where DATE will be provided), for each row.
 
 Usage:
-	%s [flags] <xlsx-or-csv-to-be-read>
+	%s [flags] <xlsx/xls/csv-to-be-read>
 `, os.Args[0], os.Args[0])
 		flag.PrintDefaults()
 	}
@@ -134,7 +135,12 @@ Usage:
 	if _, err := io.ReadFull(inp, b[:]); err != nil {
 		log.Fatal("read %q: %v", inp, err)
 	}
-	if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
+	if bytes.Equal(b[:], []byte{0xcf, 0xd0, 0xe0, 0x11}) { // OLE2
+		go func(rows chan<- Row) {
+			defer close(rows)
+			errch <- readXLSFile(rows, flag.Arg(0), *flagCharset, *flagSheet)
+		}(rows)
+	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
 		go func(rows chan<- Row) { defer close(rows); errch <- readXLSXFile(rows, flag.Arg(0), *flagSheet) }(rows)
 	} else {
 		enc, err := htmlindex.Get(*flagCharset)
@@ -279,14 +285,34 @@ func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 	}
 	return nil
 }
-
-func readCSVFile(rows chan<- Row, filename, delim string) error {
-	fh, err := os.Open(filename)
+func readXLSFile(rows chan<- Row, filename string, charset string, sheetIndex int) error {
+	wb, err := xls.Open(filename, charset)
 	if err != nil {
 		return errgo.Notef(err, "open %q", filename)
 	}
-	defer fh.Close()
-	return readCSV(rows, fh, delim)
+	sheet := wb.GetSheet(sheetIndex)
+	if sheet == nil {
+		return errgo.Newf("This XLS file does not contain sheet no %d!", sheetIndex)
+	}
+	var maxWidth int
+	for n, row := range sheet.Rows {
+		if row == nil {
+			continue
+		}
+		vals := make([]string, maxWidth)
+		for _, col := range row.Cols {
+			if len(vals) <= int(col.LastCol()) {
+				maxWidth = int(col.LastCol()) + 1
+				vals = append(vals, make([]string, maxWidth-len(vals))...)
+			}
+			off := int(col.FirstCol())
+			for i, s := range col.String(wb) {
+				vals[off+i] = s
+			}
+		}
+		rows <- Row{Line: int(n), Values: vals}
+	}
+	return nil
 }
 
 func readCSV(rows chan<- Row, r io.Reader, delim string) error {

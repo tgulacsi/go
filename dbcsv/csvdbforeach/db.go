@@ -81,6 +81,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 			out := strings.Join(deref(st.FixParams), ", ")
 			fmt.Fprintf(stderr, "%d: %s\t%s\n", ret, out, row.Values)
 			if ret != retOk {
+				log.Printf("ROLLBACK (ret=%v)", ret)
 				tx.Rollback()
 				tx = nil
 				buf.Reset()
@@ -93,7 +94,9 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 						ret, out, row.Line, row.Values)
 				}
 			}
-		} else if !oneTx {
+		}
+		if tx != nil && !oneTx {
+			log.Printf("COMMIT")
 			if err = tx.Commit(); err != nil {
 				return n, err
 			}
