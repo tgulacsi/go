@@ -127,19 +127,24 @@ Usage:
 	}()
 
 	// detect file type
-	var b [4]byte
+	var (
+		b       [4]byte
+		R       func(rows chan<- Row, inp io.Reader, inpfn string) error
+		rdrName string
+	)
 	if _, err := io.ReadFull(inp, b[:]); err != nil {
 		log.Fatal("read %q: %v", inp, err)
 	}
-	var R func(rows chan<- Row, inp io.Reader, inpfn string) error
-	if bytes.Equal(b[:], []byte{0xcf, 0xd0, 0xe0, 0x11}) { // OLE2
+	if bytes.Equal(b[:], []byte{0xd0, 0xcf, 0x11, 0xe0}) { // OLE2
 		R = func(rows chan<- Row, _ io.Reader, fn string) error {
 			return readXLSFile(rows, fn, *flagCharset, *flagSheet)
 		}
+		rdrName = "xls"
 	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
 		R = func(rows chan<- Row, _ io.Reader, fn string) error {
 			return readXLSXFile(rows, fn, *flagSheet)
 		}
+		rdrName = "xlsx"
 	} else {
 		enc, err := htmlindex.Get(*flagCharset)
 		if err != nil {
@@ -149,7 +154,9 @@ Usage:
 			r := transform.NewReader(inp, enc.NewDecoder())
 			return readCSV(rows, r, *flagDelim)
 		}
+		rdrName = "csv"
 	}
+	log.Printf("File starts with %q (% x), so using %s reader.", b, b, rdrName)
 	go func(rows chan<- Row) {
 		defer close(rows)
 		errch <- R(rows, inp, flag.Arg(0))
