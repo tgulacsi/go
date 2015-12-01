@@ -116,5 +116,5 @@ func IsInsideDocker() bool {
 	if err != nil {
 		return false
 	}
-	return bytes.Contains(b, []byte(":/docker/"))
+	return bytes.Contains(b, []byte(":/docker/")) || bytes.Contains(b, []byte(":/lxc/"))
 }
