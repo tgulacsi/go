@@ -54,3 +54,12 @@ func (mc *multiCloser) Close() error {
 	mc.closers = mc.closers[:0]
 	return err
 }
+
+var _ = io.Closer(CloserFunc(nil))
+
+// CloserFunc implements the io.Closer.
+type CloserFunc func() error
+
+func (cf CloserFunc) Close() error {
+	return cf()
+}
