@@ -19,6 +19,8 @@ package osgroup
 
 import (
 	"bufio"
+	"bytes"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -107,4 +109,12 @@ func GroupName(gid int) (string, error) {
 	}
 
 	return groups[gid], nil
+}
+
+func IsInsideDocker() bool {
+	b, err := ioutil.ReadFile("/proc/self/cgroup")
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(b, []byte(":/docker/"))
 }
