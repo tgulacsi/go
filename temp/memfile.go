@@ -157,8 +157,9 @@ func (ms *memorySlurper) ReadFrom(r io.Reader) (n int64, err error) {
 	}
 	var size int64
 	if fh, ok := r.(*os.File); ok {
-		ms.stat, err = fh.Stat()
-		size = ms.stat.Size()
+		if ms.stat, err = fh.Stat(); err == nil {
+			size = ms.stat.Size()
+		}
 	}
 	if ms.file == nil && size > 0 && size < int64(ms.maxInMemorySlurp) {
 		return io.Copy(ms.buf, r)
