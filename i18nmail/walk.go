@@ -107,15 +107,20 @@ type DecoderFunc func(io.Reader) io.Reader
 //
 // By default this is recursive, except dontDescend is true.
 func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
+	var (
+		msg *mail.Message
+		hsh string
+	)
 	br, e := temp.NewReadSeeker(part.Body)
 	if e != nil {
 		return e
 	}
 	defer func() { _ = br.Close() }()
-	msg, hsh, e := ReadAndHashMessage(br)
-	if e != nil {
+	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
+		logger.Warn("msg", "ReadAndHashMessage", "error", e)
 		return errgo.Notef(e, "WalkMail")
 	}
+	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
 	logger.Info("msg", "Walk message", "hsh", hsh, "headers", msg.Header)
 	if e != nil {
@@ -129,7 +134,9 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		Body:   msg.Body, Parent: &part,
 		Level: part.Level + 1,
 		Seq:   nextSeqInt()}
-	child.Header.Add("X-Hash", hsh)
+	if hsh != "" {
+		child.Header.Add("X-Hash", hsh)
+	}
 	if child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
@@ -170,6 +177,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		ct      string
 	)
 	for i := 1; e == nil; i++ {
+		part.Header = DecodeHeaders(part.Header)
 		if ct, params, decoder, e = getCT(part.Header); e != nil {
 			return e
 		}
@@ -179,9 +187,12 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		} else {
 			body = part
 		}
-		child := MailPart{ContentType: ct, MediaType: params, Body: body,
-			Header: part.Header, Parent: &mp,
-			Level: mp.Level + 1, Seq: nextSeqInt()}
+		child := MailPart{ContentType: ct, MediaType: params,
+			Body:   body,
+			Header: part.Header,
+			Parent: &mp,
+			Level:  mp.Level + 1,
+			Seq:    nextSeqInt()}
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
 		logger.Debug("msg", "multipart", "sequence", child.Seq, "content-type", ct, "params", params)
 		if !dontDescend && strings.HasPrefix(ct, "multipart/") {
@@ -206,6 +217,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		part, e = parts.NextPart()
 	}
 	if e != nil && e != io.EOF && !strings.HasSuffix(e.Error(), " EOF") {
+		logger.Error("reading parts", "error", e)
 		return errgo.NoteMask(e, "reading parts", errIsStopWalk)
 	}
 	return nil
@@ -380,4 +392,15 @@ func safeFn(fn string, maskPercent bool) string {
 		fn = strings.Replace(fn, "%", "!P!", -1)
 	}
 	return fn
+}
+
+// DecodeHeaders decodes the headers.
+func DecodeHeaders(hdr map[string][]string) map[string][]string {
+	for k, vv := range hdr {
+		for i, v := range vv {
+			vv[i] = HeadDecode(v)
+		}
+		hdr[k] = vv
+	}
+	return hdr
 }

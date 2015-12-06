@@ -8,13 +8,9 @@ import (
 	"net/mail"
 	"strconv"
 	"testing"
-
-	"github.com/tgulacsi/go/loghlp/tsthlp"
 )
 
 func TestMailAddress(t *testing.T) {
-	Log.SetHandler(tsthlp.TestHandler(t))
-
 	for i, str := range [][3]string{
 		[3]string{"=?iso-8859-2?Q?Bogl=E1rka_Tak=E1cs?= <tbogi77@gmail.com>",
 			"Boglárka Takács", "<tbogi77@gmail.com>"},

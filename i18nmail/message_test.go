@@ -38,6 +38,8 @@ var headDecodeTests = [][2]string{
 		"partner lev. : 135944/1 ,  RKO-870   új GPS kooridnáta és fuvar levél szükséges"},
 	[2]string{"=?utf-8?B?KE0yQikgUmU6IEvDoXJzesOhbTogMTQwNjk0LzEgVURXNDI5IFtbSzk5NjU3?= =?utf-8?Q?6-963815]]?=",
 		"(M2B) Re: Kárszám: 140694/1 UDW429 [[K996576-963815]]"},
+	[2]string{"=?utf-8?b?RXNlZMOpa2Vzc8OpZ2kgw6lydGVzw610xZEgKExERzU4OSwgMTA5MjMxNTgp?=\n  =?utf-8?q?_=5B=5BS10923158-3772089=5D=5D?=",
+		"Esedékességi értesítő (LDG589, 10923158) [[S10923158-3772089]]"},
 }
 
 func TestHeadDecode(t *testing.T) {
