@@ -11,7 +11,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -27,6 +26,8 @@ import (
 	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
 )
+
+const MaxWalkDepth = 32
 
 var (
 	// Logger is the base logger, can be swapped - defaults to NopLogger.
@@ -140,11 +141,11 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
-	logger.Debug("msg", "message", "sequence", child.Seq, "content-type", ct, "params", params)
+	//logger.Debug("msg", "message", "sequence", child.Seq, "content-type", ct, "params", params)
 	if strings.HasPrefix(ct, "multipart/") {
 		return WalkMultipart(child, todo, dontDescend)
 	}
-	if !dontDescend && strings.HasPrefix(ct, "message/") { //mail
+	if !dontDescend && child.Level < MaxWalkDepth && strings.HasPrefix(ct, "message/") { //mail
 		if decoder != nil {
 			child.Body = decoder(child.Body)
 		}
@@ -181,7 +182,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		if ct, params, decoder, e = getCT(part.Header); e != nil {
 			return e
 		}
-		//log.Printf("part ct=%s decoder=%v", ct, decoder)
+		//logger.Debug("msg", "part", "ct", ct, "decoder", decoder)
 		if decoder != nil {
 			body = decoder(part)
 		} else {
@@ -194,7 +195,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			Level:  mp.Level + 1,
 			Seq:    nextSeqInt()}
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		logger.Debug("msg", "multipart", "sequence", child.Seq, "content-type", ct, "params", params)
+		//logger.Debug("msg", "multipart", "sequence", child.Seq, "content-type", ct, "params", params)
 		if !dontDescend && strings.HasPrefix(ct, "multipart/") {
 			if e = WalkMultipart(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
@@ -251,33 +252,7 @@ func getCT(
 	case "":
 	case "base64":
 		decoder = func(r io.Reader) io.Reader {
-			r = B64FilterReader(r, nil)
-			if CheckEncoding {
-				raw, e := ioutil.ReadAll(r)
-				if e != nil {
-					logger.Warn("msg", "cannot read data", "error", e)
-					return bytes.NewReader(nil)
-				}
-				decoded := make([]byte, base64.StdEncoding.DecodedLen(len(raw)))
-				n, e := base64.StdEncoding.Decode(decoded, raw)
-				if e != nil {
-					bad := string(raw[:min(20, len(raw))])
-					txt := e.Error()
-					q := strings.LastIndex(txt, " ")
-					if q >= 0 {
-						p, e2 := strconv.Atoi(txt[q+1:])
-						if e2 == nil {
-							p = max(0, p-4)
-							q = min(len(raw), p+4)
-							bad = string(raw[p:q])
-						}
-					}
-					logger.Error("msg", "base64 decoding", "raw", bad, "error", e)
-				}
-				// K-MT9461
-				return bytes.NewReader(decoded[:n])
-			}
-			return base64.NewDecoder(base64.StdEncoding, r)
+			return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}
 		}
 	case "quoted-printable":
 		decoder = func(r io.Reader) io.Reader {
@@ -326,8 +301,10 @@ func HashBytes(data []byte) string {
 // ReadAndHashMessage reads message and hashes it by the way
 func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	h := sha1.New()
-	m, e := mail.ReadMessage(io.TeeReader(r, h))
-	if e != nil {
+	var buf bytes.Buffer
+	m, e := mail.ReadMessage(io.TeeReader(io.MultiReader(r, strings.NewReader("\r\n\r\n")), io.MultiWriter(h, &buf)))
+	if e != nil && !(e == io.EOF && m != nil) {
+		logger.Error("msg", "ReadMessage", "data", buf.String(), "error", e)
 		return nil, "", e
 	}
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil
@@ -403,4 +380,54 @@ func DecodeHeaders(hdr map[string][]string) map[string][]string {
 		hdr[k] = vv
 	}
 	return hdr
+}
+
+type b64ForceDecoder struct {
+	*base64.Encoding
+	r       io.Reader
+	scratch []byte
+}
+
+func (d *b64ForceDecoder) Read(p []byte) (int, error) {
+	bs := (len(p) / 3) * 3
+	es := bs << 2
+	if cap(d.scratch) < es {
+		d.scratch = make([]byte, es)
+	} else {
+		d.scratch = d.scratch[:es]
+	}
+	raw := d.scratch
+	n, err := d.r.Read(raw)
+	//logger.Debug("msg", "read", "n", n, "error", err)
+	if n == 0 {
+		return n, err
+	}
+	raw = raw[:n]
+	for len(raw) > 0 {
+		dn, e := d.Encoding.Decode(p, raw)
+		//logger.Debug("msg", "decode", "dn", dn, "error", e)
+		if e == nil {
+			return dn, err
+		}
+		bad := raw[:min(200, len(raw))]
+		txt := e.Error()
+		q := strings.LastIndex(txt, " ")
+		if q < 0 {
+			if err == nil {
+				err = e
+			}
+			return dn, err
+		}
+		i, e2 := strconv.Atoi(txt[q+1:])
+		if e2 != nil {
+			if err == nil {
+				err = e
+			}
+			return dn, err
+		}
+		bad = raw[max(0, i-20):min(i+4, len(raw))]
+		logger.Error("msg", "base64 decoding", "raw", string(bad), "error", e)
+		raw = append(raw[:i], raw[i+1:]...)
+	}
+	return 0, err
 }
