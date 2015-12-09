@@ -7,7 +7,6 @@ package iohlp
 import (
 	"bytes"
 	"io"
-	"log"
 )
 
 // NewStreamReplacer returns an io.Reader in which all non-overlapping
@@ -20,17 +19,19 @@ func NewStreamReplacer(r io.Reader, patternReplacementPairs ...[]byte) io.Reader
 	}
 	pr, pw := io.Pipe()
 	go func() {
-		scratch := make([]byte, 4096)
+		n := 4096
+		for n < maxLen {
+			n <<= 1
+		}
+		scratch := make([]byte, n)
 		for {
 			n, readErr := io.ReadAtLeast(r, scratch, maxLen)
-			log.Printf("Read %d bytes with %v.", n, readErr)
 			if n == 0 && readErr == nil {
 				break
 			}
 			var writeErr error
 			if n > 0 {
 				scratch = repl.Replace(scratch[:n])
-				log.Printf("n=%d => scratch=%q", n, scratch)
 				if readErr != nil {
 					n, writeErr = pw.Write(scratch)
 				} else {
@@ -39,6 +40,9 @@ func NewStreamReplacer(r io.Reader, patternReplacementPairs ...[]byte) io.Reader
 				scratch = scratch[n:]
 			}
 			if readErr != nil {
+				if len(scratch) > 0 {
+					_, writeErr = pw.Write(scratch)
+				}
 				pw.CloseWithError(readErr)
 				break
 			}

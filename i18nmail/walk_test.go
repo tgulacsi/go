@@ -5,6 +5,7 @@
 package i18nmail
 
 import (
+	"io/ioutil"
 	"net/mail"
 	"strconv"
 	"strings"
@@ -121,7 +122,11 @@ MIME-Version: 1.0
 --_003_dovecot14435205674454690mailneosofthu_--
 `)},
 		func(mp MailPart) error {
-			t.Logf("part %d/%d %q %#v\n%s", mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header)
+			b, err := ioutil.ReadAll(mp.Body)
+			if err != nil {
+				t.Errorf("read body of %d/%d: %v", mp.Level, mp.Seq, err)
+			}
+			t.Logf("part %d/%d %q %#v\n%s\n%s", mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header, b)
 			return nil
 		},
 		false,
