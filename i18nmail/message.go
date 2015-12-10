@@ -508,10 +508,10 @@ func HeadDecode(head string) string {
 	}
 	res, err := WordDecoder.DecodeHeader(head)
 	if err != nil {
-		logger.Error("msg", "HeadDecode", "head", head, "error", err)
+		logger.Error().Log("msg", "HeadDecode", "head", head, "error", err)
 		return head
 	}
-	logger.Debug("msg", "WordDecoder", "old", head, "new", res)
+	logger.Debug().Log("msg", "WordDecoder", "old", head, "new", res)
 	return res
 }
 

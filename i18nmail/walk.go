@@ -118,12 +118,12 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	}
 	defer func() { _ = br.Close() }()
 	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
-		logger.Warn("msg", "ReadAndHashMessage", "error", e)
+		logger.Warn().Log("msg", "ReadAndHashMessage", "error", e)
 		return errgo.Notef(e, "WalkMail")
 	}
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
-	logger.Info("msg", "Walk message", "hsh", hsh, "headers", msg.Header)
+	logger.Info().Log("msg", "Walk message", "hsh", hsh, "headers", msg.Header)
 	if e != nil {
 		return errgo.Notef(e, "WalkMail")
 	}
@@ -218,7 +218,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		part, e = parts.NextPart()
 	}
 	if e != nil && e != io.EOF && !strings.HasSuffix(e.Error(), " EOF") {
-		logger.Error("reading parts", "error", e)
+		logger.Error().Log("reading parts", "error", e)
 		return errgo.NoteMask(e, "reading parts", errIsStopWalk)
 	}
 	return nil
@@ -265,7 +265,7 @@ func getCT(
 			return qprintable.NewDecoder(enc, br)
 		}
 	default:
-		logger.Warn("msg", "unknown transfer-encoding", "transfer-encoding", te)
+		logger.Warn().Log("msg", "unknown transfer-encoding", "transfer-encoding", te)
 	}
 	return
 }
@@ -304,7 +304,7 @@ func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	var buf bytes.Buffer
 	m, e := mail.ReadMessage(io.TeeReader(io.MultiReader(r, strings.NewReader("\r\n\r\n")), io.MultiWriter(h, &buf)))
 	if e != nil && !(e == io.EOF && m != nil) {
-		logger.Error("msg", "ReadMessage", "data", buf.String(), "error", e)
+		logger.Error().Log("msg", "ReadMessage", "data", buf.String(), "error", e)
 		return nil, "", e
 	}
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil
@@ -353,7 +353,7 @@ func (f *B64Filter) Read(b []byte) (int, error) {
 			continue
 		}
 		if c := f.decodeMap[b[i]]; c == 0xFF {
-			logger.Warn("msg", "invalid char: "+fmt.Sprintf("%c(%d) @ %d", b[i], b[i], f.n+i))
+			logger.Warn().Log("msg", "invalid char: "+fmt.Sprintf("%c(%d) @ %d", b[i], b[i], f.n+i))
 			b[i] = '\n'
 		}
 	}
@@ -426,7 +426,7 @@ func (d *b64ForceDecoder) Read(p []byte) (int, error) {
 			return dn, err
 		}
 		bad = raw[max(0, i-20):min(i+4, len(raw))]
-		logger.Error("msg", "base64 decoding", "raw", string(bad), "error", e)
+		logger.Error().Log("msg", "base64 decoding", "raw", string(bad), "error", e)
 		raw = append(raw[:i], raw[i+1:]...)
 	}
 	return 0, err
