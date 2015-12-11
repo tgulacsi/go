@@ -511,7 +511,9 @@ func HeadDecode(head string) string {
 		logger.Error().Log("msg", "HeadDecode", "head", head, "error", err)
 		return head
 	}
-	logger.Debug().Log("msg", "WordDecoder", "old", head, "new", res)
+	if strings.Contains(res, "=?") {
+		logger.Debug().Log("msg", "WordDecoder", "old", head, "new", res)
+	}
 	return res
 }
 
