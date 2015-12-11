@@ -426,7 +426,12 @@ func (d *b64ForceDecoder) Read(p []byte) (int, error) {
 		}
 		bad = raw[max(0, i-20):min(i+4, len(raw))]
 		logger.Error().Log("msg", "base64 decoding", "raw", string(bad), "error", e)
-		raw = append(raw[:i], raw[i+1:]...)
+		if 0 <= i && i < len(raw) {
+			raw = append(raw[:i], raw[i+1:]...)
+		} else {
+			raw = raw[:len(raw)-1]
+		}
+
 	}
 	return 0, err
 }
