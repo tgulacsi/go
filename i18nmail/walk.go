@@ -389,8 +389,7 @@ type b64ForceDecoder struct {
 }
 
 func (d *b64ForceDecoder) Read(p []byte) (int, error) {
-	bs := (len(p) / 3) * 3
-	es := bs << 2
+	es := d.Encoding.EncodedLen(len(p))
 	if cap(d.scratch) < es {
 		d.scratch = make([]byte, es)
 	} else {
