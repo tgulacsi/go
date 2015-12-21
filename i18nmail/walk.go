@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -22,7 +23,6 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/levels"
 	"github.com/sloonz/go-qprintable"
-	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
 )
 
@@ -111,11 +111,13 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		msg *mail.Message
 		hsh string
 	)
-	br, e := temp.NewReadSeeker(part.Body)
+	b, e := ioutil.ReadAll(io.MultiReader(part.Body, strings.NewReader("\n")))
+	//br, e := temp.NewReadSeeker(io.MultiReader(part.Body, strings.NewReader("\n")))
 	if e != nil {
 		return e
 	}
-	defer func() { _ = br.Close() }()
+	//defer func() { _ = br.Close() }()
+	br := bytes.NewBuffer(b)
 	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
 		logger.Warn().Log("msg", "ReadAndHashMessage", "error", e)
 		return errgo.Notef(e, "WalkMail")
@@ -131,9 +133,10 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	}
 	child := MailPart{ContentType: ct, MediaType: params,
 		Header: textproto.MIMEHeader(msg.Header),
-		Body:   msg.Body, Parent: &part,
-		Level: part.Level + 1,
-		Seq:   nextSeqInt()}
+		Body:   msg.Body,
+		Parent: &part,
+		Level:  part.Level + 1,
+		Seq:    nextSeqInt()}
 	if hsh != "" {
 		child.Header.Add("X-Hash", hsh)
 	}
@@ -171,7 +174,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 //
 // By default this is recursive, except dontDescend is true.
 func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
-	parts := multipart.NewReader(mp.Body, mp.MediaType["boundary"])
+	parts := multipart.NewReader(io.MultiReader(mp.Body, strings.NewReader("\n")), mp.MediaType["boundary"])
 	part, e := parts.NextPart()
 	var (
 		decoder DecoderFunc
@@ -228,7 +231,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		part, e = parts.NextPart()
 	}
 	if e != nil && e != io.EOF && !strings.HasSuffix(e.Error(), " EOF") {
-		logger.Error().Log("reading parts", "error", e)
+		logger.Error().Log("msg", "reading parts", "error", e)
 		return errgo.NoteMask(e, "reading parts", errIsStopWalk)
 	}
 	return nil
@@ -263,7 +266,8 @@ func getCT(
 	case "base64":
 		decoder = func(r io.Reader) io.Reader {
 			//return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}
-			return B64FilterReader(r, base64.StdEncoding)
+			//return B64FilterReader(r, base64.StdEncoding)
+			return base64.NewDecoder(base64.StdEncoding, r)
 		}
 	case "quoted-printable":
 		decoder = func(r io.Reader) io.Reader {
