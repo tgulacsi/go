@@ -6,12 +6,10 @@ package i18nmail
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -23,6 +21,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/levels"
 	"github.com/sloonz/go-qprintable"
+	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
 )
 
@@ -111,13 +110,11 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		msg *mail.Message
 		hsh string
 	)
-	b, e := ioutil.ReadAll(io.MultiReader(part.Body, strings.NewReader("\n")))
-	//br, e := temp.NewReadSeeker(io.MultiReader(part.Body, strings.NewReader("\n")))
+	br, e := temp.NewReadSeeker(io.MultiReader(part.Body, strings.NewReader("\r\n\r\n")))
 	if e != nil {
 		return e
 	}
-	//defer func() { _ = br.Close() }()
-	br := bytes.NewBuffer(b)
+	defer func() { _ = br.Close() }()
 	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
 		logger.Warn().Log("msg", "ReadAndHashMessage", "error", e)
 		return errgo.Notef(e, "WalkMail")
@@ -316,10 +313,9 @@ func HashBytes(data []byte) string {
 // ReadAndHashMessage reads message and hashes it by the way
 func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	h := sha1.New()
-	var buf bytes.Buffer
-	m, e := mail.ReadMessage(io.TeeReader(io.MultiReader(r, strings.NewReader("\r\n\r\n")), io.MultiWriter(h, &buf)))
+	m, e := mail.ReadMessage(io.TeeReader(io.MultiReader(r, strings.NewReader("\r\n\r\n")), h))
 	if e != nil && !(e == io.EOF && m != nil) {
-		logger.Error().Log("msg", "ReadMessage", "data", buf.String(), "error", e)
+		logger.Error().Log("msg", "ReadMessage", "error", e)
 		return nil, "", e
 	}
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil
