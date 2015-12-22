@@ -110,7 +110,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		msg *mail.Message
 		hsh string
 	)
-	br, e := temp.NewReadSeeker(io.MultiReader(part.Body, strings.NewReader("\r\n\r\n")))
+	br, e := temp.NewReadSeeker(part.Body)
 	if e != nil {
 		return e
 	}
@@ -121,7 +121,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	}
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
-	logger.Info().Log("msg", "Walk message", "hsh", hsh, "headers", msg.Header)
+	logger.Info().Log("msg", "Walk message", "hsh", hsh, "headers", msg.Header, "level", part.Level)
 	if e != nil {
 		return errgo.Notef(e, "WalkMail")
 	}
@@ -147,15 +147,15 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		}
 		return nil
 	}
-	if !dontDescend && child.Level < MaxWalkDepth && strings.HasPrefix(ct, "message/") { //mail
-		if decoder != nil {
-			child.Body = decoder(child.Body)
-		}
-		if e = Walk(child, todo, dontDescend); e != nil {
-			return errgo.Notef(e, "level=%d", child.Level)
-		}
-		return nil
+	//if !dontDescend && child.Level < MaxWalkDepth && strings.HasPrefix(ct, "message/") { //mail
+	if decoder != nil {
+		child.Body = decoder(child.Body)
 	}
+	//if e = Walk(child, todo, dontDescend); e != nil {
+	//return errgo.Notef(e, "level=%d", child.Level)
+	//}
+	//return nil
+	//}
 	//simple
 	if decoder != nil {
 		child.Body = decoder(child.Body)
@@ -313,7 +313,7 @@ func HashBytes(data []byte) string {
 // ReadAndHashMessage reads message and hashes it by the way
 func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	h := sha1.New()
-	m, e := mail.ReadMessage(io.TeeReader(io.MultiReader(r, strings.NewReader("\r\n\r\n")), h))
+	m, e := mail.ReadMessage(io.TeeReader(r, h))
 	if e != nil && !(e == io.EOF && m != nil) {
 		logger.Error().Log("msg", "ReadMessage", "error", e)
 		return nil, "", e
