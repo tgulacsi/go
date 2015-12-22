@@ -116,7 +116,14 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	}
 	defer func() { _ = br.Close() }()
 	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
-		logger.Warn().Log("msg", "ReadAndHashMessage", "error", e)
+		if p, _ := br.Seek(0, 2); p == 0 {
+			logger.Warn().Log("msg", "empty body!")
+			return nil
+		}
+		br.Seek(0, 0)
+		b := make([]byte, 4096)
+		n, _ := io.ReadAtLeast(br, b, 2048)
+		logger.Warn().Log("msg", "ReadAndHashMessage", "error", e, "mail", string(b[:n]))
 		return errgo.Notef(e, "WalkMail")
 	}
 	msg.Header = DecodeHeaders(msg.Header)
