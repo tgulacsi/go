@@ -5,7 +5,7 @@
 package i18nmail
 
 import (
-	"io/ioutil"
+	"io"
 	"net/mail"
 	"strconv"
 	"strings"
@@ -40,13 +40,14 @@ func TestMailAddress(t *testing.T) {
 func TestWalk(t *testing.T) {
 	Logger.Swap(kithlp.TestLogger(t))
 	for i, tc := range walkTestCases {
+		b := make([]byte, 2048)
 		if err := Walk(MailPart{Body: strings.NewReader(tc)},
 			func(mp MailPart) error {
-				_, err := ioutil.ReadAll(mp.Body)
+				n, err := io.ReadAtLeast(mp.Body, b, cap(b)/2)
 				if err != nil {
-					t.Errorf("%d. read body of %d/%d: %v", i, mp.Level, mp.Seq, err)
+					t.Errorf("%d %d/%d. read body of: %v", i, mp.Level, mp.Seq, err)
 				}
-				//t.Logf("%d. part %d/%d %q %#v\n%s\n%q", i, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header, b)
+				t.Logf("\n--- %d %d/%d. part ---\n%q %#v\n%s\n%q...", i, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header, b[:n])
 				return nil
 			},
 			false,
