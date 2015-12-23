@@ -178,7 +178,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 //
 // By default this is recursive, except dontDescend is true.
 func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
-	parts := multipart.NewReader(io.MultiReader(mp.Body, strings.NewReader("\n")), mp.MediaType["boundary"])
+	parts := multipart.NewReader(io.MultiReader(mp.Body, strings.NewReader("\r\n")), mp.MediaType["boundary"])
 	part, e := parts.NextPart()
 	var (
 		decoder DecoderFunc
@@ -209,12 +209,20 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			if e = WalkMultipart(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				data, _ := br.Peek(1024)
+				if len(data) == 0 { // EOF
+					e = nil
+					break
+				}
 				return errgo.NoteMask(e, fmt.Sprintf("descending data=%s", data), errIsStopWalk)
 			}
 		} else if !dontDescend && strings.HasPrefix(ct, "message/") {
 			if e = Walk(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				data, _ := br.Peek(1024)
+				if len(data) == 0 { // EOF
+					e = nil
+					break
+				}
 				return errgo.NoteMask(e, fmt.Sprintf("descending data=%s", data), errIsStopWalk)
 			}
 		} else {
@@ -234,7 +242,11 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 
 		part, e = parts.NextPart()
 	}
-	if e != nil && e != io.EOF && !strings.HasSuffix(e.Error(), " EOF") {
+	var eS string
+	if e != nil {
+		eS = e.Error()
+	}
+	if e != nil && e != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
 		logger.Error().Log("msg", "reading parts", "error", e)
 		return errgo.NoteMask(e, "reading parts", errIsStopWalk)
 	}
