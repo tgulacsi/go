@@ -12,7 +12,45 @@ import (
 	"strings"
 )
 
+// NewB64Decoder returns a new filtering base64 decoder.
+func NewB64Decoder(enc *base64.Encoding, r io.Reader) io.Reader {
+	return base64.NewDecoder(enc.WithPadding(0), NewB64FilterReader(r))
+}
+
+// NEwB64FilterReader returns a new filtering reader for base64 characters.
+func NewB64FilterReader(r io.Reader) io.Reader {
+	return NewFilterReader(r, []byte(b64chars))
+}
+
 const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+type filterReader struct {
+	io.Reader
+	okBytes [256]bool
+}
+
+// NewFilterReader returns a new reader which filter out bytes not in the given
+// okBytes slice.
+func NewFilterReader(r io.Reader, okBytes []byte) *filterReader {
+	fr := filterReader{Reader: r}
+	for _, b := range okBytes {
+		fr.okBytes[b] = true
+	}
+	return &fr
+}
+func (fr *filterReader) Read(p []byte) (int, error) {
+	n, err := fr.Reader.Read(p)
+	if n == 0 {
+		return n, err
+	}
+	p2 := make([]byte, 0, n)
+	for _, b := range p {
+		if fr.okBytes[b] {
+			p2 = append(p2, b)
+		}
+	}
+	return len(p2), err
+}
 
 // B64Filter is a decoding base64 filter
 type B64Filter struct {

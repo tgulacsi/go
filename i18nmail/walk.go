@@ -283,7 +283,7 @@ func getCT(
 		decoder = func(r io.Reader) io.Reader {
 			//return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}
 			//return B64FilterReader(r, base64.StdEncoding)
-			return base64.NewDecoder(base64.StdEncoding, r)
+			return NewB64Decoder(base64.StdEncoding, r)
 		}
 	case "quoted-printable":
 		decoder = func(r io.Reader) io.Reader {

@@ -6,6 +6,7 @@ package i18nmail
 
 import (
 	"io"
+	"io/ioutil"
 	"net/mail"
 	"strconv"
 	"strings"
@@ -40,10 +41,11 @@ func TestMailAddress(t *testing.T) {
 func TestWalk(t *testing.T) {
 	Logger.Swap(kithlp.TestLogger(t))
 	for i, tc := range walkTestCases {
-		b := make([]byte, 2048)
+		b := make([]byte, 1024)
 		if err := Walk(MailPart{Body: strings.NewReader(tc)},
 			func(mp MailPart) error {
 				n, err := io.ReadAtLeast(mp.Body, b, cap(b)/2)
+				io.Copy(ioutil.Discard, mp.Body)
 				if err != nil {
 					t.Errorf("%d %d/%d. read body of: %v", i, mp.Level, mp.Seq, err)
 				}
@@ -3705,5 +3707,48 @@ fFt7hImaVjjkXlEz4Od61lxWHHaRiw+EmFS/Jwto+sj3QflQ4a9rCs/cq3AElGOK
 zJjIHu+r
 
 ------AAA913DBD4DF875C1B1122C393E63B60--
+`,
+	`Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch02.kobe.hu
+ ([::1]) with mapi id 14.03.0195.001; Wed, 23 Dec 2015 10:04:17 +0100
+From: =?utf-8?B?S8OWQkUga8OhcnJlbmRlesOpcyAoa2FyQGtvYmUuaHUp?= <kar@kobe.hu>
+To: MailToBruno <mailtobruno@kobe.hu>
+CC: Vincze Erika <vinczee@kobe.hu>
+Subject: =?utf-8?B?MTc2ODM5IGVnecOpYiBsZXYg?=
+Thread-Topic: =?utf-8?B?MTc2ODM5IGVnecOpYiBsZXYg?=
+Thread-Index: AdE9YOIvuHFUsa4uQMmjcAPz+6dNpg==
+Date: Wed, 23 Dec 2015 10:04:16 +0100
+Message-ID: <8B225910490C14469D48A5153725E14F2B8E119F@BUDSEXCH03.kobe.hu>
+Accept-Language: hu-HU, en-US
+Content-Language: hu-HU
+X-MS-Exchange-Organization-AuthAs: Internal
+X-MS-Exchange-Organization-AuthMechanism: 04
+X-MS-Exchange-Organization-AuthSource: budsexch02.kobe.hu
+X-MS-Has-Attach:
+X-MS-Exchange-Organization-SCL: -1
+X-MS-TNEF-Correlator:
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: base64
+MIME-Version: 1.0
+
+DQoNCg0KDQrDnGR2w7Z6bGV0dGVsOiANCiANClB1YmxpayBGcnV6c2luYSANCmvDoXJhZG1pbmlz
+enRyw6F0b3IgDQogDQogIA0KDQoNCi0tLS0tT3JpZ2luYWwgTWVzc2FnZS0tLS0tDQpGcm9tOiBU
+dXphIElzdHbDoW5uw6kgW21haWx0bzp0dXphLnpzdXpzaUBmcmVlbWFpbC5odV0gDQpTZW50OiBX
+ZWRuZXNkYXksIERlY2VtYmVyIDIzLCAyMDE1IDg6MjkgQU0NClRvOiBLw5ZCRSBrw6FycmVuZGV6
+w6lzIChrYXJAa29iZS5odSkNClN1YmplY3Q6IEZ3OiBUdXphIElzdHbDoW5uw6kgMjAxNS4gbm92
+ZW1iZXIgMTYtYWkga8OhcmVzZW3DqW55aGV6IC0gw6lyZGVrbMWRZMOpcyBheiDDvGd5IMOhbGzD
+oXNhIGlyw6FudCENCg0KVGlzenRlbHQgQml6dG9zw610w7MhDQoNCsOJcmRla2zFkWRuw6lrLCBo
+b2d5YW4gw6FsbCBhIGvDoXLDvGd5ZW0/IEhpc3plbiBhIG1haSBuYXBpZyBuZW0gdMO2cnTDqW50
+IG1lZyBhIGtvbGzDqWfDoWp1ayByw6lzesOpcsWRbCBmZWxtw6lydCBrw6FyIMOhdHV0YWzDoXNh
+Lg0KDQpUaXN6dGVsZXR0ZWw6IFR1emEgSXN0dsOhbm7DqQ0KDQotLS0tLS0tLS0tRXJlZGV0aSDD
+vHplbmV0LS0tLS0tLS0tLQ0KRMOhdHVtOiAgICAgICAgMjAxNS4gZGVjZW1iZXIgMS4sIGtlZGQs
+IDEwOjMyOjIwDQpGZWxhZMOzOiAgICAgICAiVHV6YSAgSXN0dsOhbm7DqSIgPHR1emEuenN1enNp
+QGZyZWVtYWlsLmh1Pg0KVMOhcmd5OiAgICAgICAgVHV6YSBJc3R2w6FubsOpIDIwMTUuIG5vdmVt
+YmVyIDE2LWFpIGvDoXJlc2Vtw6lueWhleg0KQ8OtbXpldHQ6ICAgICAga2FyQGtvYmUuaHUNClRp
+c3p0ZWx0IEJpenRvc8OtdMOzIQ0KDQpBIG1haSBuYXBvbiBheiDDlm7Dtmsga29sbMOpZ8OhamEg
+RmVyZW5jemkgw7pyIG1lZ27DqXp0ZSBheiBBVVgtOTUwIGZyc3otw7ogU2tvZGEgMTIwIEwgZ8Op
+cGtvY3NpbiBrZWxldGtlemV0dCBrw6FydC4gDQpBIHRvdsOhYmJpIMO8Z3lpbnTDqXrDqXNoZXog
+c3plcmV0bsOpbSBtZWdhZG5pIGEgYmFua3N6w6FtbGEgc3rDoW11bmthdDoNClR1emEgSXN0dsOh
+bm7DqQ0KUGlsbMOpciBUYWthcsOpa3N6w7Z2ZXRrZXpldA0KNTc0MDAyMjQtMTUxMDEzNzINCg0K
+S8O2c3rDtm5ldHRlbDogVHV6w6Fuw6kNCg0KDQoNCg==
 `,
 }

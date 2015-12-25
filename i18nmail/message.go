@@ -134,10 +134,12 @@ type Address struct {
 	Address string // user@domain
 }
 
+var wsRepl = strings.NewReplacer("  ", " ", "\t", " ")
+
 // Parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
 func ParseAddress(address string) (*Address, error) {
 	//return newAddrParser(address).parseAddress()
-	maddr, err := AddressParser.Parse(address)
+	maddr, err := AddressParser.Parse(wsRepl.Replace(address))
 	if maddr == nil {
 		return nil, err
 	}
@@ -147,7 +149,7 @@ func ParseAddress(address string) (*Address, error) {
 // ParseAddressList parses the given string as a list of addresses.
 func ParseAddressList(list string) ([]*Address, error) {
 	//return newAddrParser(list).parseAddressList()
-	al, err := AddressParser.ParseList(list)
+	al, err := AddressParser.ParseList(wsRepl.Replace(list))
 	if al == nil {
 		return nil, err
 	}

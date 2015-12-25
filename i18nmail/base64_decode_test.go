@@ -1,0 +1,45 @@
+// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Use of this source code is governed by an Apache 2.0
+// license that can be found in the LICENSE file.
+
+package i18nmail
+
+import (
+	"encoding/base64"
+	"io/ioutil"
+	"strings"
+	"testing"
+)
+
+var b64tc = []string{
+	`DQoNCg0KDQrDnGR2w7Z6bGV0dGVsOiANCiANClB1YmxpayBGcnV6c2luYSANCmvDoXJhZG1pbmlz
+enRyw6F0b3IgDQogDQogIA0KDQoNCi0tLS0tT3JpZ2luYWwgTWVzc2FnZS0tLS0tDQpGcm9tOiBU
+dXphIElzdHbDoW5uw6kgW21haWx0bzp0dXphLnpzdXpzaUBmcmVlbWFpbC5odV0gDQpTZW50OiBX
+ZWRuZXNkYXksIERlY2VtYmVyIDIzLCAyMDE1IDg6MjkgQU0NClRvOiBLw5ZCRSBrw6FycmVuZGV6
+w6lzIChrYXJAa29iZS5odSkNClN1YmplY3Q6IEZ3OiBUdXphIElzdHbDoW5uw6kgMjAxNS4gbm92
+ZW1iZXIgMTYtYWkga8OhcmVzZW3DqW55aGV6IC0gw6lyZGVrbMWRZMOpcyBheiDDvGd5IMOhbGzD
+oXNhIGlyw6FudCENCg0KVGlzenRlbHQgQml6dG9zw610w7MhDQoNCsOJcmRla2zFkWRuw6lrLCBo
+b2d5YW4gw6FsbCBhIGvDoXLDvGd5ZW0/IEhpc3plbiBhIG1haSBuYXBpZyBuZW0gdMO2cnTDqW50
+IG1lZyBhIGtvbGzDqWfDoWp1ayByw6lzesOpcsWRbCBmZWxtw6lydCBrw6FyIMOhdHV0YWzDoXNh
+Lg0KDQpUaXN6dGVsZXR0ZWw6IFR1emEgSXN0dsOhbm7DqQ0KDQotLS0tLS0tLS0tRXJlZGV0aSDD
+vHplbmV0LS0tLS0tLS0tLQ0KRMOhdHVtOiAgICAgICAgMjAxNS4gZGVjZW1iZXIgMS4sIGtlZGQs
+IDEwOjMyOjIwDQpGZWxhZMOzOiAgICAgICAiVHV6YSAgSXN0dsOhbm7DqSIgPHR1emEuenN1enNp
+QGZyZWVtYWlsLmh1Pg0KVMOhcmd5OiAgICAgICAgVHV6YSBJc3R2w6FubsOpIDIwMTUuIG5vdmVt
+YmVyIDE2LWFpIGvDoXJlc2Vtw6lueWhleg0KQ8OtbXpldHQ6ICAgICAga2FyQGtvYmUuaHUNClRp
+c3p0ZWx0IEJpenRvc8OtdMOzIQ0KDQpBIG1haSBuYXBvbiBheiDDlm7Dtmsga29sbMOpZ8OhamEg
+RmVyZW5jemkgw7pyIG1lZ27DqXp0ZSBheiBBVVgtOTUwIGZyc3otw7ogU2tvZGEgMTIwIEwgZ8Op
+cGtvY3NpbiBrZWxldGtlemV0dCBrw6FydC4gDQpBIHRvdsOhYmJpIMO8Z3lpbnTDqXrDqXNoZXog
+c3plcmV0bsOpbSBtZWdhZG5pIGEgYmFua3N6w6FtbGEgc3rDoW11bmthdDoNClR1emEgSXN0dsOh
+bm7DqQ0KUGlsbMOpciBUYWthcsOpa3N6w7Z2ZXRrZXpldA0KNTc0MDAyMjQtMTUxMDEzNzINCg0K
+S8O2c3rDtm5ldHRlbDogVHV6w6Fuw6kNCg0KDQoNCg==`,
+}
+
+func TestB64FilterReader(t *testing.T) {
+	for i, tc := range b64tc {
+		r := base64.NewDecoder(base64.StdEncoding.WithPadding(0),
+			NewB64FilterReader(strings.NewReader(tc)))
+		if _, err := ioutil.ReadAll(r); err != nil {
+			t.Errorf("%d. %v", i, err)
+		}
+	}
+}
