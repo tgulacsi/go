@@ -12,25 +12,25 @@ import (
 	"strings"
 )
 
-// NewB64Decoder returns a new filtering base64 decoder.
+const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+// NewB64Decoder returns a new filtering bae64 decoder.
 func NewB64Decoder(enc *base64.Encoding, r io.Reader) io.Reader {
-	return base64.NewDecoder(enc.WithPadding(0), NewB64FilterReader(r))
+	return base64.NewDecoder(enc.WithPadding(0), NewB64FilterReader(NewB64FilterReader(r)))
 }
 
-// NEwB64FilterReader returns a new filtering reader for base64 characters.
+// NewB64FilterReader returns a base64 filtering reader.
 func NewB64FilterReader(r io.Reader) io.Reader {
 	return NewFilterReader(r, []byte(b64chars))
 }
-
-const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 type filterReader struct {
 	io.Reader
 	okBytes [256]bool
 }
 
-// NewFilterReader returns a new reader which filter out bytes not in the given
-// okBytes slice.
+// NewFilterReader returns a reader which silently throws away bytes not in
+// the okBytes slice.
 func NewFilterReader(r io.Reader, okBytes []byte) *filterReader {
 	fr := filterReader{Reader: r}
 	for _, b := range okBytes {
@@ -49,6 +49,7 @@ func (fr *filterReader) Read(p []byte) (int, error) {
 			p2 = append(p2, b)
 		}
 	}
+	copy(p, p2)
 	return len(p2), err
 }
 
