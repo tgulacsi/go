@@ -23,7 +23,7 @@ func MakeMsgID() string {
 	getHostname.Do(func() {
 		var err error
 		if hostname, err = os.Hostname(); err != nil {
-			logger.Error().Log("msg", "get hostname", "error", err)
+			Log.Errorf("get hostname: %v", err)
 			hostname = "localhost"
 		}
 	})

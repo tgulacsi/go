@@ -18,8 +18,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/levels"
+	"github.com/rs/xlog"
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
@@ -29,7 +28,7 @@ const MaxWalkDepth = 32
 
 var (
 	// Logger is the base logger, can be swapped - defaults to NopLogger.
-	Logger = new(log.SwapLogger)
+	Log = xlog.Logger(xlog.NopLogger)
 
 	// CheckEncoding is true if we should check Base64 encodings
 	CheckEncoding = true
@@ -39,14 +38,7 @@ var (
 
 	// ErrStop
 	ErrStopWalk = errgo.New("Stop the walk")
-
-	// logger is the package-level logger.
-	logger = levels.New(log.NewContext(Logger).With("lib", "i18nmail"))
 )
-
-func init() {
-	Logger.Swap(log.NewNopLogger())
-}
 
 // TodoFunc is the type of the function called by Walk and WalkMultipart.
 type TodoFunc func(mp MailPart) error
@@ -117,18 +109,18 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	defer func() { _ = br.Close() }()
 	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
 		if p, _ := br.Seek(0, 2); p == 0 {
-			logger.Warn().Log("msg", "empty body!")
+			Log.Warn("empty body!")
 			return nil
 		}
 		br.Seek(0, 0)
 		b := make([]byte, 4096)
 		n, _ := io.ReadAtLeast(br, b, 2048)
-		logger.Warn().Log("msg", "ReadAndHashMessage", "error", e, "mail", string(b[:n]))
+		Log.Warnf("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
 		return errgo.Notef(e, "WalkMail")
 	}
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
-	logger.Info().Log("msg", "Walk message", "hsh", hsh, "headers", msg.Header, "level", part.Level)
+	Log.Infof("Walk message hsh=%s headers=%q level=%d", hsh, msg.Header, part.Level)
 	if e != nil {
 		return errgo.Notef(e, "WalkMail")
 	}
@@ -147,7 +139,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
-	//logger.Debug("msg", "message", "sequence", child.Seq, "content-type", ct, "params", params)
+	//Log.Debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
 	if strings.HasPrefix(ct, "multipart/") {
 		if e = WalkMultipart(child, todo, dontDescend); e != nil {
 			return errgo.Notef(e, "multipart")
@@ -191,7 +183,6 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		if ct, params, decoder, e = getCT(part.Header); e != nil {
 			return errgo.Notef(e, "%d.getCT(%v)", i, part.Header)
 		}
-		//logger.Debug("msg", "part", "ct", ct, "decoder", decoder)
 		if decoder != nil {
 			body = decoder(part)
 		} else {
@@ -204,7 +195,6 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			Level:  mp.Level + 1,
 			Seq:    nextSeqInt()}
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		//logger.Debug("msg", "multipart", "sequence", child.Seq, "content-type", ct, "params", params)
 		if !dontDescend && strings.HasPrefix(ct, "multipart/") {
 			if e = WalkMultipart(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
@@ -247,7 +237,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		eS = e.Error()
 	}
 	if e != nil && e != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
-		logger.Error().Log("msg", "reading parts", "error", e)
+		Log.Errorf("reading parts: %v", e)
 		return errgo.NoteMask(e, "reading parts", errIsStopWalk)
 	}
 	return nil
@@ -296,7 +286,7 @@ func getCT(
 			return qprintable.NewDecoder(enc, br)
 		}
 	default:
-		logger.Warn().Log("msg", "unknown transfer-encoding", "transfer-encoding", te)
+		Log.Warnf("unknown transfer-encoding %q", te)
 	}
 	return
 }
@@ -334,7 +324,7 @@ func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	h := sha1.New()
 	m, e := mail.ReadMessage(io.TeeReader(r, h))
 	if e != nil && !(e == io.EOF && m != nil) {
-		logger.Error().Log("msg", "ReadMessage", "error", e)
+		Log.Errorf("ReadMessage: %v", e)
 		return nil, "", e
 	}
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tgulacsi/go/loghlp/kithlp"
+	"github.com/tgulacsi/go/loghlp/xloghlp"
 )
 
 func TestMailAddress(t *testing.T) {
@@ -39,7 +39,7 @@ func TestMailAddress(t *testing.T) {
 	}
 }
 func TestWalk(t *testing.T) {
-	Logger.Swap(kithlp.TestLogger(t))
+	Log = xloghlp.TestLogger(t)
 	for i, tc := range walkTestCases {
 		b := make([]byte, 1024)
 		if err := Walk(MailPart{Body: strings.NewReader(tc)},

@@ -510,11 +510,11 @@ func HeadDecode(head string) string {
 	}
 	res, err := WordDecoder.DecodeHeader(head)
 	if err != nil {
-		logger.Error().Log("msg", "HeadDecode", "head", head, "error", err)
+		Log.Errorf("HeadDecode(%q): %v", head, err)
 		return head
 	}
 	if strings.Contains(res, "=?") {
-		logger.Debug().Log("msg", "WordDecoder", "old", head, "new", res)
+		Log.Debugf("WordDecoder %q => %q", head, res)
 	}
 	return res
 }
