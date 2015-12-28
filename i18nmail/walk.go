@@ -146,15 +146,9 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		}
 		return nil
 	}
-	//if !dontDescend && child.Level < MaxWalkDepth && strings.HasPrefix(ct, "message/") { //mail
 	if decoder != nil {
 		child.Body = decoder(child.Body)
 	}
-	//if e = Walk(child, todo, dontDescend); e != nil {
-	//return errgo.Notef(e, "level=%d", child.Level)
-	//}
-	//return nil
-	//}
 	//simple
 	if decoder != nil {
 		child.Body = decoder(child.Body)

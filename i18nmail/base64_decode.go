@@ -24,6 +24,7 @@ func NewB64FilterReader(r io.Reader) io.Reader {
 type filterReader struct {
 	io.Reader
 	okBytes [256]bool
+	scratch []byte
 }
 
 // NewFilterReader returns a reader which silently throws away bytes not in
@@ -36,16 +37,23 @@ func NewFilterReader(r io.Reader, okBytes []byte) *filterReader {
 	return &fr
 }
 func (fr *filterReader) Read(p []byte) (int, error) {
-	n, err := fr.Reader.Read(p)
+	if cap(fr.scratch) < len(p) {
+		n := 1024
+		for n < len(p) {
+			n <<= 1
+		}
+		fr.scratch = make([]byte, n)
+	}
+	n, err := fr.Reader.Read(fr.scratch[:len(p)])
 	if n == 0 {
 		return n, err
 	}
-	p2 := make([]byte, 0, n)
-	for _, b := range p {
+	i := 0
+	for _, b := range fr.scratch[:n] {
 		if fr.okBytes[b] {
-			p2 = append(p2, b)
+			p[i] = b
+			i++
 		}
 	}
-	copy(p, p2)
-	return len(p2), err
+	return i, err
 }
