@@ -13,7 +13,7 @@ const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 
 // NewB64Decoder returns a new filtering bae64 decoder.
 func NewB64Decoder(enc *base64.Encoding, r io.Reader) io.Reader {
-	return base64.NewDecoder(enc.WithPadding(0), NewB64FilterReader(NewB64FilterReader(r)))
+	return base64.NewDecoder(enc, NewB64FilterReader(NewB64FilterReader(r)))
 }
 
 // NewB64FilterReader returns a base64 filtering reader.
@@ -25,6 +25,7 @@ type filterReader struct {
 	io.Reader
 	okBytes [256]bool
 	scratch []byte
+	n       int64
 }
 
 // NewFilterReader returns a reader which silently throws away bytes not in
@@ -45,15 +46,32 @@ func (fr *filterReader) Read(p []byte) (int, error) {
 		fr.scratch = make([]byte, n)
 	}
 	n, err := fr.Reader.Read(fr.scratch[:len(p)])
-	if n == 0 {
-		return n, err
-	}
 	i := 0
-	for _, b := range fr.scratch[:n] {
-		if fr.okBytes[b] {
-			p[i] = b
-			i++
+	if n > 0 {
+		for _, b := range fr.scratch[:n] {
+			if fr.okBytes[b] {
+				p[i] = b
+				i++
+			}
 		}
+		fr.n += int64(i)
 	}
 	return i, err
+
+	if err == nil || err != io.EOF {
+		return i, err
+	}
+	padding := int(fr.n % 4)
+	if padding == 0 {
+		return i, io.EOF
+	}
+	for j := 0; j < 4-padding; j++ {
+		p[i] = '='
+		i++
+	}
+	j := i - 4
+	if j < 0 {
+		j = 0
+	}
+	return i, io.EOF
 }
