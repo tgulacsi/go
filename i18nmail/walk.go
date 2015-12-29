@@ -120,6 +120,9 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	}
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
+	if decoder != nil {
+		msg.Body = decoder(msg.Body)
+	}
 	Log.Infof("Walk message hsh=%s headers=%q level=%d", hsh, msg.Header, part.Level)
 	if e != nil {
 		return errgo.Notef(e, "WalkMail")
@@ -145,13 +148,6 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 			return errgo.Notef(e, "multipart")
 		}
 		return nil
-	}
-	if decoder != nil {
-		child.Body = decoder(child.Body)
-	}
-	//simple
-	if decoder != nil {
-		child.Body = decoder(child.Body)
 	}
 	if e = todo(child); e != nil {
 		return e

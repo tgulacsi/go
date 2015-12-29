@@ -60,6 +60,40 @@ func TestWalk(t *testing.T) {
 }
 
 var walkTestCases = []string{
+	`Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch01.kobe.hu
+ ([::1]) with mapi id 14.03.0195.001; Mon, 21 Dec 2015 12:31:56 +0100
+From: =?utf-8?B?S8OWQkUga8OhcnJlbmRlesOpcyAoa2FyQGtvYmUuaHUp?= <kar@kobe.hu>
+To: MailToBruno <mailtobruno@kobe.hu>
+Subject: 137036 jav lev
+Thread-Topic: 137036 jav lev
+Thread-Index: AdE74zC13d4/0mU9Qfmue4gy3U8RQg==
+Date: Mon, 21 Dec 2015 12:31:55 +0100
+Message-ID: <8B225910490C14469D48A5153725E14F2B8E0639@BUDSEXCH03.kobe.hu>
+Accept-Language: hu-HU, en-US
+Content-Language: hu-HU
+X-MS-Exchange-Organization-AuthAs: Internal
+X-MS-Exchange-Organization-AuthMechanism: 04
+X-MS-Exchange-Organization-AuthSource: budsexch01.kobe.hu
+X-MS-Has-Attach:
+X-MS-Exchange-Organization-SCL: -1
+X-MS-TNEF-Correlator:
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: base64
+MIME-Version: 1.0
+
+DQoNCg0KDQrDnGR2w7Z6bGV0dGVsOiANCiANClB1YmxpayBGcnV6c2luYSANCmvDoXJhZG1pbmlz
+enRyw6F0b3IgDQogDQogIA0KDQoNCi0tLS0tT3JpZ2luYWwgTWVzc2FnZS0tLS0tDQpGcm9tOiBt
+YXJpYW5uYS5wYXBAc2NobmVpZGVyYXV0b2hhei5odSBbbWFpbHRvOm1hcmlhbm5hLnBhcEBzY2hu
+ZWlkZXJhdXRvaGF6Lmh1XSANClNlbnQ6IEZyaWRheSwgRGVjZW1iZXIgMTgsIDIwMTUgMjowNyBQ
+TQ0KVG86IEvDlkJFIGvDoXJyZW5kZXrDqXMgKGthckBrb2JlLmh1KQ0KU3ViamVjdDoga8OhcmVs
+c3rDoW1vbMOzIGvDqXLDqXNlIEpMVy0wNTctZXMgc3pnay4taG96DQoNClRpc3p0ZWx0IEJpenRv
+c8OtdMOzIQ0KDQpBIEpMVy0wNTctZXMgQk1XMTE2aSBzemdrLiAyMDEzLjEyLjE4LWkgZMOhdHVt
+bWFsIGtpw6FsbMOtdG90dCBzesOhbWzDoWrDoW4gc3plcmVwbMWRIGvDoXJlc2Vtw6lueWhleiBz
+emVyZXRuw6lrIGvDoXJlbHN6w6Ftb2zDs3Qga8Opcm5pLCBtZXJ0IG5lbSBrZXLDvGx0IGxldXRh
+bMOhc3JhIGEgdGVsamVzIMO2c3N6ZWc6IDEyMy45MTkuLWZ0LCBsZXZvbsOhcyB0w7ZydMOpbnQg
+MTMuMTczLi1mdCDDqXJ0w6lrYmVuLCBtZWx5bmVrIG9rw6F0IHN6ZXJldG7DqWsgdHVkbmkuDQoN
+CkvDtnN6w7ZuZXR0ZWw6DQpTY2h1bHR6bsOpIFBhcCBNYXJpYW5uYQ0KU2NobmVpZGVyIEF1dMOz
+aMOheiBLZnQuDQpLb250cm9sbGVyDQo=`,
 	`Received: from mesmtp1.kobe.hu (192.168.1.55) by BUDSEXCH03.kobe.hu
  (192.168.1.38) with Microsoft SMTP Server id 14.3.123.3; Tue, 29 Sep 2015
  11:56:08 +0200
