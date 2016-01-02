@@ -5,14 +5,18 @@ import (
 	"encoding/xml"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+
+	"golang.org/x/net/context"
+	"golang.org/x/net/context/ctxhttp"
 
 	"gopkg.in/errgo.v1"
 
 	"github.com/kylewolfe/soaptrip"
+	"github.com/rs/xlog"
 )
 
 func NewClient(endpointURL, soapActionBase string, cl *http.Client) *soapClient {
@@ -36,30 +40,30 @@ type soapClient struct {
 	SOAPActionBase string
 }
 
-func (s soapClient) Call(method string, body io.Reader) (*xml.Decoder, io.Closer, error) {
+func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, io.Closer, error) {
 	if s.SOAPActionBase != "" {
 		method = s.SOAPActionBase + "/" + method
 	}
-	return s.CallAction(method, body)
+	return s.CallAction(ctx, method, body)
 }
-func (s soapClient) CallAction(soapAction string, body io.Reader) (*xml.Decoder, io.Closer, error) {
+func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.Reader) (*xml.Decoder, io.Closer, error) {
 	var buf bytes.Buffer
-	io.WriteString(&buf, `<?xml version="1.0" encoding="utf-8"?>
+	_, err := io.Copy(&buf, io.MultiReader(
+		strings.NewReader(`<?xml version="1.0" encoding="utf-8"?>
 <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
-`)
-	io.Copy(&buf, body)
-	io.WriteString(&buf, `
-</Body></Envelope>`)
-
-	req, err := http.NewRequest("POST", s.URL, bytes.NewReader(buf.Bytes()))
+`),
+		body,
+		strings.NewReader("\n</Body></Envelope>")))
 	if err != nil {
 		return nil, nil, err
 	}
+	req, err := http.NewRequest("POST", s.URL, bytes.NewReader(buf.Bytes()))
 	req.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	req.Header.Set("SOAPAction", soapAction)
-	log.Printf("calling %q (%q)\n%s", s.URL, soapAction, buf.String())
-	resp, err := s.Client.Do(req)
+	Log := xlog.FromContext(ctx)
+	Log.Warnf("calling %q (%q): %s", s.URL, soapAction, buf.String())
+	resp, err := ctxhttp.Do(ctx, s.Client, req)
 	if err != nil {
 		if resp != nil && resp.Body != nil {
 			resp.Body.Close()
