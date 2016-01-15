@@ -5,7 +5,6 @@
 package i18nmail
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/base64"
 	"io"
@@ -35,11 +34,6 @@ func NewFilterReader(r io.Reader, okBytes []byte) io.Reader {
 		var length int64
 		raw := make([]byte, 16<<10)
 		filtered := make([]byte, cap(raw))
-		bw := bufio.NewWriter(pw)
-		finish := func(err error) {
-			bw.Flush()
-			pw.CloseWithError(err)
-		}
 		for {
 			n, readErr := r.Read(raw)
 			if n == 0 && readErr == nil {
@@ -53,9 +47,9 @@ func NewFilterReader(r io.Reader, okBytes []byte) io.Reader {
 					i++
 				}
 			}
-			i, err := bw.Write(filtered[:i])
+			i, err := pw.Write(filtered[:i])
 			if err != nil {
-				finish(err)
+				pw.CloseWithError(err)
 				return
 			}
 			length += int64(i)
@@ -63,16 +57,16 @@ func NewFilterReader(r io.Reader, okBytes []byte) io.Reader {
 				continue
 			}
 			if readErr != io.EOF {
-				finish(err)
+				pw.CloseWithError(err)
 				return
 			}
 			if padding := int(length % 4); padding > 0 {
-				if _, err := bw.Write(bytes.Repeat([]byte{'='}, 4-padding)); err != nil {
-					finish(err)
+				if _, err := pw.Write(bytes.Repeat([]byte{'='}, 4-padding)); err != nil {
+					pw.CloseWithError(err)
 					return
 				}
 			}
-			finish(readErr)
+			pw.CloseWithError(readErr)
 			return
 		}
 	}()
