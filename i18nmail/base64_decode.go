@@ -5,6 +5,8 @@
 package i18nmail
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/base64"
 	"io"
 )
@@ -21,57 +23,58 @@ func NewB64FilterReader(r io.Reader) io.Reader {
 	return NewFilterReader(r, []byte(b64chars))
 }
 
-type filterReader struct {
-	io.Reader
-	okBytes [256]bool
-	scratch []byte
-	n       int64
-}
-
 // NewFilterReader returns a reader which silently throws away bytes not in
 // the okBytes slice.
-func NewFilterReader(r io.Reader, okBytes []byte) *filterReader {
-	fr := filterReader{Reader: r}
+func NewFilterReader(r io.Reader, okBytes []byte) io.Reader {
+	var okMap [256]bool
 	for _, b := range okBytes {
-		fr.okBytes[b] = true
+		okMap[b] = true
 	}
-	return &fr
-}
-func (fr *filterReader) Read(p []byte) (int, error) {
-	if cap(fr.scratch) < len(p) {
-		n := 1024
-		for n < len(p) {
-			n <<= 1
+	pr, pw := io.Pipe()
+	go func() {
+		var length int64
+		raw := make([]byte, 16<<10)
+		filtered := make([]byte, cap(raw))
+		bw := bufio.NewWriter(pw)
+		finish := func(err error) {
+			bw.Flush()
+			pw.CloseWithError(err)
 		}
-		fr.scratch = make([]byte, n)
-	}
-	n, err := fr.Reader.Read(fr.scratch[:len(p)])
-	i := 0
-	if n > 0 {
-		for _, b := range fr.scratch[:n] {
-			if fr.okBytes[b] {
-				p[i] = b
-				i++
+		for {
+			n, readErr := r.Read(raw)
+			if n == 0 && readErr == nil {
+				continue
 			}
+			filtered = filtered[:n]
+			i := 0
+			for _, b := range raw[:n] {
+				if okMap[b] {
+					filtered[i] = b
+					i++
+				}
+			}
+			i, err := bw.Write(filtered[:i])
+			if err != nil {
+				finish(err)
+				return
+			}
+			length += int64(i)
+			if readErr == nil {
+				continue
+			}
+			if readErr != io.EOF {
+				finish(err)
+				return
+			}
+			if padding := int(length % 4); padding > 0 {
+				if _, err := bw.Write(bytes.Repeat([]byte{'='}, 4-padding)); err != nil {
+					finish(err)
+					return
+				}
+			}
+			finish(readErr)
+			return
 		}
-		fr.n += int64(i)
-	}
-	return i, err
-
-	if err == nil || err != io.EOF {
-		return i, err
-	}
-	padding := int(fr.n % 4)
-	if padding == 0 {
-		return i, io.EOF
-	}
-	for j := 0; j < 4-padding; j++ {
-		p[i] = '='
-		i++
-	}
-	j := i - 4
-	if j < 0 {
-		j = 0
-	}
-	return i, io.EOF
+	}()
+	return pr
 }
