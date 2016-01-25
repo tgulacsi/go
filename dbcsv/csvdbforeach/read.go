@@ -5,10 +5,14 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/csv"
 	"io"
+	"log"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/extrame/xls"
 	"github.com/tealeg/xlsx"
@@ -107,7 +111,31 @@ func readXLSFile(rows chan<- Row, filename string, charset string, sheetIndex in
 }
 
 func readCSV(rows chan<- Row, r io.Reader, delim string) error {
+	if delim == "" {
+		br := bufio.NewReader(r)
+		b, _ := br.Peek(1024)
+		r = br
+		b = bytes.Map(
+			func(r rune) rune {
+				if r == '"' || unicode.IsDigit(r) || unicode.IsLetter(r) {
+					return -1
+				}
+				return r
+			},
+			b,
+		)
+		for len(b) > 1 && b[0] == ' ' {
+			b = b[1:]
+		}
+		s := []rune(string(b))
+		if len(s) > 4 {
+			s = s[:4]
+		}
+		delim = string(s[:1])
+		log.Printf("Non-alphanum characters are %q, so delim is %q.", s, delim)
+	}
 	cr := csv.NewReader(r)
+
 	cr.Comma = ([]rune(delim))[0]
 	n := 0
 	for {
