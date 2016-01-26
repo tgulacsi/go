@@ -60,7 +60,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 			}
 			v, err := conv(s)
 			if err != nil {
-				log.Printf("row=%#v", row)
+				log.Printf("row=%#v error=%v", row, err)
 				return n, errgo.Notef(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
 			}
 			values = append(values, v)
@@ -79,8 +79,10 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 		n++
 		if st.Returns && values[0] != nil {
 			out := strings.Join(deref(st.FixParams), ", ")
-			fmt.Fprintf(stderr, "%d: %s\t%s\n", ret, out, row.Values)
-			if ret != retOk {
+			if ret == retOk {
+				fmt.Fprintf(stdout, "%d: OK [%s]\t%s\n", ret, out, row.Values)
+			} else {
+				fmt.Fprintf(stderr, "%d: %s\t%s\n", ret, out, row.Values)
 				log.Printf("ROLLBACK (ret=%v)", ret)
 				tx.Rollback()
 				tx = nil
