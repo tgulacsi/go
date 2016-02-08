@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -54,7 +55,7 @@ func main() {
 	flagFixParams := flag.String("fix", "p_file_name=>{{.FileName}}", "fix parameters to add; uses text/template")
 	flagFuncRetOk := flag.Int("call-ret-ok", 0, "OK return value")
 	flagOneTx := flag.Bool("one-tx", true, "one transaction, or commit after each row")
-	flagDelim := flag.String("d", ";", "Delimiter to use between fields")
+	flagDelim := flag.String("d", "", "Delimiter to use between fields")
 	flagCharset := flag.String("charset", "utf-8", "input charset")
 	flagSkip := flag.Int("skip", 1, "skip first N rows")
 	flagColumns := flag.String("columns", "", "column numbers to use, separated by comma, in param order, starts with 1")
@@ -136,27 +137,44 @@ Usage:
 		log.Fatal("read %q: %v", inp, err)
 	}
 	if bytes.Equal(b[:], []byte{0xd0, 0xcf, 0x11, 0xe0}) { // OLE2
+		rdrName = "xls"
+	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
+		rdrName = "xlsx"
+	} else if bytes.Equal(b[:1], []byte{'"'}) { // CSV
+		rdrName = "csv"
+	} else {
+		switch filepath.Ext(inp.Name()) {
+		case ".xls":
+			rdrName = "xls"
+		case ".xlsx":
+			rdrName = "xlsx"
+		default:
+			rdrName = "csv"
+		}
+	}
+	log.Printf("File starts with %q (% x), so using %s reader.", b, b, rdrName)
+
+	switch rdrName {
+	case "xls":
 		R = func(rows chan<- Row, _ io.Reader, fn string) error {
 			return readXLSFile(rows, fn, *flagCharset, *flagSheet)
 		}
-		rdrName = "xls"
-	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
+	case "xlsx":
 		R = func(rows chan<- Row, _ io.Reader, fn string) error {
 			return readXLSXFile(rows, fn, *flagSheet)
 		}
-		rdrName = "xlsx"
-	} else {
+	default:
 		enc, err := htmlindex.Get(*flagCharset)
 		if err != nil {
 			log.Fatalf("Get encoding for name %q: %v", *flagCharset, err)
 		}
 		R = func(rows chan<- Row, inp io.Reader, _ string) error {
-			r := transform.NewReader(inp, enc.NewDecoder())
+			r := transform.NewReader(
+				io.MultiReader(bytes.NewReader(b[:]), inp),
+				enc.NewDecoder())
 			return readCSV(rows, r, *flagDelim)
 		}
-		rdrName = "csv"
 	}
-	log.Printf("File starts with %q (% x), so using %s reader.", b, b, rdrName)
 	go func(rows chan<- Row) {
 		defer close(rows)
 		errch <- R(rows, inp, flag.Arg(0))

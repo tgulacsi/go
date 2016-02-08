@@ -16,12 +16,12 @@ import (
 func TestB64FilterReader(t *testing.T) {
 	var buf bytes.Buffer
 	for i, tc := range b64tc {
-		r := base64.NewDecoder(base64.StdEncoding.WithPadding(0),
+		r := base64.NewDecoder(base64.StdEncoding,
 			NewB64FilterReader(strings.NewReader(tc.String)))
 		buf.Reset()
 		n, err := io.Copy(&buf, r)
-		if i == 0 {
-			t.Logf("%d. longer with %q", i, buf.Bytes())
+		if i == 0 && n != tc.N {
+			t.Logf("%d. longer with %q (wanted %d, got %d bytes)", i, buf.Bytes(), tc.N, n)
 		}
 		if i == 1 {
 			ioutil.WriteFile("/tmp/y.pdf", buf.Bytes(), 0644)
@@ -54,7 +54,7 @@ emVyZXRuw6lrIGvDoXJlbHN6w6Ftb2zDs3Qga8Opcm5pLCBtZXJ0IG5lbSBrZXLDvGx0IGxldXRh
 bMOhc3JhIGEgdGVsamVzIMO2c3N6ZWc6IDEyMy45MTkuLWZ0LCBsZXZvbsOhcyB0w7ZydMOpbnQg
 MTMuMTczLi1mdCDDqXJ0w6lrYmVuLCBtZWx5bmVrIG9rw6F0IHN6ZXJldG7DqWsgdHVkbmkuDQoN
 CkvDtnN6w7ZuZXR0ZWw6DQpTY2h1bHR6bsOpIFBhcCBNYXJpYW5uYQ0KU2NobmVpZGVyIEF1dMOz
-aMOheiBLZnQuDQpLb250cm9sbGVyDQo=`, 705},
+aMOheiBLZnQuDQpLb250cm9sbGVyDQo=`, 707},
 	{`DQoNCg0KDQrDnGR2w7Z6bGV0dGVsOiANCiANClB1YmxpayBGcnV6c2luYSANCmvDoXJhZG1pbmlz
 enRyw6F0b3IgDQogDQogIA0KDQoNCi0tLS0tT3JpZ2luYWwgTWVzc2FnZS0tLS0tDQpGcm9tOiBU
 dXphIElzdHbDoW5uw6kgW21haWx0bzp0dXphLnpzdXpzaUBmcmVlbWFpbC5odV0gDQpTZW50OiBX
@@ -74,7 +74,7 @@ RmVyZW5jemkgw7pyIG1lZ27DqXp0ZSBheiBBVVgtOTUwIGZyc3otw7ogU2tvZGEgMTIwIEwgZ8Op
 cGtvY3NpbiBrZWxldGtlemV0dCBrw6FydC4gDQpBIHRvdsOhYmJpIMO8Z3lpbnTDqXrDqXNoZXog
 c3plcmV0bsOpbSBtZWdhZG5pIGEgYmFua3N6w6FtbGEgc3rDoW11bmthdDoNClR1emEgSXN0dsOh
 bm7DqQ0KUGlsbMOpciBUYWthcsOpa3N6w7Z2ZXRrZXpldA0KNTc0MDAyMjQtMTUxMDEzNzINCg0K
-S8O2c3rDtm5ldHRlbDogVHV6w6Fuw6kNCg0KDQoNCg==`, 1113},
+S8O2c3rDtm5ldHRlbDogVHV6w6Fuw6kNCg0KDQoNCg==`, 1114},
 	{`JVBERi0xLjQKJeLjz9MKMyAwIG9iago8PC9GIDEzMi9UeXBlL0Fubm90L1N1YnR5cGUvV2lkZ2V0
 L1JlY3RbMCAwIDAgMF0vRlQvU2lnL0RSPDw+Pi9UKFNpZ25hdHVyZTEpL1YgMSAwIFIvUCA0IDAg
 Ui9BUDw8L04gMiAwIFI+Pj4+CmVuZG9iagoxIDAgb2JqCjw8L0NvbnRlbnRzIDwzMDgyMTNkYTA2
@@ -2065,5 +2065,5 @@ MTA2NyAwMDAwMCBuIAowMDAwMTExNDIzIDAwMDAwIG4gCjAwMDAxMTE2MjggMDAwMDAgbiAKMDAw
 MDExMTgxNSAwMDAwMCBuIAowMDAwMTEyMDQ2IDAwMDAwIG4gCnRyYWlsZXIKPDwvUm9vdCA0MyAw
 IFIvSUQgWzw4MGY0OWRlOGMzZDQzZWQ0YzNiNTVmMzBhZWVlNTUzZT48MTIxY2E3MTM2NDI3NDEw
 MjUyMTc4MmRjN2ZhZTgy72U+XS9JbmZvIDQ0IDAgUi9TaXplIDQ1Pj4Kc3RhcnR4cmVmCjExMjM4
-NgolJUVPRgo=`, 113436},
+NgolJUVPRgo=`, 113438},
 }

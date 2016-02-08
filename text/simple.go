@@ -118,12 +118,12 @@ var ISO8859_1 encoding.Encoding = cmap("ISO8859-1")
 
 type cmap string
 
-func (m cmap) NewDecoder() transform.Transformer {
-	return fromISO8859_1{}
+func (m cmap) NewDecoder() *encoding.Decoder {
+	return &encoding.Decoder{Transformer: fromISO8859_1{}}
 }
 
-func (m cmap) NewEncoder() transform.Transformer {
-	return toISO8859_1{}
+func (m cmap) NewEncoder() *encoding.Encoder {
+	return &encoding.Encoder{Transformer: toISO8859_1{}}
 }
 
 type fromISO8859_1 struct {
