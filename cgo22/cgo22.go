@@ -22,9 +22,30 @@ func init() {
 	}
 }
 
-func call(batchLen int) {
+func callNaive(batchLen int) {
 	n := C.uint32_t(len(arr))
 	for i := 0; i < batchLen; i++ {
 		C.call(&arr[i%int(n)], &arr[(i+100)%int(n)])
+	}
+}
+
+func callSliced(batchLen int) {
+	n := C.uint32_t(len(arr))
+	for i := 0; i < batchLen; i++ {
+		i := i % int(n)
+		carr := arr[i : i+1]
+		i = (i + 100) % int(n)
+		darr := arr[i : i+1]
+		C.call(&carr[0], &darr[0])
+	}
+}
+func callCapped(batchLen int) {
+	n := C.uint32_t(len(arr))
+	for i := 0; i < batchLen; i++ {
+		i := i % int(n)
+		carr := arr[i : i+1 : i+1]
+		i = (i + 100) % int(n)
+		darr := arr[i : i+1 : i+1]
+		C.call(&carr[0], &darr[0])
 	}
 }
