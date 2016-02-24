@@ -19,32 +19,36 @@ package iohlp
 import (
 	"bufio"
 	"io"
-	"strings"
 
 	"github.com/bthomson/wrap"
 )
 
 // WrappingReader returns an io.Reader which will wrap lines longer than the given width.
 // All other lines (LF chars) will be preserved.
-func WrappingReader(r io.Reader, width int) io.Reader {
+func WrappingReader(r io.Reader, width uint) io.Reader {
 	pr, pw := io.Pipe()
 
 	go func() {
-		uwidth := uint(width)
 		scanner := bufio.NewScanner(r)
 		ew := &ErrWriter{Writer: pw}
 		for scanner.Scan() { // split lines
-			if len(scanner.Bytes()) <= width {
+			if uint(len(scanner.Bytes())) <= width {
 				ew.Write(scanner.Bytes())
-				ew.Write([]byte{'\n'})
+				if _, err := ew.Write([]byte{'\n'}); err != nil {
+					break
+				}
 				continue
 			}
-			for _, line := range strings.Split(wrap.String(scanner.Text(), uwidth), "\n") {
-				io.WriteString(ew, line)
-				ew.Write([]byte{'\n'})
+			io.WriteString(ew, wrap.String(scanner.Text(), width))
+			if _, err := ew.Write([]byte{'\n'}); err != nil {
+				break
 			}
 		}
-		pw.CloseWithError(scanner.Err())
+		err := scanner.Err()
+		if err == nil {
+			err = ew.Err()
+		}
+		pw.CloseWithError(err)
 	}()
 
 	return pr
@@ -63,3 +67,4 @@ func (w *ErrWriter) Write(p []byte) (int, error) {
 	n, w.err = w.Writer.Write(p)
 	return n, w.err
 }
+func (w *ErrWriter) Err() error { return w.err }

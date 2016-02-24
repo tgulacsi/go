@@ -1,4 +1,5 @@
-// build: windows,!linux,!posix
+// +build windows
+
 /*
 Copyright 2015 Tamás Gulácsi
 
@@ -18,6 +19,7 @@ limitations under the License.
 package iohlp
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 )

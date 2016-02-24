@@ -1,4 +1,5 @@
-// build: !windows,linux,bsd,darwin
+// +build posix linux !windows
+
 /*
 Copyright 2015 Tamás Gulácsi
 
