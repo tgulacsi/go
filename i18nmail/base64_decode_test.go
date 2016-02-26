@@ -5,13 +5,47 @@
 package i18nmail
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 )
+
+func TestB64FilterReaderPipePeek(t *testing.T) {
+	testB64FilterReaderPeek(t, NewFilterReaderPipe)
+}
+func TestB64FilterReaderMemPeek(t *testing.T) {
+	testB64FilterReaderPeek(t, NewFilterReaderMem)
+}
+
+func testB64FilterReaderPeek(t *testing.T, newReader func(io.Reader, []byte) io.Reader) {
+	fn := os.Args[0]
+
+	fh, err := os.Open(fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rc := newReader(fh, []byte(b64chars))
+			r := bufio.NewReader(rc)
+			r.Peek(512)
+			if _, err := io.Copy(ioutil.Discard, r); err != nil {
+				t.Fatal(err)
+			}
+		}()
+	}
+	wg.Wait()
+	fh.Close()
+}
 
 func TestB64FilterReader(t *testing.T) {
 	var buf bytes.Buffer

@@ -38,7 +38,7 @@ func NewFilterReaderMem(r io.Reader, okBytes []byte) io.Reader {
 	}
 	raw, err := ioutil.ReadAll(r)
 	if err != nil {
-		return &rdr{Err: err}
+		return rdrErr{err}
 	}
 	filtered := make([]byte, 0, len(raw)+3)
 	for _, b := range raw {
@@ -52,16 +52,12 @@ func NewFilterReaderMem(r io.Reader, okBytes []byte) io.Reader {
 	return bytes.NewReader(filtered)
 }
 
-type rdr struct {
-	Err error
-	io.Reader
+type rdrErr struct {
+	error
 }
 
-func (r *rdr) Read(p []byte) (int, error) {
-	if r.Err != nil {
-		return 0, r.Err
-	}
-	return r.Reader.Read(p)
+func (r rdrErr) Read(p []byte) (int, error) {
+	return 0, r.error
 }
 
 // NewFilterReader returns a reader which silently throws away bytes not in
