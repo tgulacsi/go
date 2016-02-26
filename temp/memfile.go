@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/errgo.v1"
@@ -165,10 +166,11 @@ func (ms *memorySlurper) ReadFrom(r io.Reader) (n int64, err error) {
 		return io.Copy(ms.buf, r)
 	}
 	if ms.file == nil {
-		ms.file, err = ioutil.TempFile("", ms.blobRef)
+		ms.file, err = ioutil.TempFile("", "memorySlurper-"+ms.blobRef)
 		if err != nil {
 			return 0, err
 		}
+		os.Remove(ms.file.Name())
 	}
 	return io.Copy(ms.file, r)
 }
@@ -186,10 +188,11 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 		ms.maxInMemorySlurp = MaxInMemorySlurp
 	}
 	if ms.buf.Len()+len(p) > ms.maxInMemorySlurp {
-		ms.file, err = ioutil.TempFile("", ms.blobRef)
+		ms.file, err = ioutil.TempFile("", "memorySlurper-"+ms.blobRef)
 		if err != nil {
 			return
 		}
+		os.Remove(ms.file.Name())
 		_, err = io.Copy(ms.file, ms.buf)
 		if err != nil {
 			return
@@ -204,7 +207,9 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 
 func (ms *memorySlurper) Cleanup() error {
 	if ms.file != nil {
-		return os.Remove(ms.file.Name())
+		if err := os.Remove(ms.file.Name()); err != nil && !strings.Contains(err.Error(), "exist") {
+			return err
+		}
 	}
 	return nil
 }
