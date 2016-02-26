@@ -23,6 +23,7 @@ var (
 
 	ErrQueryMismatch = errgo.Newf("query mismatch")
 	ErrArgsMismatch  = errgo.Newf("args mismatch")
+	ErrTxFinished    = errgo.Newf("transaction already finished")
 )
 
 type Mocker interface {
@@ -41,6 +42,7 @@ var _ = Txer((*Tx)(nil))
 type Tx struct {
 	Expects []*expectQuery
 	pos     int
+	done    bool
 }
 
 // ExpectQuery adds the query to the list of expected queries.
@@ -73,8 +75,23 @@ func stripSpace(qry string) string {
 		" ", `\E\s+\Q`, -1)
 }
 
-func (cx Tx) Commit() error   { return nil }
-func (cx Tx) Rollback() error { return nil }
+func (tx *Tx) Commit() error {
+	if tx.done {
+		return ErrTxFinished
+	}
+	tx.done = true
+	if len(tx.Expects) > 0 {
+		return errgo.Newf("COMMIT left %d expectations: %q", len(tx.Expects), tx.Expects)
+	}
+	return nil
+}
+func (tx *Tx) Rollback() error {
+	if tx.done {
+		return ErrTxFinished
+	}
+	tx.done = true
+	return nil
+}
 
 var _ = Mock(&expectQuery{})
 
@@ -137,9 +154,12 @@ func (tx *Tx) QueryRow(qry string, params ...interface{}) Scanner {
 const ExpectAny = "{{ExpectAny}}"
 
 func (cu *Tx) check(qry string, args ...interface{}) (*expectQuery, error) {
+	cu.pos++
+	if len(cu.Expects) == 0 {
+		return nil, errgo.WithCausef(nil, ErrQueryMismatch, "%d. EXTRA query %q", cu.pos, qry)
+	}
 	exp := cu.Expects[0]
 	cu.Expects = cu.Expects[1:]
-	cu.pos++
 	Debug("pop expect qry=%q, remains %d.", exp.Qry, len(cu.Expects))
 	if !exp.Qry.MatchString(qry) {
 		return exp, errgo.WithCausef(nil, ErrQueryMismatch, "%d. awaited %q, \ngot\n%q", cu.pos, exp.Qry, qry)
