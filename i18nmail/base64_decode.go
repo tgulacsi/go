@@ -35,7 +35,7 @@ func NewFilterReader(r io.Reader, okBytes []byte) io.Reader {
 		raw := make([]byte, 16<<10)
 		filtered := make([]byte, cap(raw))
 		for {
-			n, readErr := r.Read(raw)
+			n, readErr := r.Read(raw[:cap(raw)])
 			if n == 0 && readErr == nil {
 				continue
 			}
