@@ -16,11 +16,8 @@ import (
 	"testing"
 )
 
-func TestB64FilterReaderPipePeek(t *testing.T) {
-	testB64FilterReaderPeek(t, NewFilterReaderPipe)
-}
-func TestB64FilterReaderMemPeek(t *testing.T) {
-	testB64FilterReaderPeek(t, NewFilterReaderMem)
+func TestB64FilterReaderPeek(t *testing.T) {
+	testB64FilterReaderPeek(t, NewFilterReader)
 }
 
 func testB64FilterReaderPeek(t *testing.T, newReader func(io.Reader, []byte) io.Reader) {
@@ -54,20 +51,22 @@ func TestB64FilterReader(t *testing.T) {
 			NewB64FilterReader(strings.NewReader(tc.String)))
 		buf.Reset()
 		n, err := io.Copy(&buf, r)
+		if err != nil {
+			t.Errorf("%d. %v", i, err)
+			break
+		}
 		if i == 0 && n != tc.N {
 			t.Logf("%d. longer with %q (wanted %d, got %d bytes)", i, buf.Bytes(), tc.N, n)
 		}
 		if i == 1 {
 			ioutil.WriteFile("/tmp/y.pdf", buf.Bytes(), 0644)
 		}
-		if err != nil {
-			t.Errorf("%d. %v", i, err)
-		}
 		if n != tc.N {
 			t.Errorf("%d: got %d, awaited %d bytes.", i, n, tc.N)
 			if n > tc.N {
 				t.Logf("%d. longer with %q", i, buf.Bytes()[tc.N-8:])
 			}
+			break
 		}
 	}
 }

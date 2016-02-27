@@ -5,10 +5,8 @@
 package i18nmail
 
 import (
-	"bytes"
 	"encoding/base64"
 	"io"
-	"io/ioutil"
 )
 
 const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -20,95 +18,83 @@ func NewB64Decoder(enc *base64.Encoding, r io.Reader) io.Reader {
 
 // NewB64FilterReader returns a base64 filtering reader.
 func NewB64FilterReader(r io.Reader) io.Reader {
-	return NewFilterReader(r, []byte(b64chars))
+	return &paddingReader{
+		Reader: NewFilterReader(r, []byte(b64chars)),
+		Pad:    '=',
+		Modulo: 4,
+	}
 }
 
 // NewFilterReader returns a reader which silently throws away bytes not in
 // the okBytes slice.
-var NewFilterReader = NewFilterReaderMem
-
-// NewFilterReaderMem returns a reader which silently throws away bytes not in
-// the okBytes slice.
-//
-// Reads the whole reader into memory.
-func NewFilterReaderMem(r io.Reader, okBytes []byte) io.Reader {
-	var okMap [256]bool
+func NewFilterReader(r io.Reader, okBytes []byte) io.Reader {
+	fr := &filterReader{Reader: r}
 	for _, b := range okBytes {
-		okMap[b] = true
+		fr.okMap[b] = true
 	}
-	raw, err := ioutil.ReadAll(r)
-	if err != nil {
-		return rdrErr{err}
+	return fr
+}
+
+type filterReader struct {
+	io.Reader
+	scratch []byte
+	okMap   [256]bool
+}
+
+func (r *filterReader) Read(p []byte) (int, error) {
+	if cap(r.scratch) < len(p) {
+		r.scratch = make([]byte, len(p))
 	}
-	filtered := make([]byte, 0, len(raw)+3)
-	for _, b := range raw {
-		if okMap[b] {
-			filtered = append(filtered, b)
+	scratch := r.scratch[:len(p)]
+	for {
+		n, err := r.Reader.Read(scratch)
+		if n == 0 {
+			return 0, err
+		}
+		p = p[:0]
+		for _, b := range scratch[:n] {
+			if r.okMap[b] {
+				p = append(p, b)
+			}
+		}
+		if len(p) > 0 || err != nil {
+			return len(p), err
 		}
 	}
-	if padding := int(len(filtered) % 4); padding > 0 {
-		filtered = append(filtered, bytes.Repeat([]byte{'='}, 4-padding)...)
-	}
-	return bytes.NewReader(filtered)
 }
 
-type rdrErr struct {
-	error
+type paddingReader struct {
+	io.Reader
+	Pad    byte
+	Modulo int
+	length int64
+	atEOF  bool
 }
 
-func (r rdrErr) Read(p []byte) (int, error) {
-	return 0, r.error
-}
-
-// NewFilterReader returns a reader which silently throws away bytes not in
-// the okBytes slice.
-//
-// Uses io.Pipe to avoid reading whole reader into memory.
-func NewFilterReaderPipe(r io.Reader, okBytes []byte) io.Reader {
-	var okMap [256]bool
-	for _, b := range okBytes {
-		okMap[b] = true
-	}
-	pr, pw := io.Pipe()
-	go func() {
-		var length int64
-		raw := make([]byte, 16<<10)
-		filtered := make([]byte, cap(raw))
-		for {
-			n, readErr := r.Read(raw[:cap(raw)])
-			if n == 0 && readErr == nil {
-				continue
-			}
-			filtered = filtered[:n]
-			i := 0
-			for _, b := range raw[:n] {
-				if okMap[b] {
-					filtered[i] = b
-					i++
-				}
-			}
-			i, err := pw.Write(filtered[:i])
-			if err != nil {
-				pw.CloseWithError(err)
-				return
-			}
-			length += int64(i)
-			if readErr == nil {
-				continue
-			}
-			if readErr != io.EOF {
-				pw.CloseWithError(err)
-				return
-			}
-			if padding := int(length % 4); padding > 0 {
-				if _, err := pw.Write(bytes.Repeat([]byte{'='}, 4-padding)); err != nil {
-					pw.CloseWithError(err)
-					return
-				}
-			}
-			pw.CloseWithError(readErr)
-			return
+func (r *paddingReader) Read(p []byte) (int, error) {
+	if r.atEOF {
+		padding := int(r.length % int64(r.Modulo))
+		if padding == 0 {
+			return 0, io.EOF
 		}
-	}()
-	return pr
+		padding = r.Modulo - padding
+		n := 0
+		for i := 0; i < padding && i < len(p); i++ {
+			p[i] = r.Pad
+			n++
+		}
+		r.length += int64(n)
+		return n, nil
+	}
+
+	n, err := r.Reader.Read(p)
+	r.length += int64(n)
+	if err != io.EOF {
+		return n, err
+	}
+	r.atEOF = true
+	if n > 0 {
+		return n, nil
+	}
+	return r.Read(p)
 }
