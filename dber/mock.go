@@ -131,6 +131,14 @@ func (tx *Tx) Exec(qry string, params ...interface{}) (sql.Result, error) {
 	}
 	return exp.Result, nil
 }
+func (tx *Tx) PrepAndExe(qry string, params ...interface{}) (uint64, error) {
+	res, err := tx.Exec(qry, params...)
+	if err != nil {
+		return 0, err
+	}
+	aff, err := res.RowsAffected()
+	return uint64(aff), err
+}
 
 func (tx *Tx) Query(qry string, params ...interface{}) (Rowser, error) {
 	exp, err := tx.check(qry, params...)
