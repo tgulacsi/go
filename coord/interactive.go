@@ -17,8 +17,6 @@ limitations under the License.
 package coord
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -138,14 +136,6 @@ func init() {
 	tmpl = template.Must(template.New("gmapsHTML").Parse(gmapsHTML))
 }
 
-func genID() string {
-	buf := make([]byte, 32)
-	n, _ := io.ReadAtLeast(rand.Reader, buf, len(buf)/2)
-	if n == 0 {
-		n = 1
-	}
-	return base64.URLEncoding.EncodeToString(buf[:n])
-}
 func parseLatLng(latS, lngS string) (float64, float64, error) {
 	lat, err := strconv.ParseFloat(latS, 64)
 	if err != nil {

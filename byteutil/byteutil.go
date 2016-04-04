@@ -94,10 +94,7 @@ func EqualFoldRune(sr, tr rune) bool {
 	// Fast check for ASCII.
 	if tr < utf8.RuneSelf && 'A' <= sr && sr <= 'Z' {
 		// ASCII, and sr is upper case.  tr must be lower case.
-		if tr == sr+'a'-'A' {
-			return true
-		}
-		return false
+		return tr == sr+'a'-'A'
 	}
 
 	// General case.  SimpleFold(x) returns the next equivalent rune > x
@@ -106,8 +103,5 @@ func EqualFoldRune(sr, tr rune) bool {
 	for r != sr && r < tr {
 		r = unicode.SimpleFold(r)
 	}
-	if r == tr {
-		return true
-	}
-	return false
+	return r == tr
 }

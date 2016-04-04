@@ -137,24 +137,6 @@ func groupKill(p *os.Process, interrupt bool) error {
 	return GroupKill(p.Pid, os.Kill)
 }
 
-func simpleKill(p *os.Process) error {
-	if p == nil {
-		return nil
-	}
-	Log.Info("killing", "pid", p.Pid)
-	defer recover()
-	return p.Kill()
-}
-
-func newFamilyKiller(cmd *exec.Cmd, interrupt bool) func() error {
-	return func() error {
-		if cmd == nil {
-			return nil
-		}
-		return familyKill(cmd, interrupt)
-	}
-}
-
 func familyKill(cmd *exec.Cmd, interrupt bool) error {
 	if cmd.SysProcAttr != nil && isGroupLeader(cmd) {
 		return groupKill(cmd.Process, interrupt)

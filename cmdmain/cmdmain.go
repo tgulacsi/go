@@ -112,11 +112,6 @@ func RegisterCommand(mode string, makeCmd func(Flags *flag.FlagSet) CommandRunne
 	modeCommand[mode] = makeCmd(flags)
 }
 
-type namedMode struct {
-	Name    string
-	Command CommandRunner
-}
-
 func hasFlags(flags *flag.FlagSet) bool {
 	any := false
 	flags.VisitAll(func(*flag.Flag) {

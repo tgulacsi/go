@@ -26,10 +26,6 @@ var (
 	ErrTxFinished    = errgo.Newf("transaction already finished")
 )
 
-type Mocker interface {
-	expectQuery(qry string) Mock
-}
-
 type Mock interface {
 	WithArgs(...interface{}) Mock
 	WillReturnRows(...[]interface{}) Mock

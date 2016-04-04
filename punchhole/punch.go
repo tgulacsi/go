@@ -27,16 +27,6 @@ var errNoPunch = errors.New("punchHole not supported")
 // punchHole, if non-nil, punches a hole in f from offset to offset+size.
 var PunchHole func(file *os.File, offset, size int64) error
 
-// punchHoleZeros zeroes the bytes of the file from offset at size length.
-func punchHoleZeros(file *os.File, offset, size int64) error {
-	_, err := file.Seek(offset, 0)
-	if err != nil {
-		return err
-	}
-	_, err = io.CopyN(file, &zeroReader{size}, size)
-	return err
-}
-
 type zeroReader struct {
 	n int64
 }

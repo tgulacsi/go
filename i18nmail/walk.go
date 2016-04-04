@@ -281,27 +281,6 @@ func getCT(
 	return
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-func max(a, b int) int {
-	if a < b {
-		return b
-	}
-	return a
-}
-
-// strips directory information from the filename (both windows and unix)
-func basename(fn string) string {
-	if i := strings.LastIndexAny(fn, `/\`); i >= 0 {
-		return fn[i+1:]
-	}
-	return fn
-}
-
 // HashBytes returns a hash (sha1 atm) for the given bytes
 func HashBytes(data []byte) string {
 	h := sha1.New()

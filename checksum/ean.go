@@ -16,8 +16,8 @@ type Checksum interface {
 }
 
 var (
-	CDV     = checksum{Calculator: csCDV{}}
-	EAN8    = checksum{Calculator: csEAN8{}}
+	CDV     = checksum{Calculator: csCDV{}, Direction: dirAppend}
+	EAN8    = checksum{Calculator: csEAN8{}, Direction: dirAppend}
 	CvtEAN8 = checksum{Calculator: csCvtEAN8{}, Direction: dirPrepend}
 )
 
