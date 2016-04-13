@@ -21,9 +21,10 @@ import (
 var (
 	Debug = func(string, ...interface{}) {}
 
-	ErrQueryMismatch = errgo.Newf("query mismatch")
-	ErrArgsMismatch  = errgo.Newf("args mismatch")
-	ErrTxFinished    = errgo.Newf("transaction already finished")
+	ErrQueryMismatch       = errgo.Newf("query mismatch")
+	ErrArgsMismatch        = errgo.Newf("args mismatch")
+	ErrTxAlreadyRolledBack = errgo.Newf("transaction already rolled back")
+	ErrTxAlreadyCommited   = errgo.Newf("transaction already commited")
 )
 
 type Mock interface {
@@ -38,7 +39,7 @@ var _ = Txer((*Tx)(nil))
 type Tx struct {
 	Expects []*expectQuery
 	pos     int
-	done    bool
+	done    TxState
 }
 
 // ExpectQuery adds the query to the list of expected queries.
@@ -72,22 +73,37 @@ func stripSpace(qry string) string {
 }
 
 func (tx *Tx) Commit() error {
-	if tx.done {
-		return ErrTxFinished
+	if tx.done == TxUndecided {
+		tx.done = TxCommited
+		if len(tx.Expects) > 0 {
+			return errgo.Newf("COMMIT left %d expectations: %q", len(tx.Expects), tx.Expects)
+		}
 	}
-	tx.done = true
-	if len(tx.Expects) > 0 {
-		return errgo.Newf("COMMIT left %d expectations: %q", len(tx.Expects), tx.Expects)
+	if tx.done == TxCommited {
+		return ErrTxAlreadyCommited
 	}
-	return nil
+	return ErrTxAlreadyRolledBack
 }
 func (tx *Tx) Rollback() error {
-	if tx.done {
-		return ErrTxFinished
+	if tx.done == TxUndecided {
+		tx.done = TxRolledBack
+		return nil
 	}
-	tx.done = true
-	return nil
+	if tx.done == TxRolledBack {
+		return ErrTxAlreadyRolledBack
+	}
+	return ErrTxAlreadyCommited
 }
+
+type TxState uint8
+
+const (
+	TxUndecided = TxState(iota)
+	TxRolledBack
+	TxCommited
+)
+
+var _ = Mock(&expectQuery{})
 
 var _ = Mock(&expectQuery{})
 
