@@ -5,6 +5,7 @@
 package i18nmail
 
 import (
+	"flag"
 	"io"
 	"io/ioutil"
 	"net/mail"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/tgulacsi/go/loghlp/xloghlp"
 )
+
+var flagOnly = flag.String("only", "", "only this case")
 
 func TestMailAddress(t *testing.T) {
 	for i, str := range [][3]string{
@@ -40,27 +43,32 @@ func TestMailAddress(t *testing.T) {
 }
 func TestWalk(t *testing.T) {
 	Log = xloghlp.TestLogger(t)
-	for i, tc := range walkTestCases {
-		b := make([]byte, 1024)
+	b := make([]byte, 1024)
+	for tcName, tc := range walkTestCases {
+		if *flagOnly != "" && tcName != *flagOnly {
+			continue
+		}
 		if err := Walk(MailPart{Body: strings.NewReader(tc)},
 			func(mp MailPart) error {
-				n, err := io.ReadAtLeast(mp.Body, b, cap(b)/2)
-				io.Copy(ioutil.Discard, mp.Body)
-				if err != nil {
-					t.Errorf("%d %d/%d. read body of: %v", i, mp.Level, mp.Seq, err)
+				n, err := mp.Body.Read(b[:cap(b)])
+				if _, nextErr := io.Copy(ioutil.Discard, mp.Body); nextErr != nil && err == nil {
+					err = nextErr
 				}
-				t.Logf("\n--- %d %d/%d. part ---\n%q %#v\n%s\n%q...", i, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header, b[:n])
+				if err != nil || n == 0 {
+					t.Errorf("%q %d/%d. read body of: %v", tcName, mp.Level, mp.Seq, err)
+				}
+				t.Logf("\n--- %q %d/%d. part ---\n%q %#v\n%s\n%q...", tcName, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header, b[:n])
 				return nil
 			},
 			false,
 		); err != nil {
-			t.Errorf("%d. walk: %v", i, err)
+			t.Errorf("%q. walk: %v", tcName, err)
 		}
 	}
 }
 
-var walkTestCases = []string{
-	`Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch01.kobe.hu
+var walkTestCases = map[string]string{
+	"jav lev": `Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch01.kobe.hu
  ([::1]) with mapi id 14.03.0195.001; Mon, 21 Dec 2015 12:31:56 +0100
 From: =?utf-8?B?S8OWQkUga8OhcnJlbmRlesOpcyAoa2FyQGtvYmUuaHUp?= <kar@kobe.hu>
 To: MailToBruno <mailtobruno@kobe.hu>
@@ -94,7 +102,7 @@ bMOhc3JhIGEgdGVsamVzIMO2c3N6ZWc6IDEyMy45MTkuLWZ0LCBsZXZvbsOhcyB0w7ZydMOpbnQg
 MTMuMTczLi1mdCDDqXJ0w6lrYmVuLCBtZWx5bmVrIG9rw6F0IHN6ZXJldG7DqWsgdHVkbmkuDQoN
 CkvDtnN6w7ZuZXR0ZWw6DQpTY2h1bHR6bsOpIFBhcCBNYXJpYW5uYQ0KU2NobmVpZGVyIEF1dMOz
 aMOheiBLZnQuDQpLb250cm9sbGVyDQo=`,
-	`Received: from mesmtp1.kobe.hu (192.168.1.55) by BUDSEXCH03.kobe.hu
+	"nested": `Received: from mesmtp1.kobe.hu (192.168.1.55) by BUDSEXCH03.kobe.hu
  (192.168.1.38) with Microsoft SMTP Server id 14.3.123.3; Tue, 29 Sep 2015
  11:56:08 +0200
 Received: from mail.neosoft.hu ([195.228.75.176])  by esmtp1.kobe.hu with
@@ -175,7 +183,7 @@ MIME-Version: 1.0
 
 --_003_dovecot14435205674454690mailneosofthu_--
 `,
-	`Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch01.kobe.hu
+	"html": `Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch01.kobe.hu
  ([::1]) with mapi id 14.03.0195.001; Mon, 21 Dec 2015 08:30:20 +0100
 From: =?utf-8?B?S8OWQkUgTmVtemV0a8O2emkgKG5lbXpldGtvemlAa29iZS5odSk=?=
 	<nemzetkozi@kobe.hu>
@@ -960,7 +968,7 @@ pMXxrMz8JZ4vE/fvCyiumg3ELdPSPSczXek4c1V+pfCJTtBnW270xtRbo4q1WkvnK0C47332im0N
 SUVORK5CYII=
 
 --_005_4178A1ED64D50942B0A01C0AA79E423B2B8D9AB7BUDSEXCH03kobeh_--`,
-	`Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch02.kobe.hu
+	"debit": `Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch02.kobe.hu
  ([::1]) with mapi id 14.03.0195.001; Mon, 21 Dec 2015 09:33:06 +0100
 From: =?iso-8859-2?Q?K=D6BE_Nemzetk=F6zi_=28nemzetkozi=40kobe=2Ehu=29?=
 	<nemzetkozi@kobe.hu>
@@ -3489,7 +3497,7 @@ Content-Transfer-Encoding: base64
 IAoKIAoK
 
 --_010_75940524FA297341B54F91EE9A37C1DB2B8CFA1BBUDSEXCH03kobeh_--`,
-	`Received: from lnx-prd-asb.kobe.hu (192.168.1.166) by BUDSEXCH01.kobe.hu
+	"withlogo": `Received: from lnx-prd-asb.kobe.hu (192.168.1.166) by BUDSEXCH01.kobe.hu
  (192.168.1.30) with Microsoft SMTP Server id 14.3.195.1; Mon, 21 Dec 2015
  10:53:01 +0100
 Received: from lnx-prd-asb.kobe.hu (localhost.localdomain [127.0.0.1])	by
@@ -3742,7 +3750,7 @@ zJjIHu+r
 
 ------AAA913DBD4DF875C1B1122C393E63B60--
 `,
-	`Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch02.kobe.hu
+	"simple": `Received: from BUDSEXCH03.kobe.hu ([192.168.1.38]) by budsexch02.kobe.hu
  ([::1]) with mapi id 14.03.0195.001; Wed, 23 Dec 2015 10:04:17 +0100
 From: =?utf-8?B?S8OWQkUga8OhcnJlbmRlesOpcyAoa2FyQGtvYmUuaHUp?= <kar@kobe.hu>
 To: MailToBruno <mailtobruno@kobe.hu>

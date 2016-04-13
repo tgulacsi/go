@@ -6,6 +6,7 @@ package i18nmail
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
@@ -199,10 +200,6 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			if e = Walk(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				data, _ := br.Peek(1024)
-				if len(data) == 0 { // EOF
-					e = nil
-					break
-				}
 				return errgo.NoteMask(e, fmt.Sprintf("descending data=%s", data), errIsStopWalk)
 			}
 		} else {
@@ -291,8 +288,10 @@ func HashBytes(data []byte) string {
 // ReadAndHashMessage reads message and hashes it by the way
 func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	h := sha1.New()
-	m, e := mail.ReadMessage(io.TeeReader(r, h))
-	if e != nil && !(e == io.EOF && m != nil) {
+	m, e := mail.ReadMessage(io.TeeReader(
+		io.MultiReader(r, bytes.NewReader([]byte("\r\n\r\n"))),
+		h))
+	if e != nil && m == nil {
 		Log.Errorf("ReadMessage: %v", e)
 		return nil, "", e
 	}
