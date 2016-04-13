@@ -272,7 +272,7 @@ func HeadDecode(head string) string {
 		Log.Errorf("HeadDecode(%q): %v", head, err)
 		return head
 	}
-	if strings.Contains(res, "=?") {
+	if strings.Contains(res, "=?") && !strings.HasSuffix(res, "=?u...") {
 		Log.Debugf("WordDecoder %q => %q", head, res)
 	}
 	return res
