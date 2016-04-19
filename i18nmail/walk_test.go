@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/tgulacsi/go/loghlp/xloghlp"
 )
 
 var flagOnly = flag.String("only", "", "only this case")
@@ -42,7 +40,10 @@ func TestMailAddress(t *testing.T) {
 	}
 }
 func TestWalk(t *testing.T) {
-	Log = xloghlp.TestLogger(t)
+	Debugf, Infof = t.Logf, t.Logf
+	defer func() {
+		Debugf, Infof = nil, nil
+	}()
 	b := make([]byte, 1024)
 	for tcName, tc := range walkTestCases {
 		if *flagOnly != "" && tcName != *flagOnly {

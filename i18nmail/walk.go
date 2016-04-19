@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/rs/xlog"
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/temp"
 	"gopkg.in/errgo.v1"
@@ -28,8 +27,11 @@ import (
 const MaxWalkDepth = 32
 
 var (
-	// Logger is the base logger, can be swapped - defaults to NopLogger.
-	Log = xlog.Logger(xlog.NopLogger)
+	// Debugf prints debug logs. Nil walue prints nothing.
+	Debugf func(string, ...interface{})
+
+	// Infof prints informative logs. Nil walue prints nothing.
+	Infof func(string, ...interface{})
 
 	// CheckEncoding is true if we should check Base64 encodings
 	CheckEncoding = true
@@ -43,6 +45,19 @@ var (
 
 // TodoFunc is the type of the function called by Walk and WalkMultipart.
 type TodoFunc func(mp MailPart) error
+
+func debugf(pattern string, args ...interface{}) {
+	if Debugf == nil {
+		return
+	}
+	Debugf(pattern, args...)
+}
+func infof(pattern string, args ...interface{}) {
+	if Infof == nil {
+		return
+	}
+	Infof(pattern, args...)
+}
 
 // sequence is a global sequence for numbering mail parts.
 var sequence uint64
@@ -110,13 +125,13 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	defer func() { _ = br.Close() }()
 	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
 		if p, _ := br.Seek(0, 2); p == 0 {
-			Log.Warn("empty body!")
+			infof("empty body!")
 			return nil
 		}
 		br.Seek(0, 0)
 		b := make([]byte, 4096)
 		n, _ := io.ReadAtLeast(br, b, 2048)
-		Log.Warnf("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
+		infof("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
 		return errgo.Notef(e, "WalkMail")
 	}
 	msg.Header = DecodeHeaders(msg.Header)
@@ -124,7 +139,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if decoder != nil {
 		msg.Body = decoder(msg.Body)
 	}
-	Log.Infof("Walk message hsh=%s headers=%q level=%d", hsh, msg.Header, part.Level)
+	debugf("Walk message hsh=%s headers=%q level=%d", hsh, msg.Header, part.Level)
 	if e != nil {
 		return errgo.Notef(e, "WalkMail")
 	}
@@ -143,7 +158,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
-	//Log.Debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
+	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
 	if strings.HasPrefix(ct, "multipart/") {
 		if e = WalkMultipart(child, todo, dontDescend); e != nil {
 			return errgo.Notef(e, "multipart")
@@ -224,7 +239,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		eS = e.Error()
 	}
 	if e != nil && e != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
-		Log.Errorf("reading parts: %v", e)
+		infof("ERROR reading parts: %v", e)
 		return errgo.NoteMask(e, "reading parts", errIsStopWalk)
 	}
 	return nil
@@ -273,7 +288,7 @@ func getCT(
 			return qprintable.NewDecoder(enc, br)
 		}
 	default:
-		Log.Warnf("unknown transfer-encoding %q", te)
+		infof("unknown transfer-encoding %q", te)
 	}
 	return
 }
@@ -292,7 +307,7 @@ func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 		io.MultiReader(r, bytes.NewReader([]byte("\r\n\r\n"))),
 		h))
 	if e != nil && m == nil {
-		Log.Errorf("ReadMessage: %v", e)
+		infof("ERROR ReadMessage: %v", e)
 		return nil, "", e
 	}
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil

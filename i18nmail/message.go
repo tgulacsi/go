@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime"
 	"net/mail"
 	"net/textproto"
@@ -35,20 +34,6 @@ import (
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 )
-
-var debug = debugT(false)
-
-func SetDebug(dbg bool) {
-	debug = debugT(dbg)
-}
-
-type debugT bool
-
-func (d debugT) Printf(format string, args ...interface{}) {
-	if d {
-		log.Printf(format, args...)
-	}
-}
 
 // Layouts suitable for passing to time.Parse.
 // These are tried in order.
@@ -254,7 +239,7 @@ func (s *splitter) fieldsFunc(r rune) bool {
 			s.state = 0
 		}
 	}
-	debug.Printf("splitter(%s): %d=>%d", string([]rune{r}), oldstate, s.state)
+	debugf("splitter(%s): %d=>%d", string([]rune{r}), oldstate, s.state)
 	if s.state == 0 && (r == ' ' || r == '\n' || r == '\r' || r == '\t' || r == '\v') {
 		return true
 	}
@@ -269,11 +254,11 @@ func HeadDecode(head string) string {
 	}
 	res, err := WordDecoder.DecodeHeader(head)
 	if err != nil {
-		Log.Errorf("HeadDecode(%q): %v", head, err)
+		infof("ERROR HeadDecode(%q): %v", head, err)
 		return head
 	}
 	if strings.Contains(res, "=?") && !strings.HasSuffix(res, "=?u...") {
-		Log.Debugf("WordDecoder %q => %q", head, res)
+		debugf("WordDecoder %q => %q", head, res)
 	}
 	return res
 }

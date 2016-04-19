@@ -17,9 +17,9 @@ var splitTest = [][2]string{
 }
 
 func TestSplit(t *testing.T) {
-	//SetDebug(true)
+	Debugf = t.Logf
 	defer func() {
-		SetDebug(false)
+		Debugf = nil
 	}()
 	for i, tup := range splitTest {
 		result := strings.Join(
