@@ -36,7 +36,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
 
-	"gopkg.in/errgo.v1"
+	"github.com/pkg/errors"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -101,7 +101,7 @@ func GetPDF(
 	meURL := macroExpertURL + "?" + params.Encode()
 	req, err := http.NewRequest("GET", meURL, nil)
 	if err != nil {
-		return nil, "", "", errgo.Notef(err, "url=%q", meURL)
+		return nil, "", "", errors.Wrapf(err, "url=%q", meURL)
 	}
 	req.SetBasicAuth(username, password)
 	select {
@@ -112,14 +112,14 @@ func GetPDF(
 	Log.Info("Get", "url", req.URL)
 	resp, err := ctxhttp.Do(ctx, client, req)
 	if err != nil {
-		return nil, "", "", errgo.Notef(err, "Do %#v", req)
+		return nil, "", "", errors.Wrapf(err, "Do %#v", req)
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, "", "", errgo.Newf("Authentication error: %s", resp.Status)
+			return nil, "", "", errors.New("Authentication error: " + resp.Status)
 		}
-		return nil, "", "", errgo.Newf("%s: egyéb hiba (%s)", resp.Status, req.URL)
+		return nil, "", "", errors.New(fmt.Sprintf("%s: egyéb hiba (%s)", resp.Status, req.URL))
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -128,14 +128,14 @@ func GetPDF(
 		if err := xml.NewDecoder(io.TeeReader(resp.Body, &buf)).Decode(&mr); err != nil {
 			_, _ = io.Copy(&buf, resp.Body)
 			resp.Body.Close()
-			return nil, "", "", errgo.Notef(err, "parse %q", buf.String())
+			return nil, "", "", errors.Wrapf(err, "parse %q", buf.String())
 		}
 		return nil, "", "", mr
 	}
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
 		buf, _ := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, "", "", errgo.Newf("998: %s", buf)
+		return nil, "", "", errors.New(fmt.Sprintf("998: %s", buf))
 	}
 	var fn string
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
@@ -184,7 +184,7 @@ var macroExpertUserPassw string
 func ReadUserPassw(filename string) (string, string, error) {
 	fh, err := os.Open(filename)
 	if err != nil {
-		return "", "", errgo.Notef(err, "open %q", filename)
+		return "", "", errors.Wrapf(err, "open %q", filename)
 	}
 	defer fh.Close()
 	scanner := bufio.NewScanner(fh)

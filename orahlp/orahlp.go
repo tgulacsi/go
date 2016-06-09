@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dber"
-	"gopkg.in/errgo.v1"
 )
 
 func SplitDSN(dsn string) (username, password, sid string) {
@@ -96,7 +96,7 @@ END;`, qry, &res,
 		if n, err := fmt.Sscanf(string(line), "%s %d %d %d %d %d %d %d",
 			&col.Name, &col.Type, &col.Length, &col.Precision, &col.Scale, &nullable, &col.CharsetID, &col.CharsetForm,
 		); err != nil {
-			return cols, errgo.Notef(err, "parsing %q (parsed: %d)", line, n)
+			return cols, errors.Wrapf(err, "parsing %q (parsed: %d)", line, n)
 		}
 		col.Nullable = nullable != 0
 		cols = append(cols, col)
@@ -118,7 +118,7 @@ func GetVersion(db dber.Queryer) (Version, error) {
 	var v Version
 	if _, err := fmt.Sscanf(s.String, "%d.%d.%d.%d.%d",
 		&v.Major, &v.Maintenance, &v.AppServer, &v.Component, &v.Platform); err != nil {
-		return v, errgo.Notef(err, "scan version number %q", s.String)
+		return v, errors.Wrapf(err, "scan version number %q", s.String)
 	}
 	return v, nil
 }

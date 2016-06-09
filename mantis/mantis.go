@@ -12,8 +12,8 @@ import (
 	"strconv"
 
 	"github.com/kolo/xmlrpc"
+	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/text"
-	"gopkg.in/errgo.v1"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -37,7 +37,7 @@ func (m Mantis) Call(command string, args map[string]interface{}) (retval, error
 	var ret retval
 	req, err := xmlrpc.NewRequest(m.url, command, args)
 	if err != nil {
-		return ret, errgo.Notef(err, "NewRequest(url=%q, method=%s, args=%+v)", m.url, command, args)
+		return ret, errors.Wrapf(err, "NewRequest(url=%q, method=%s, args=%+v)", m.url, command, args)
 	}
 	req.SetBasicAuth(m.user, m.passw)
 	req.Header.Set("PHP_AUTH_USER", m.user)
@@ -55,15 +55,15 @@ func (m Mantis) Call(command string, args map[string]interface{}) (retval, error
 	Log.Debug("Do", "req", req)
 	resp, err := cl.Do(req)
 	if err != nil {
-		return ret, errgo.Notef(err, "Do %#v", req)
+		return ret, errors.Wrapf(err, "Do %#v", req)
 	}
 	defer resp.Body.Close()
 	ret.Body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return ret, errgo.Notef(err, "read resonse")
+		return ret, errors.Wrapf(err, "read resonse")
 	}
 	if resp.StatusCode >= 400 {
-		return ret, errgo.Newf("%q: %s: %s", req.URL, resp.Status, ret.Body)
+		return ret, errors.New(fmt.Sprintf("%q: %s: %s", req.URL, resp.Status, ret.Body))
 	}
 	Log.Info("response", "resp", resp)
 
@@ -84,7 +84,7 @@ func (m Mantis) Call(command string, args map[string]interface{}) (retval, error
 				return ret, nil
 			}
 			Log.Error("failure", "errcode", ret.Code, "errmsg", ret.Msg)
-			return ret, errgo.Newf("failure; %d: %s", ret.Code, ret.Msg)
+			return ret, errors.New(fmt.Sprintf("failure; %d: %s", ret.Code, ret.Msg))
 		}
 	}
 	Log.Info("success", "body", string(ret.Body))
@@ -107,7 +107,7 @@ func (m Mantis) NewUser(email, realName, userName string, accessLevel int) error
 		return nil
 	}
 	Log.Error("failure", "errcode", ret.Code, "errmsg", ret.Msg)
-	return errgo.Newf("failure; %d: %s", ret.Code, ret.Msg)
+	return errors.New(fmt.Sprintf("failure; %d: %s", ret.Code, ret.Msg))
 }
 
 type retval struct {

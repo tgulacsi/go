@@ -13,18 +13,17 @@ import (
 	"strings"
 	"unicode"
 
-	"gopkg.in/errgo.v1"
-
 	"github.com/kylelemons/godebug/diff"
+	"github.com/pkg/errors"
 )
 
 var (
 	Debug = func(string, ...interface{}) {}
 
-	ErrQueryMismatch       = errgo.Newf("query mismatch")
-	ErrArgsMismatch        = errgo.Newf("args mismatch")
-	ErrTxAlreadyRolledBack = errgo.Newf("transaction already rolled back")
-	ErrTxAlreadyCommited   = errgo.Newf("transaction already commited")
+	ErrQueryMismatch       = errors.New("query mismatch")
+	ErrArgsMismatch        = errors.New("args mismatch")
+	ErrTxAlreadyRolledBack = errors.New("transaction already rolled back")
+	ErrTxAlreadyCommited   = errors.New("transaction already commited")
 )
 
 type Mock interface {
@@ -76,7 +75,7 @@ func (tx *Tx) Commit() error {
 	if tx.done == TxUndecided {
 		tx.done = TxCommited
 		if len(tx.Expects) > 0 {
-			return errgo.Newf("COMMIT left %d expectations: %q", len(tx.Expects), tx.Expects)
+			return errors.New(fmt.Sprintf("COMMIT left %d expectations: %q", len(tx.Expects), tx.Expects))
 		}
 	}
 	if tx.done == TxCommited {
@@ -176,17 +175,17 @@ const ExpectAny = "{{ExpectAny}}"
 func (cu *Tx) check(qry string, args ...interface{}) (*expectQuery, error) {
 	cu.pos++
 	if len(cu.Expects) == 0 {
-		return nil, errgo.WithCausef(nil, ErrQueryMismatch, "%d. EXTRA query %q", cu.pos, qry)
+		return nil, errors.Wrapf(ErrQueryMismatch, "%d. EXTRA query %q", cu.pos, qry)
 	}
 	exp := cu.Expects[0]
 	cu.Expects = cu.Expects[1:]
 	Debug("pop expect qry=%q, remains %d.", exp.Qry, len(cu.Expects))
 	if !exp.Qry.MatchString(qry) {
-		return exp, errgo.WithCausef(nil, ErrQueryMismatch, "%d. awaited %q, \ngot\n%q", cu.pos, exp.Qry, qry)
+		return exp, errors.Wrapf(ErrQueryMismatch, "%d. awaited %q, \ngot\n%q", cu.pos, exp.Qry, qry)
 	}
 	if len(args) != len(exp.Args) {
 		df := diff.Diff(verboseString(exp.Args), verboseString(args))
-		return exp, errgo.WithCausef(nil, ErrArgsMismatch, "%d. got %d, want %d:\n%s", cu.pos, len(args), len(exp.Args), df)
+		return exp, errors.Wrapf(ErrArgsMismatch, "%d. got %d, want %d:\n%s", cu.pos, len(args), len(exp.Args), df)
 	}
 	// filter ExpectAny
 	expArgsF := make([]interface{}, 0, len(exp.Args))
@@ -201,7 +200,7 @@ func (cu *Tx) check(qry string, args ...interface{}) (*expectQuery, error) {
 	if !reflect.DeepEqual(argsF, expArgsF) {
 		df := diff.Diff(verboseString(expArgsF), verboseString(argsF))
 		if df != "" {
-			return exp, errgo.WithCausef(nil, ErrArgsMismatch, "%d. %s", cu.pos, df)
+			return exp, errors.Wrapf(ErrArgsMismatch, "%d. %s", cu.pos, df)
 		}
 	}
 

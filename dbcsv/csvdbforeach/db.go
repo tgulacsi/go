@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/errgo.v1"
+	"github.com/pkg/errors"
 	"gopkg.in/rana/ora.v3"
 )
 
@@ -61,7 +61,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 			v, err := conv(s)
 			if err != nil {
 				log.Printf("row=%#v error=%v", row, err)
-				return n, errgo.Notef(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
+				return n, errors.Wrapf(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
 			}
 			values = append(values, v)
 		}
@@ -74,7 +74,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 		if _, err = stmt.Exe(values...); err != nil {
 			log.Printf("values=%d ParamCount=%d", len(values), st.ParamCount)
 			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
-			return n, errgo.Notef(err, "qry=%q params=%#v", st.Qry, values)
+			return n, errors.Wrapf(err, "qry=%q params=%#v", st.Qry, values)
 		}
 		n++
 		if st.Returns && values[0] != nil {
@@ -92,8 +92,8 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 				cw.Flush()
 				stdout.Write(buf.Bytes())
 				if oneTx {
-					return n, errgo.Newf("returned %v (%s) for line %d (%q).",
-						ret, out, row.Line, row.Values)
+					return n, errors.New(fmt.Sprintf("returned %v (%s) for line %d (%q).",
+						ret, out, row.Line, row.Values))
 				}
 			}
 		}
@@ -140,12 +140,12 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		qry += "all_arguments WHERE owner = UPPER(:1) AND package_name = UPPER(:2) AND object_name = UPPER(:3)"
 		params = append(params, parts[0], parts[1], parts[2])
 	default:
-		return st, errgo.Newf("bad function name: %q", fun)
+		return st, errors.New("bad function name: " + fun)
 	}
 	qry += " ORDER BY sequence"
 	rset, err := ses.PrepAndQry(qry, params...)
 	if err != nil {
-		return st, errgo.Notef(err, qry)
+		return st, errors.Wrapf(err, qry)
 	}
 
 	type Arg struct {
@@ -167,10 +167,10 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		args = append(args, arg)
 	}
 	if rset.Err != nil {
-		return st, errgo.Notef(rset.Err, qry)
+		return st, errors.Wrapf(rset.Err, qry)
 	}
 	if len(args) == 0 {
-		return st, errgo.Newf("%q has no arguments!", fun)
+		return st, errors.New(fun + " has no arguments!")
 	}
 
 	st.Qry = "BEGIN "

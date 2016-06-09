@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/csv"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -15,8 +16,8 @@ import (
 	"unicode"
 
 	"github.com/extrame/xls"
+	"github.com/pkg/errors"
 	"github.com/tealeg/xlsx"
-	"gopkg.in/errgo.v1"
 )
 
 const (
@@ -45,14 +46,14 @@ var timeReplacer = strings.NewReplacer(
 func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 	xlFile, err := xlsx.OpenFile(filename)
 	if err != nil {
-		return errgo.Notef(err, "open %q", filename)
+		return errors.Wrapf(err, "open %q", filename)
 	}
 	sheetLen := len(xlFile.Sheets)
 	switch {
 	case sheetLen == 0:
-		return errgo.New("This XLSX file contains no sheets.")
+		return errors.New("This XLSX file contains no sheets.")
 	case sheetIndex >= sheetLen:
-		return errgo.Newf("No sheet %d available, please select a sheet between 0 and %d\n", sheetIndex, sheetLen-1)
+		return errors.New(fmt.Sprintf("No sheet %d available, please select a sheet between 0 and %d\n", sheetIndex, sheetLen-1))
 	}
 	sheet := xlFile.Sheets[sheetIndex]
 	n := 0
@@ -67,7 +68,7 @@ func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 				goFmt := timeReplacer.Replace(numFmt)
 				dt, err := time.Parse(goFmt, cell.String())
 				if err != nil {
-					return errgo.Notef(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
+					return errors.Wrapf(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
 				}
 				vals = append(vals, dt.Format(dateFormat))
 			} else {
@@ -83,11 +84,11 @@ func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 func readXLSFile(rows chan<- Row, filename string, charset string, sheetIndex int) error {
 	wb, err := xls.Open(filename, charset)
 	if err != nil {
-		return errgo.Notef(err, "open %q", filename)
+		return errors.Wrapf(err, "open %q", filename)
 	}
 	sheet := wb.GetSheet(sheetIndex)
 	if sheet == nil {
-		return errgo.Newf("This XLS file does not contain sheet no %d!", sheetIndex)
+		return errors.New(fmt.Sprintf("This XLS file does not contain sheet no %d!", sheetIndex))
 	}
 	var maxWidth int
 	for n, row := range sheet.Rows {

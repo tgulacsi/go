@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/errgo.v1"
+	"github.com/pkg/errors"
 )
 
 var MaxInMemorySlurp = 4 << 20 // 4MB.  *shrug*.
@@ -53,7 +53,7 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 	ms := NewMemorySlurper(blobRef)
 	n, err := io.Copy(ms, r)
 	if err != nil {
-		return nil, errgo.Notef(err, "copy from %v to %v", r, ms)
+		return nil, errors.Wrapf(err, "copy from %v to %v", r, ms)
 	}
 
 	if fh, ok := r.(*os.File); ok {
@@ -110,7 +110,7 @@ func (ms *memorySlurper) prepareRead() error {
 	ms.reading = true
 	if ms.file != nil {
 		if _, err := ms.file.Seek(0, 0); err != nil {
-			return errgo.Notef(err, "file=%v", ms.file)
+			return errors.Wrapf(err, "file=%v", ms.file)
 		}
 	} else {
 		ms.mem = bytes.NewReader(ms.buf.Bytes())
