@@ -15,8 +15,9 @@ import (
 
 	"github.com/kylewolfe/soaptrip"
 	"github.com/pkg/errors"
-	"github.com/rs/xlog"
 )
+
+var Log = func(...interface{}) error { return nil }
 
 func NewClient(endpointURL, soapActionBase string, cl *http.Client) *soapClient {
 	if cl == nil {
@@ -60,8 +61,8 @@ func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.R
 	req, err := http.NewRequest("POST", s.URL, bytes.NewReader(buf.Bytes()))
 	req.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	req.Header.Set("SOAPAction", soapAction)
-	Log := xlog.FromContext(ctx)
-	Log.Warnf("calling %q (%q): %s", s.URL, soapAction, buf.String())
+	Log := GetLog(ctx)
+	Log("msg", "calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
 	resp, err := ctxhttp.Do(ctx, s.Client, req)
 	if err != nil {
 		if resp != nil && resp.Body != nil {
@@ -90,4 +91,11 @@ func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.R
 		}
 	}
 	return d, resp.Body, io.EOF
+}
+
+func GetLog(ctx context.Context) func(keyvalue ...interface{}) error {
+	if Log, _ := ctx.Value("Log").(func(...interface{}) error); Log != nil {
+		return Log
+	}
+	return Log
 }
