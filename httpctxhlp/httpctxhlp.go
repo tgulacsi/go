@@ -58,19 +58,15 @@ func AddLogger(Log log15.Logger, h httpctx.Handler) httpctx.Handler {
 }
 
 func GetLogger(Log log15.Logger, ctx context.Context) (log15.Logger, context.Context) {
-	if lgI := ctx.Value("logger"); lgI != nil {
-		return lgI.(log15.Logger), ctx
+	if lgI, _ := ctx.Value("logger").(log15.Logger); lgI != nil {
+		Log = lgI
 	}
-	var id string
-	idI := ctx.Value("reqid")
-	if idI != nil {
-		id, _ = idI.(string)
-	}
+	id, _ := ctx.Value("reqid").(string)
 	if id == "" {
 		id = shortuuid.New()
 		ctx = context.WithValue(ctx, "reqid", id)
+		Log = Log.New("reqid", id)
 	}
-	Log = Log.New("reqid", id)
 	return Log, context.WithValue(ctx, "logger", Log)
 }
 

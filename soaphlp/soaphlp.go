@@ -13,9 +13,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
 
-	"gopkg.in/errgo.v1"
-
 	"github.com/kylewolfe/soaptrip"
+	"github.com/pkg/errors"
 	"github.com/rs/xlog"
 )
 
@@ -71,7 +70,7 @@ func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.R
 		if urlErr, ok := err.(*url.Error); ok {
 			if fault, ok := urlErr.Err.(*soaptrip.SoapFault); ok {
 				b, _ := ioutil.ReadAll(fault.Response.Body)
-				return nil, ioutil.NopCloser(bytes.NewReader(b)), errgo.Notef(err, "%v: %v\n%s", fault.FaultCode, fault.FaultString, b)
+				return nil, ioutil.NopCloser(bytes.NewReader(b)), errors.Wrapf(err, "%v: %v\n%s", fault.FaultCode, fault.FaultString, b)
 			}
 		}
 		return nil, nil, err

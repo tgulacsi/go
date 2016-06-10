@@ -32,7 +32,7 @@ import (
 	"github.com/tgulacsi/go/orahlp"
 	"gopkg.in/rana/ora.v3"
 
-	"gopkg.in/errgo.v1"
+	"github.com/pkg/errors"
 )
 
 func getQuery(table, where string, columns []string) string {
@@ -56,7 +56,7 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 	}
 	rows, err := db.Query(qry)
 	if err != nil {
-		return errgo.Notef(err, "executing %q", qry)
+		return errors.Wrapf(err, "executing %q", qry)
 	}
 	defer rows.Close()
 	//log.Printf("columns: %#v", columns)
@@ -81,7 +81,7 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 	n := 0
 	for rows.Next() {
 		if err = rows.Scan(dest...); err != nil {
-			return errgo.Notef(err, "scan into %#v", dest)
+			return errors.Wrapf(err, "scan into %#v", dest)
 		}
 		for i, data := range dest {
 			if i > 0 {
@@ -98,7 +98,7 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 	err = rows.Err()
 	log.Printf("written %d rows.", n)
 	if err != nil {
-		return errgo.Notef(err, "fetching rows")
+		return errors.Wrapf(err, "fetching rows")
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ func (col Column) Converter() stringer {
 func GetColumns(db dber.Execer, qry string) (cols []Column, err error) {
 	desc, err := orahlp.DescribeQuery(db, qry)
 	if err != nil {
-		return nil, errgo.Notef(err, "Describe %q", qry)
+		return nil, errors.Wrapf(err, "Describe %q", qry)
 	}
 	cols = make([]Column, len(desc))
 	for i, col := range desc {

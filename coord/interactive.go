@@ -26,7 +26,7 @@ import (
 	"sync"
 	"text/template" // yes, no need for context-aware escapes
 
-	"gopkg.in/errgo.v1"
+	"github.com/pkg/errors"
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
@@ -69,7 +69,7 @@ func (in Interactive) RenderHTML(w io.Writer, address, callbackURL string) error
 		CallbackPath:   callbackURL,
 	}
 	if err := tmpl.Execute(w, sp); err != nil {
-		return errgo.Notef(err, "with %#v", sp)
+		return errors.Wrapf(err, "with %#v", sp)
 	}
 	return nil
 }

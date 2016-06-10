@@ -26,14 +26,14 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
 
-	"gopkg.in/errgo.v1"
+	"github.com/pkg/errors"
 )
 
 const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?sensors=false&address={{.Address}}`
 
 var (
-	ErrNotFound       = errgo.Newf("not found")
-	ErrTooManyResults = errgo.Newf("too many results")
+	ErrNotFound       = errors.New("not found")
+	ErrTooManyResults = errors.New("too many results")
 )
 
 type Location struct {
@@ -52,23 +52,23 @@ func Get(ctx context.Context, address string) (Location, error) {
 	aURL := strings.Replace(gmapsURL, "{{.Address}}", url.QueryEscape(address), 1)
 	resp, err := ctxhttp.Get(ctx, nil, aURL)
 	if err != nil {
-		return loc, errgo.Notef(err, aURL)
+		return loc, errors.Wrapf(err, aURL)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode > 299 {
-		return loc, errgo.Notef(err, aURL)
+		return loc, errors.Wrapf(err, aURL)
 	}
 
 	var data mapsResponse
 	if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return loc, errgo.Notef(err, "decode")
+		return loc, errors.Wrapf(err, "decode")
 	}
 	switch data.Status {
 	case "OK":
 	case "ZERO_RESULTS":
 		return loc, ErrNotFound
 	default:
-		return loc, errgo.Notef(err, "status=%q", data.Status)
+		return loc, errors.Wrapf(err, "status=%q", data.Status)
 	}
 	switch len(data.Results) {
 	case 0:
