@@ -24,7 +24,7 @@ import (
 
 type LogFunc func(...interface{}) error
 
-func LogWith(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
+func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
 	return LogFunc(func(keyvals ...interface{}) error {
 		return oLog(append(keyvals, plus...))
 	})
