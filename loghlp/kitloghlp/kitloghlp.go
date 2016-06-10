@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/docker/docker/daemon/logger"
 	"github.com/go-kit/kit/log"
 )
 
 type LogFunc func(...interface{}) error
 
-func New(w io.Writer) *logger.Context {
-	return log.NewContext(Stringify{log.NewLogfmtLogger(w)}).With("ts", log.DefaultTimestamp)
+func New(w io.Writer) *log.Context {
+	return log.NewContext(Stringify{log.NewLogfmtLogger(w)}).
+		With("ts", log.DefaultTimestamp)
 }
 
 func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
