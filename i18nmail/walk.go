@@ -17,6 +17,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/sloonz/go-qprintable"
@@ -300,16 +301,23 @@ func HashBytes(data []byte) string {
 	return base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
 
+var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 4096)) }}
+
 // ReadAndHashMessage reads message and hashes it by the way
 func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
 	h := sha1.New()
-	m, e := mail.ReadMessage(io.TeeReader(
-		io.MultiReader(r, bytes.NewReader([]byte("\r\n\r\n"))),
-		h))
+	m, e := mail.ReadMessage(io.MultiReader(
+		io.TeeReader(r, buf),
+		bytes.NewReader([]byte("\r\n\r\n")),
+	))
 	if e != nil && m == nil {
 		infof("ERROR ReadMessage: %v", e)
 		return nil, "", e
 	}
+	h.Write(bytes.TrimSpace(buf.Bytes()))
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil
 }
 
