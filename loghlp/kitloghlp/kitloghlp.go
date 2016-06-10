@@ -24,7 +24,7 @@ import (
 
 func NewTestLogger(t testLogger) *log.Context {
 	return log.NewContext(
-		log.NewLogfmtLogger(testLog{t}),
+		Stringify{log.NewLogfmtLogger(testLog{t})},
 	).With(
 		"file", log.Caller(4),
 	)
