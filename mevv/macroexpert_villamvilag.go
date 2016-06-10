@@ -39,6 +39,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const macroExpertURL = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
+
 var Log = func(...interface{}) error { return nil }
 
 /*
