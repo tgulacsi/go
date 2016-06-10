@@ -41,11 +41,11 @@ func Mmap(f *os.File) ([]byte, io.Closer, error) {
 		syscall.PROT_READ,
 		syscall.MAP_PRIVATE|syscall.MAP_DENYWRITE|syscall.MAP_POPULATE)
 	if err != nil {
-		Log.Error("Mmap", "f", f, "size", fi.Size(), "error", err)
+		Log("msg", "Mmap", "f", f, "size", fi.Size(), "error", err)
 		p, err = ioutil.ReadAll(f)
 		return p, closer, err
 	}
-	Log.Debug("Mmap", "f", f, "len(p)", len(p))
+	//Log("msg","Mmap", "f", f, "len(p)", len(p))
 
 	return p, &mmapCloser{p}, nil
 }
