@@ -37,16 +37,9 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 
 	"github.com/pkg/errors"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var Log = log15.New("lib", "mevv")
-
-func init() {
-	Log.SetHandler(log15.DiscardHandler())
-}
-
-const macroExpertURL = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
+var Log = func(...interface{}) error { return nil }
 
 /*
 GetPDF visszaad egy PDF-et a megadott címen és koordinátákon
@@ -109,7 +102,7 @@ func GetPDF(
 		return nil, "", "", ctx.Err()
 	default:
 	}
-	Log.Info("Get", "url", req.URL)
+	Log("msg", "Get", "url", req.URL)
 	resp, err := ctxhttp.Do(ctx, client, req)
 	if err != nil {
 		return nil, "", "", errors.Wrapf(err, "Do %#v", req)

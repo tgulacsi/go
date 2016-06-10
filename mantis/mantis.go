@@ -17,9 +17,7 @@ import (
 	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var Log = log15.New("lib", "mantis")
-
-func init() { Log.SetHandler(log15.DiscardHandler()) }
+var Log = func(...interface{})error { return nil }
 
 type Mantis struct {
 	url         string
@@ -43,7 +41,7 @@ func (m Mantis) Call(command string, args map[string]interface{}) (retval, error
 	req.Header.Set("PHP_AUTH_USER", m.user)
 	req.Header.Set("PHP_AUTH_PW", m.passw)
 
-	Log.Debug("request", "body", log15.Lazy{func() (string, error) {
+	//Log("msg","request", "body", log15.Lazy{func() (string, error) {
 		b, err := httputil.DumpRequest(req, true)
 		if err != nil {
 			return "", err
@@ -52,7 +50,7 @@ func (m Mantis) Call(command string, args map[string]interface{}) (retval, error
 	}})
 
 	cl := http.DefaultClient
-	Log.Debug("Do", "req", req)
+	//Log("msg","Do", "req", req)
 	resp, err := cl.Do(req)
 	if err != nil {
 		return ret, errors.Wrapf(err, "Do %#v", req)
@@ -65,10 +63,10 @@ func (m Mantis) Call(command string, args map[string]interface{}) (retval, error
 	if resp.StatusCode >= 400 {
 		return ret, errors.New(fmt.Sprintf("%q: %s: %s", req.URL, resp.Status, ret.Body))
 	}
-	Log.Info("response", "resp", resp)
+	Log("msg","response", "resp", resp)
 
 	if ret.Body, err = ensureXmlUTF8(ret.Body); err != nil {
-		Log.Error("transform encoding", "body", string(ret.Body), "error", err)
+		Log("msg","transform encoding", "body", string(ret.Body), "error", err)
 	}
 	r := xmlrpc.NewResponse(ret.Body)
 	if r.Failed() {
@@ -77,17 +75,17 @@ func (m Mantis) Call(command string, args map[string]interface{}) (retval, error
 	if bytes.Contains(ret.Body, []byte("<name>errcode</name>")) {
 		var ret retval
 		if err = r.Unmarshal(&ret); err != nil {
-			Log.Error("unmarshal retval", "body", string(ret.Body), "error", err)
+			Log("msg","unmarshal retval", "body", string(ret.Body), "error", err)
 		} else {
 			if ret.Code == 0 {
-				Log.Info("success")
+				Log("msg","success")
 				return ret, nil
 			}
-			Log.Error("failure", "errcode", ret.Code, "errmsg", ret.Msg)
+			Log("msg","failure", "errcode", ret.Code, "errmsg", ret.Msg)
 			return ret, errors.New(fmt.Sprintf("failure; %d: %s", ret.Code, ret.Msg))
 		}
 	}
-	Log.Info("success", "body", string(ret.Body))
+	Log("msg","success", "body", string(ret.Body))
 	return ret, nil
 }
 
@@ -103,10 +101,10 @@ func (m Mantis) NewUser(email, realName, userName string, accessLevel int) error
 		return err
 	}
 	if ret.Code == 0 {
-		Log.Info("success")
+		Log("msg","success")
 		return nil
 	}
-	Log.Error("failure", "errcode", ret.Code, "errmsg", ret.Msg)
+	Log("msg","failure", "errcode", ret.Code, "errmsg", ret.Msg)
 	return errors.New(fmt.Sprintf("failure; %d: %s", ret.Code, ret.Msg))
 }
 
@@ -125,13 +123,13 @@ func ensureXmlUTF8(b []byte) ([]byte, error) {
 	if i <= 0 {
 		return b, nil
 	}
-	Log.Debug("first", "i", i, "line", b[:i])
+	//Log("msg","first", "i", i, "line", b[:i])
 	j := bytes.Index(b[:i-1], []byte("encoding=\""))
 	if j <= 0 {
 		return b, nil
 	}
 	encS := string(bytes.ToLower(b[j+10 : i-1]))
-	Log.Debug("enc", "j", j, "enc", encS)
+	//Log("msg","enc", "j", j, "enc", encS)
 	if encS == "utf-8" {
 		return b, nil
 	}
@@ -145,6 +143,6 @@ func ensureXmlUTF8(b []byte) ([]byte, error) {
 		return b, fmt.Errorf("decode tail: %v", err)
 	}
 	s := head + "utf-8" + tail
-	Log.Debug("transformed", "body", s)
+	//Log("msg","transformed", "body", s)
 	return []byte(s), nil
 }

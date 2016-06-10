@@ -24,7 +24,7 @@ import (
 
 	"camlistore.org/pkg/blobserver"
 	"camlistore.org/pkg/blobserver/diskpacked"
-	"camlistore.org/pkg/context"
+	"golang.org/x/net/context"
 )
 
 func main() {

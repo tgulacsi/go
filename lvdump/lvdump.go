@@ -12,14 +12,9 @@ import (
 	"os"
 
 	"github.com/syndtr/goleveldb/leveldb"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var Log = log15.New("lib", "lvdump")
-
-func init() {
-	Log.SetHandler(log15.DiscardHandler())
-}
+var Log = func(...interface{}) error { return nil }
 
 // Dump records.
 //
@@ -28,7 +23,7 @@ func init() {
 // The end of data is indicated by an extra newline.
 func Dump(src string) error {
 	defer os.Stdout.Close()
-	Log.Debug("open src", "file", src)
+	//Log("msg","open src", "file", src)
 	db, err := leveldb.OpenFile(src, nil)
 	if err != nil {
 		return err

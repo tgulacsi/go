@@ -30,22 +30,17 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/temp"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
 // Log is discarded by default
-var Log = log15.New("lib", "httpreq")
-
-func init() {
-	Log.SetHandler(log15.DiscardHandler())
-}
+var Log = func(...interface{}) error { return nil }
 
 // ReadRequestOneFile reads the first file from the request (if multipart/),
 // or returns the body if not
 func ReadRequestOneFile(r *http.Request) (body io.ReadCloser, contentType string, status int, err error) {
 	body = r.Body
 	contentType = r.Header.Get("Content-Type")
-	Log.Debug("ReadRequestOneFile", "ct", contentType)
+	//Log("msg","ReadRequestOneFile", "ct", contentType)
 	if !strings.HasPrefix(contentType, "multipart/") {
 		// not multipart-form
 		status = 200
@@ -99,7 +94,7 @@ func ReadRequestFiles(r *http.Request) (filenames []string, status int, err erro
 				status, err = 405, fmt.Errorf("error reading part %q: %s", fileHeader.Filename, err)
 				return
 			}
-			Log.Debug("part", "filename", fileHeader.Filename)
+			//Log("msg","part", "filename", fileHeader.Filename)
 			if fn, err = temp.ReaderToFile(f, fileHeader.Filename, ""); err != nil {
 				f.Close()
 				status, err = 500, fmt.Errorf("error saving %q: %s", fileHeader.Filename, err)
@@ -139,11 +134,11 @@ func SendFile(w http.ResponseWriter, filename, contentType string) error {
 	}
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", size))
 	w.WriteHeader(200)
-	Log.Info("SendFile", "filename", filename, "length", size, "header", w.Header())
+	Log("msg", "SendFile", "filename", filename, "length", size, "header", w.Header())
 	fh.Seek(0, 0)
 	if _, err = io.CopyN(w, fh, size); err != nil {
 		err = fmt.Errorf("error sending file %q: %s", filename, err)
-		Log.Error("SendFile", "filename", filename, "error", err)
+		Log("msg", "SendFile", "filename", filename, "error", err)
 	}
 	return err
 }

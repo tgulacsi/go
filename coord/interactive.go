@@ -27,11 +27,10 @@ import (
 	"text/template" // yes, no need for context-aware escapes
 
 	"github.com/pkg/errors"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var (
-	Log = log15.New("lib", "coord")
+	Log = func(...interface{}) error { return nil }
 
 	DefaultTitle   = "Cím koordináták pontosítása"
 	DefaultAddress = "Budapest"
@@ -95,7 +94,7 @@ func (in *Interactive) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		in.Title = DefaultTitle
 	}
 	if err := in.RenderHTML(w, vals.Get("address"), in.BaseURL+"/?id="+url.QueryEscape(id)); err != nil {
-		Log.Error("RenderHTML", "error", err)
+		Log("msg", "RenderHTML", "error", err)
 	}
 }
 func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
@@ -131,8 +130,6 @@ func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
 var tmpl *template.Template
 
 func init() {
-	Log.SetHandler(log15.DiscardHandler())
-
 	tmpl = template.Must(template.New("gmapsHTML").Parse(gmapsHTML))
 }
 

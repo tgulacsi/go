@@ -24,16 +24,10 @@ import (
 	"os"
 	"os/exec"
 	"time"
-
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
 // Log is discarded by default
-var Log = log15.New("lib", "httpreq")
-
-func init() {
-	Log.SetHandler(log15.DiscardHandler())
-}
+var Log = func(keyvals ...interface{}) error { return nil }
 
 // ErrTimedOut is an error for child timeout
 var ErrTimedOut = errors.New("Child timed out.")
@@ -85,9 +79,9 @@ func RunWithTimeout(timeoutSeconds int, cmd *exec.Cmd) error {
 	case err := <-gcmd.done:
 		return err
 	case <-time.After(time.Second * time.Duration(timeoutSeconds)):
-		Log.Info("killing timed out", "pid", cmd.Process.Pid, "path", cmd.Path, "args", cmd.Args)
+		Log("msg", "killing timed out", "pid", cmd.Process.Pid, "path", cmd.Path, "args", cmd.Args)
 		if killErr := familyKill(gcmd.Cmd, true); killErr != nil {
-			Log.Warn("interrupt", "pid", cmd.Process.Pid)
+			Log("msg", "interrupt", "pid", cmd.Process.Pid)
 		}
 		select {
 		case <-gcmd.done:
@@ -101,14 +95,14 @@ func RunWithTimeout(timeoutSeconds int, cmd *exec.Cmd) error {
 // KillWithChildren kills the process
 // and tries to kill its all children (process group)
 func KillWithChildren(p *os.Process, interrupt bool) (err error) {
-	Log.Debug("killWithChildren", "process", p)
+	//Log("msg","killWithChildren", "process", p)
 	if p == nil {
 		return
 	}
-	Log.Info("killWithChildren", "pid", p.Pid, "interrupt", interrupt)
+	Log("msg", "killWithChildren", "pid", p.Pid, "interrupt", interrupt)
 	defer func() {
 		if r := recover(); r != nil {
-			Log.Warn("PANIC in kill", "process", p, "error", r)
+			Log("msg", "PANIC in kill", "process", p, "error", r)
 		}
 	}()
 	defer p.Release()
@@ -127,7 +121,7 @@ func groupKill(p *os.Process, interrupt bool) error {
 	if p == nil {
 		return nil
 	}
-	Log.Info("groupKill", "pid", p.Pid)
+	Log("msg", "groupKill", "pid", p.Pid)
 	defer recover()
 	if interrupt {
 		defer p.Signal(os.Interrupt)

@@ -5,10 +5,9 @@ import (
 	"io"
 
 	"github.com/nathankerr/pdf"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var Log = log15.New("lib", "pdf")
+var Log = func(...interface{}) error { return nil }
 
 func MergeFiles(dest string, sources ...string) error {
 	merged, err := pdf.Create(dest)

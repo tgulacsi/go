@@ -8,18 +8,20 @@ package main
 
 import (
 	"flag"
+	"os"
 
+	"github.com/go-kit/kit/log"
+	"github.com/tgulacsi/go/loghlp/kitloghlp"
 	"github.com/tgulacsi/go/lvdump"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var Log = lvdump.Log
+var logger = log.NewContext(kitloghlp.Stringify{log.NewLogfmtLogger(os.Stderr)})
 
 func main() {
-	Log.SetHandler(log15.CallerFileHandler(log15.StderrHandler))
+	lvdump.Log = logger.With("lib", "lvdump").Log
 
 	flag.Parse()
 	if err := lvdump.Dump(flag.Arg(0)); err != nil {
-		Log.Error("Dump", "src", flag.Arg(0), "error", err)
+		logger.Log("msg", "Dump", "src", flag.Arg(0), "error", err)
 	}
 }

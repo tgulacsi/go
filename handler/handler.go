@@ -19,15 +19,9 @@ package handler
 
 import (
 	"net/http"
-
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
-var Log = log15.New("lib", "handler")
-
-func init() {
-	Log.SetHandler(log15.DiscardHandler())
-}
+var Log = func(...interface{}) error { return nil }
 
 type Handler func(w http.ResponseWriter, r *http.Request) error
 
@@ -61,13 +55,13 @@ func (h ErrHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if se, ok := err.(statuser); ok {
 		// We can retrieve the status here and write out a specific
 		// HTTP status code.
-		Log.Error("HTTP error", "status", se.Status(), "error", err)
+		Log("msg", "HTTP error", "status", se.Status(), "error", err)
 		http.Error(w, err.Error(), se.Status())
 		return
 	}
 	// Any error types we don't specifically look out for default
 	// to serving a HTTP 500
-	Log.Error("HTTP", "error", err)
+	Log("msg", "HTTP", "error", err)
 	http.Error(w, http.StatusText(http.StatusInternalServerError),
 		http.StatusInternalServerError)
 }

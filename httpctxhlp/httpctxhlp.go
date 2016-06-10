@@ -22,13 +22,13 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"gopkg.in/inconshreveable/log15.v2"
 
 	"github.com/renstrom/shortuuid"
 	"github.com/spkg/httpctx"
+	"github.com/tgulacsi/go/loghlp/kitloghlp"
 )
 
-func AddLogger(Log log15.Logger, h httpctx.Handler) httpctx.Handler {
+func AddLogger(Log func(...interface{}) error, h httpctx.Handler) httpctx.Handler {
 	return httpctx.HandlerFunc(
 		func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 			var id string
@@ -41,33 +41,31 @@ func AddLogger(Log log15.Logger, h httpctx.Handler) httpctx.Handler {
 				ctx = context.WithValue(ctx, "reqid", id)
 			}
 			Log := Log
-			if lg := ctx.Value("logger"); lg != nil {
-				Log = lg.(log15.Logger)
-			} else {
-				Log = Log.New("reqid", id)
-				ctx = context.WithValue(ctx, "logger", Log)
+			if lg, _ := ctx.Value("Log").(func(...interface{}) error); lg != nil {
+				Log = kigloghlp.With(Log, "reqid", id)
+				ctx = context.WithValue(ctx, "Log", Log)
 			}
 			w.Header().Set("X-Req-Id", id)
 			start := time.Now()
 			sr := &StatusRecorder{ResponseWriter: w}
 			err := h.ServeHTTPContext(ctx, sr, r)
 			d := time.Since(start)
-			Log.Info("served", "path", r.URL.Path, "duration", d, "status", sr.StatusCode, "error", err)
+			Log("msg", "served", "path", r.URL.Path, "duration", d, "status", sr.StatusCode, "error", err)
 			return err
 		})
 }
 
-func GetLogger(Log log15.Logger, ctx context.Context) (log15.Logger, context.Context) {
-	if lgI, _ := ctx.Value("logger").(log15.Logger); lgI != nil {
+func GetLog(Log func(...interface{}) error, ctx context.Context) (func(...interface{}) error, context.Context) {
+	if lgI, _ := ctx.Value("Log").(func(...interface{}) error); lgI != nil {
 		Log = lgI
 	}
 	id, _ := ctx.Value("reqid").(string)
 	if id == "" {
 		id = shortuuid.New()
 		ctx = context.WithValue(ctx, "reqid", id)
-		Log = Log.New("reqid", id)
+		Log = kitloghlp.With(Log, "reqid", id)
 	}
-	return Log, context.WithValue(ctx, "logger", Log)
+	return Log, context.WithValue(ctx, "Log", Log)
 }
 
 type StatusRecorder struct {

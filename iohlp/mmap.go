@@ -19,17 +19,11 @@ package iohlp
 import (
 	"io"
 	"os"
-
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const MaxInt = int64(int(^uint(0) >> 1))
 
-var Log = log15.New("lib", "iohlp")
-
-func init() {
-	Log.SetHandler(log15.DiscardHandler())
-}
+var Log = func(keyvals ...interface{}) error { return nil }
 
 // MmapFile returns the mmap of the given path.
 func MmapFile(fn string) ([]byte, io.Closer, error) {
