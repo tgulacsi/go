@@ -22,6 +22,14 @@ import (
 	"github.com/go-kit/kit/log"
 )
 
+type LogFunc func(...interface{}) error
+
+func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
+	return LogFunc(func(keyvals ...interface{}) error {
+		return oLog(append(keyvals, plus...))
+	})
+}
+
 func NewTestLogger(t testLogger) *log.Context {
 	return log.NewContext(
 		Stringify{log.NewLogfmtLogger(testLog{t})},
