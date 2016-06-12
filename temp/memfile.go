@@ -50,14 +50,14 @@ type ReadSeekCloser interface {
 // MakeReadSeekCloser makes an io.ReadSeeker + io.Closer by reading the whole reader
 // If the given Reader is a Closer, too, than that Close will be called
 func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
+	if rsc, ok := r.(ReadSeekCloser); ok {
+		return rsc, nil
+	}
+
 	ms := NewMemorySlurper(blobRef)
 	n, err := io.Copy(ms, r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "copy from %v to %v", r, ms)
-	}
-
-	if fh, ok := r.(*os.File); ok {
-		ms.stat, err = fh.Stat()
 	}
 	if ms.stat == nil {
 		if ms.file == nil {
