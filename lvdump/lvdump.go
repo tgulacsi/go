@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 var Log = func(...interface{}) error { return nil }
@@ -24,7 +25,7 @@ var Log = func(...interface{}) error { return nil }
 func Dump(src string) error {
 	defer os.Stdout.Close()
 	//Log("msg","open src", "file", src)
-	db, err := leveldb.OpenFile(src, nil)
+	db, err := leveldb.OpenFile(src, &opt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
