@@ -15,7 +15,7 @@ import (
 	"github.com/tgulacsi/go/lvdump"
 )
 
-var logger = log.NewContext(kitloghlp.Stringify{log.NewLogfmtLogger(os.Stderr)})
+var logger = log.NewContext(kitloghlp.Stringify{Logger: log.NewLogfmtLogger(os.Stderr)})
 
 func main() {
 	lvdump.Log = logger.With("lib", "lvdump").Log

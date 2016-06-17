@@ -38,12 +38,15 @@ func Dump(src string) error {
 	defer it.Release()
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()
+	n := 0
 	for it.Next() {
 		fmt.Fprintf(out, "+%d,%d:%s->", len(it.Key()), len(it.Value()), it.Key())
 		if _, err := out.Write(it.Value()); err != nil {
 			return err
 		}
 		out.WriteByte('\n')
+		n++
 	}
+	Log("msg", "Finished.", "rows", n)
 	return out.WriteByte('\n')
 }
