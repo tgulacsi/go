@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 var Log = func(...interface{}) error { return nil }
@@ -24,7 +25,7 @@ var Log = func(...interface{}) error { return nil }
 func Dump(src string) error {
 	defer os.Stdout.Close()
 	//Log("msg","open src", "file", src)
-	db, err := leveldb.OpenFile(src, nil)
+	db, err := leveldb.OpenFile(src, &opt.Options{ReadOnly: true})
 	if err != nil {
 		return err
 	}
@@ -37,12 +38,15 @@ func Dump(src string) error {
 	defer it.Release()
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()
+	n := 0
 	for it.Next() {
 		fmt.Fprintf(out, "+%d,%d:%s->", len(it.Key()), len(it.Value()), it.Key())
 		if _, err := out.Write(it.Value()); err != nil {
 			return err
 		}
 		out.WriteByte('\n')
+		n++
 	}
+	Log("msg", "Finished.", "rows", n)
 	return out.WriteByte('\n')
 }
