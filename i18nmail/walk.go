@@ -70,8 +70,6 @@ func nextSeqInt() int {
 	return int(nextSeq() % uint64(1<<31))
 }
 
-func errIsStopWalk(err error) bool { return err == ErrStopWalk }
-
 // HashKeyName is the header key name for the hash
 const HashKeyName = "X-HashOfFullMessage"
 
@@ -205,6 +203,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		if !dontDescend && strings.HasPrefix(ct, "multipart/") {
 			if e = WalkMultipart(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
+				child.Body = br
 				data, _ := br.Peek(1024)
 				if len(data) == 0 { // EOF
 					e = nil
@@ -215,6 +214,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		} else if !dontDescend && strings.HasPrefix(ct, "message/") {
 			if e = Walk(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
+				child.Body = br
 				data, _ := br.Peek(1024)
 				return errors.Wrapf(e, fmt.Sprintf("descending data=%s", data))
 			}
