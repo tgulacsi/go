@@ -24,10 +24,10 @@ import (
 	"github.com/tgulacsi/go/iohlp"
 	"github.com/tgulacsi/go/text"
 	"golang.org/x/text/encoding"
-	"gopkg.in/inconshreveable/log15.v2/term"
+	"github.com/go-kit/kit/log/term"
 )
 
-var IsTTY = term.IsTty(os.Stdout.Fd())
+var IsTTY = term.IsTerminal(os.Stdout)
 
 // GetTTYEncoding returns the TTY encoding, or UTF-8 if not found.
 func GetTTYEncoding() encoding.Encoding {
