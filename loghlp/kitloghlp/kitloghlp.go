@@ -26,8 +26,10 @@ import (
 type LogFunc func(...interface{}) error
 
 func New(w io.Writer) *log.Context {
-	return log.NewContext(Stringify{log.NewLogfmtLogger(w)}).
-		With("ts", log.DefaultTimestamp)
+	return NewContext(log.NewLogfmtLogger(w))
+}
+func NewContext(logger log.Logger) *log.Context {
+	return log.NewContext(Stringify{logger}).With("ts", log.DefaultTimestamp)
 }
 
 func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
