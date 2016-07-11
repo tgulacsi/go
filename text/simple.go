@@ -80,6 +80,16 @@ func GetEncoding(name string) encoding.Encoding {
 		return encoding.Replacement
 	case "cp437":
 		return charmap.CodePage437
+	case "cp850":
+		return charmap.CodePage850
+	case "cp852":
+		return charmap.CodePage852
+	case "cp855":
+		return charmap.CodePage855
+	case "cp858":
+		return charmap.CodePage858
+	case "cp862":
+		return charmap.CodePage862
 	case "cp866":
 		return charmap.CodePage866
 	case "koi8r":
