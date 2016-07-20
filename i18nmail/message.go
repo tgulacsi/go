@@ -18,7 +18,6 @@ package i18nmail
 import (
 	"bytes"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/text"
 	//"golang.org/x/text/encoding/ianaindex"
 	"golang.org/x/text/encoding/htmlindex"
@@ -119,12 +119,21 @@ type Address struct {
 	Address string // user@domain
 }
 
-var wsRepl = strings.NewReplacer("  ", " ", "\t", " ")
+var wsRepl = strings.NewReplacer("\t", " ", "  ", " ")
 
 // Parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
 func ParseAddress(address string) (*Address, error) {
 	//return newAddrParser(address).parseAddress()
-	maddr, err := AddressParser.Parse(wsRepl.Replace(address))
+	address = wsRepl.Replace(address)
+	maddr, err := AddressParser.Parse(address)
+	if err != nil {
+		if strings.HasSuffix(errors.Cause(err).Error(), "no angle-addr") &&
+			strings.Contains(address, "<") && strings.Contains(address, ">") {
+			maddr, err = AddressParser.Parse(address[strings.LastIndex(address, "<"):])
+		} else {
+			err = errors.Wrap(err, address)
+		}
+	}
 	if maddr == nil {
 		return nil, err
 	}
