@@ -6,13 +6,13 @@ package uncompr
 
 import (
 	"archive/zip"
-	"bytes"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/temp"
 )
 
@@ -82,7 +82,7 @@ func NewZipLister(r io.Reader) (Lister, error) {
 }
 
 type rarLister struct {
-	rar   string
+	dir   string
 	files []string
 }
 
@@ -93,31 +93,40 @@ func NewRarLister(r io.Reader) (Lister, error) {
 	if err != nil {
 		return nil, err
 	}
-	rl := rarLister{rar: filepath.Join(tempdir, "rar.rar")}
-	fh, err := os.Create(rl.rar)
+	const rarName = "rar.rar"
+	rl := rarLister{dir: tempdir}
+	fh, err := os.Create(filepath.Join(rl.dir, rarName))
 	if err != nil {
 		os.RemoveAll(tempdir)
-		return nil, err
+		return nil, errors.Wrap(err, "create "+rarName)
 	}
 	if _, err = io.Copy(fh, r); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, err
+		return nil, errors.Wrap(err, "copy to "+fh.Name())
 	}
 	if err = fh.Close(); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, err
+		return nil, errors.Wrap(err, "close "+fh.Name())
 	}
-	b, err := exec.Command("unrar", "l", rl.rar).Output()
-	if err != nil {
+
+	cmd := exec.Command("unrar", "e", "-ep", rarName)
+	cmd.Dir = tempdir
+	if err := cmd.Run(); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, err
+		return nil, errors.Wrapf(err, "%q @%q", cmd.Args, cmd.Dir)
 	}
-	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		if !bytes.HasPrefix(line, []byte("    ..A.... ")) {
-			continue
-		}
-		j := bytes.LastIndex(line, []byte(" "))
-		rl.files = append(rl.files, string(line[j+1:]))
+	os.Remove(fh.Name())
+	if err = filepath.Walk(
+		tempdir,
+		func(path string, info os.FileInfo, err error) error {
+			if info.Mode().IsRegular() {
+				rl.files = append(rl.files, path)
+			}
+			return nil
+		},
+	); err != nil {
+		os.RemoveAll(tempdir)
+		return nil, errors.Wrap(err, "Walk "+tempdir)
 	}
 
 	return rl, nil
@@ -125,50 +134,45 @@ func NewRarLister(r io.Reader) (Lister, error) {
 
 // Close of rarLister deletes the temp dir.
 func (rl rarLister) Close() error {
-	if rl.rar == "" { // already closed
+	if rl.dir == "" { // already closed
 		return nil
 	}
-	dir := filepath.Dir(rl.rar)
-	rl.rar = ""
-	return os.RemoveAll(dir)
+	rl.dir = ""
+	//return os.RemoveAll(rl.dir)
+	return nil
 }
 
 // List lists the rar archive's contents (only files).
 func (rl rarLister) List() []Extracter {
 	ex := make([]Extracter, len(rl.files))
-	for i, nm := range rl.files {
-		ex[i] = rarExtracter{rar: rl.rar, name: nm}
+	for i, path := range rl.files {
+		ex[i] = rarExtracter{path: path}
 	}
 	return ex
 }
 
 type rarExtracter struct {
-	rar, name string
+	path string
 }
 
 // Open extracts the file from the rar archive.
 func (re rarExtracter) Open() (io.ReadCloser, error) {
-	cmd := exec.Command("unrar", "e", re.rar, re.name)
-	cmd.Dir = filepath.Dir(re.rar)
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	fn := filepath.Join(cmd.Dir, filepath.Base(re.name))
-	fh, err := os.Open(fn)
+	fh, err := os.Open(re.path)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "open "+re.path)
 	}
 	return unlinkCloser{fh}, nil
 }
 
 // Close deletes the underlying file.
 func (re rarExtracter) Close() error {
-	return os.Remove(filepath.Join(filepath.Dir(re.rar), re.name))
+	os.Remove(re.path)
+	return nil
 }
 
 // Name returns the atchive item's name.
 func (re rarExtracter) Name() string {
-	return re.name
+	return filepath.Base(re.path)
 }
 
 type unlinkCloser struct {
