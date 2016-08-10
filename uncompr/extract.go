@@ -138,7 +138,7 @@ func (rl rarLister) Close() error {
 		return nil
 	}
 	rl.dir = ""
-	//return os.RemoveAll(rl.dir)
+	return os.RemoveAll(rl.dir)
 	return nil
 }
 
