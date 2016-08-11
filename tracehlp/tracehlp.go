@@ -60,16 +60,18 @@ func (t *LoggerRecorder) RecordSpan(span basictracer.RawSpan) {
 	if t.Log == nil {
 		return
 	}
-	t.Log("msg", "record span",
+	t.Log(
+		"msg", "record span",
 		"operation", span.Operation,
 		"start", span.Start,
 		"duration", span.Duration,
-		"context", span.Context,
+		//"context", span.Context,
 		"baggage", span.Context.Baggage,
 		"logs", loghlp.LazyW(func(w io.Writer) {
 			for i, l := range span.Logs {
 				fmt.Fprintf(w, "%d:{%v @ %v: %v --> %v} ",
 					i, l.Timestamp, l.Event, reflect.TypeOf(l.Payload))
 			}
-		}))
+		},
+		))
 }
