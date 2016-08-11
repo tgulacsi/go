@@ -65,7 +65,7 @@ func (t *LoggerRecorder) RecordSpan(span basictracer.RawSpan) {
 		"start", span.Start,
 		"duration", span.Duration,
 		"context", span.Context,
-		"baggage", span.Baggage,
+		"baggage", span.Context.Baggage,
 		"logs", loghlp.LazyW(func(w io.Writer) {
 			for i, l := range span.Logs {
 				fmt.Fprintf(w, "%d:{%v @ %v: %v --> %v} ",
