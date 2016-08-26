@@ -75,7 +75,7 @@ type SqlTxer struct {
 }
 
 func (tx SqlTxer) Query(qry string, args ...interface{}) (Rowser, error) {
-	rows, err := tx.Tx.Query(qry, args)
+	rows, err := tx.Tx.Query(qry, args...)
 	return SqlRowser{rows}, err
 }
 
