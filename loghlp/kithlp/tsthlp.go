@@ -18,7 +18,6 @@ package kithlp
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/go-kit/kit/log"
@@ -36,7 +35,6 @@ type testLogger struct {
 
 func (t testLogger) Log(keyvals ...interface{}) error {
 	b, err := logfmt.MarshalKeyvals(append(keyvals, "stack", stack.Trace()[4:])...)
-	fmt.Fprintf(os.Stderr, "b=%s keyvals=%#v", b, keyvals)
 	if err != nil {
 		t.TB.Log(fmt.Sprintf("%s: LOG_ERROR=%v", b, err))
 		return err
