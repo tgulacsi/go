@@ -34,7 +34,7 @@ func NewContext(logger log.Logger) *log.Context {
 
 func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
 	return LogFunc(func(keyvals ...interface{}) error {
-		return oLog(append(keyvals, plus...))
+		return oLog(append(keyvals, plus...)...)
 	})
 }
 
