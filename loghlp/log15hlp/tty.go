@@ -14,13 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package loghlp
+package log15hlp
 
 import (
 	"io"
 
+	log15 "gopkg.in/inconshreveable/log15.v2"
+
 	"github.com/tgulacsi/go/term"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
 // UseWriter will use the given writer for log15.StderrHandler.

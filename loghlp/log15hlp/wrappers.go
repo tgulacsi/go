@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package loghlp
+package log15hlp
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ import (
 	"log"
 	"time"
 
-	"gopkg.in/inconshreveable/log15.v2"
+	log15 "gopkg.in/inconshreveable/log15.v2"
 	"gopkg.in/inconshreveable/log15.v2/stack"
 )
 
