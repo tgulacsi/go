@@ -63,14 +63,19 @@ func TestDescribeQuery(t *testing.T) {
 func TestMapToSlice(t *testing.T) {
 	for i, tc := range []struct {
 		in, await string
+		params    []interface{}
 	}{
-		{`SELECT NVL(MAX(F_dazon), :dazon) FROM T_spl_level
-	         WHERE (F_spl_azon = :lev_azon OR
-			        F_ssz = 0 AND F_lev_azon = :lev_azon)`,
+		{
+			`SELECT NVL(MAX(F_dazon), :dazon) FROM T_spl_level
+			WHERE (F_spl_azon = :lev_azon OR --:lev_azon OR
+			       F_ssz = 0 AND F_lev_azon = /*:lev_azon*/:lev_azon)`,
 			`SELECT NVL(MAX(F_dazon), :1) FROM T_spl_level
-	         WHERE (F_spl_azon = :2 OR
-			        F_ssz = 0 AND F_lev_azon = :3)`},
-		{`DECLARE
+			WHERE (F_spl_azon = :2 OR --:lev_azon OR
+			       F_ssz = 0 AND F_lev_azon = /*:lev_azon*/:3)`,
+			[]interface{}{"dazon", "lev_azon", "lev_azon"},
+		},
+		{
+			`DECLARE
   i1 PLS_INTEGER;
   i2 PLS_INTEGER;
   v001 BRUNO.DB_WEB_ELEKTR.KOTVENY_REC_TYP;
@@ -97,13 +102,18 @@ BEGIN
   :2 := v001.dijkod;
 
 END;
-`},
+`,
+			[]interface{}{"p002#dijkod", "p002#dijkod"},
+		},
 	} {
 
-		got, _ := MapToSlice(tc.in, nil)
+		got, params := MapToSlice(tc.in, func(s string) interface{} { return s })
 		d := diff.Diff(tc.await, got)
 		if d != "" {
 			t.Errorf("%d. diff:\n%s", i, d)
+		}
+		if !reflect.DeepEqual(params, tc.params) {
+			t.Errorf("%d. params: got\n\t%#v,\nwanted\n\t%#v.", i, params, tc.params)
 		}
 	}
 }

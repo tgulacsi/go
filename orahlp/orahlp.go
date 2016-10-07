@@ -133,26 +133,49 @@ func MapToSlice(qry string, metParam func(string) interface{}) (string, []interf
 	arr := make([]interface{}, 0, 16)
 	var buf bytes.Buffer
 	state, p, last := 0, 0, 0
+	var prev rune
 	for i, r := range qry {
-		switch {
-		case state == 0 && r == ':':
-			state++
-			p = i
-			// An identifier consists of a letter optionally followed by more letters, numerals, dollar signs, underscores, and number signs.
-			// http://docs.oracle.com/cd/B19306_01/appdev.102/b14261/fundamentals.htm#sthref309
-		case state == 1 &&
-			!('A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' ||
-				(i-p > 1 && ('0' <= r && r <= '9' || r == '$' || r == '_' || r == '#'))):
-			state = 0
-			if i-p <= 1 { // :=
-				continue
+		switch state {
+		case 2:
+			if r == '\n' {
+				state = 0
 			}
-			arr = append(arr, metParam(qry[p+1:i]))
-			param := fmt.Sprintf(":%d", len(arr))
-			buf.WriteString(qry[last:p])
-			buf.WriteString(param)
-			last = i
+		case 3:
+			if prev == '*' && r == '/' {
+				state = 0
+			}
+		case 0:
+			switch r {
+			case '-':
+				if prev == '-' {
+					state = 2
+				}
+			case '*':
+				if prev == '/' {
+					state = 3
+				}
+			case ':':
+				state = 1
+				p = i
+				// An identifier consists of a letter optionally followed by more letters, numerals, dollar signs, underscores, and number signs.
+				// http://docs.oracle.com/cd/B19306_01/appdev.102/b14261/fundamentals.htm#sthref309
+			}
+		case 1:
+			if !('A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' ||
+				(i-p > 1 && ('0' <= r && r <= '9' || r == '$' || r == '_' || r == '#'))) {
+
+				state = 0
+				if i-p <= 1 { // :=
+					continue
+				}
+				arr = append(arr, metParam(qry[p+1:i]))
+				param := fmt.Sprintf(":%d", len(arr))
+				buf.WriteString(qry[last:p])
+				buf.WriteString(param)
+				last = i
+			}
 		}
+		prev = r
 	}
 	if last <= len(qry)-1 {
 		buf.WriteString(qry[last:])
