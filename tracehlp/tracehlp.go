@@ -19,7 +19,6 @@ package tracehlp
 import (
 	"fmt"
 	"io"
-	"reflect"
 
 	"github.com/opentracing/basictracer-go"
 	"github.com/opentracing/opentracing-go"
@@ -69,8 +68,8 @@ func (t *LoggerRecorder) RecordSpan(span basictracer.RawSpan) {
 		"baggage", span.Context.Baggage,
 		"logs", loghlp.LazyW(func(w io.Writer) {
 			for i, l := range span.Logs {
-				fmt.Fprintf(w, "%d:{%v @ %v: %v --> %v} ",
-					i, l.Timestamp, l.Event, reflect.TypeOf(l.Payload))
+				fmt.Fprintf(w, "%d:{%v @ %v} ",
+					i, l.Timestamp, l.Fields)
 			}
 		},
 		))
