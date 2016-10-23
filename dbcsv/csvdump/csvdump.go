@@ -1,5 +1,5 @@
 /*
-   Copyright 2013 Tamás Gulácsi
+   Copyright 2016 Tamás Gulácsi
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"database/sql"
+	"database/sql/driver"
 	"flag"
 	"io"
 	"log"
@@ -36,7 +37,8 @@ import (
 )
 
 func getQuery(table, where string, columns []string) string {
-	if strings.HasPrefix(table, "SELECT ") {
+	table = strings.TrimSpace(table)
+	if len(table) > 6 && strings.HasPrefix(strings.ToUpper(table), "SELECT ") {
 		return table
 	}
 	cols := "*"
@@ -174,7 +176,23 @@ func (v ValTime) String() string {
 	}
 	return `"` + v.Value.Format(dateFormat) + `"`
 }
-func (v *ValTime) Pointer() interface{} { return &v.Value }
+func (vt ValTime) ConvertValue(v interface{}) (driver.Value, error) {
+	if v == nil {
+		return time.Time{}, nil
+	}
+	t, _ := v.(time.Time)
+	return t, nil
+}
+func (vt *ValTime) Scan(v interface{}) error {
+	if v == nil {
+		vt.Value = time.Time{}
+		return nil
+	}
+	t, _ := v.(time.Time)
+	vt.Value = t
+	return nil
+}
+func (v *ValTime) Pointer() interface{} { return v }
 
 func getColConverter(col orahlp.Column) stringer {
 	switch col.Type {
@@ -231,3 +249,5 @@ func main() {
 	}
 	os.Exit(0)
 }
+
+// vim: se noet fileencoding=utf-8:
