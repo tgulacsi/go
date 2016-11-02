@@ -21,8 +21,10 @@ import (
 	"os"
 )
 
+// MaxInt is the maximum value an int can contain.
 const MaxInt = int64(int(^uint(0) >> 1))
 
+// Log is used for logging.
 var Log = func(keyvals ...interface{}) error { return nil }
 
 // MmapFile returns the mmap of the given path.

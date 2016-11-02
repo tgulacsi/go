@@ -25,6 +25,7 @@ import (
 	"github.com/tgulacsi/go/loghlp"
 )
 
+// NewLoggerTracer returns a new basictracer with the given processName and Log function.
 func NewLoggerTracer(processName string, Log func(keyvals ...interface{}) error) opentracing.Tracer {
 	return basictracer.New(NewLoggerRecorder(processName, Log))
 }

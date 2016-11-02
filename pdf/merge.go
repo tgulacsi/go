@@ -7,8 +7,10 @@ import (
 	"github.com/nathankerr/pdf"
 )
 
+// Log is used for logging.
 var Log = func(...interface{}) error { return nil }
 
+// MergeFiles merges the given sources into dest.
 func MergeFiles(dest string, sources ...string) error {
 	merged, err := pdf.Create(dest)
 	if err != nil {

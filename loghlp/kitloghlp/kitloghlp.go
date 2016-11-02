@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package kitloghlp contains some helpers for go-kit/kit/log.
 package kitloghlp
 
 import (
@@ -23,21 +24,27 @@ import (
 	"github.com/go-kit/kit/log"
 )
 
+// LogFunc is the Log function.
 type LogFunc func(...interface{}) error
 
+// New returns a log.Context, using Logfmt logger on w.
 func New(w io.Writer) *log.Context {
 	return NewContext(log.NewLogfmtLogger(w))
 }
+
+// NewContext wraps the given logger with Stringify, and adds a default ts timestamp.
 func NewContext(logger log.Logger) *log.Context {
 	return log.NewContext(Stringify{logger}).With("ts", log.DefaultTimestamp)
 }
 
+// With appends the given plus keyvals to the LogFunc.
 func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
 	return LogFunc(func(keyvals ...interface{}) error {
 		return oLog(append(keyvals, plus...)...)
 	})
 }
 
+// NewTestLogger returns a Context wrapping a testing.TB.Log.
 func NewTestLogger(t testLogger) *log.Context {
 	return log.NewContext(
 		Stringify{log.NewLogfmtLogger(testLog{t})},
@@ -67,6 +74,7 @@ type Stringify struct {
 	log.Logger
 }
 
+// Log with stringifying every value.
 func (l Stringify) Log(keyvals ...interface{}) error {
 	for i := 1; i < len(keyvals); i += 2 {
 		switch keyvals[i].(type) {

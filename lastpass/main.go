@@ -44,7 +44,7 @@ func main() {
 			log.Fatal(err)
 		}
 		log.Printf("ROW=%q", row)
-		var rec Entry
+		var rec entry
 		for nm, i := range order {
 			switch nm {
 			case "url":
@@ -70,7 +70,7 @@ func main() {
 	}
 }
 
-type Entry struct {
+type entry struct {
 	XMLName    string    `xml:"entry"`
 	Title      string    `xml:"title"`
 	Username   string    `xml:"username"`

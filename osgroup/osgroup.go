@@ -111,6 +111,7 @@ func GroupName(gid int) (string, error) {
 	return groups[gid], nil
 }
 
+// IsInsideDocker returns true iff we are inside a docker cgroup.
 func IsInsideDocker() bool {
 	b, err := ioutil.ReadFile("/proc/self/cgroup")
 	if err != nil {

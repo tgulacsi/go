@@ -33,13 +33,14 @@ import (
 // Log is discarded by default
 var Log = func(...interface{}) error { return nil }
 
-// loffice executable name
+// Loffice executable name
 var Loffice = "loffice"
 
-// child timeout, in seconds
+// Timeout of the child, in seconds
 var Timeout = 300
 
 // Convert converts from srcFn to dstFn, into the given format.
+// Convert from srcFn to dstFn files, with the given format.
 // Either filenames can be empty or "-" which treated as stdin/stdout
 func Convert(srcFn, dstFn, format string) error {
 	tempDir, err := ioutil.TempDir("", filepath.Base(srcFn))

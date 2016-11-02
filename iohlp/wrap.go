@@ -54,6 +54,9 @@ func WrappingReader(r io.Reader, width uint) io.Reader {
 	return pr
 }
 
+// ErrWriter is a writer with a "stuck-in" error policy: writes normally,
+// until the underlying io.Writer returns error; then after it always returns
+// that error.
 type ErrWriter struct {
 	io.Writer
 	err error
@@ -67,4 +70,6 @@ func (w *ErrWriter) Write(p []byte) (int, error) {
 	n, w.err = w.Writer.Write(p)
 	return n, w.err
 }
+
+// Err returns the first error the underlying io.Writer returned.
 func (w *ErrWriter) Err() error { return w.err }

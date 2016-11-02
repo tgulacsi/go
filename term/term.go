@@ -21,12 +21,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/go-kit/kit/log/term"
 	"github.com/tgulacsi/go/iohlp"
 	"github.com/tgulacsi/go/text"
 	"golang.org/x/text/encoding"
-	"github.com/go-kit/kit/log/term"
 )
 
+// IsTTY contains whether the stdout is a terminal.
 var IsTTY = term.IsTerminal(os.Stdout)
 
 // GetTTYEncoding returns the TTY encoding, or UTF-8 if not found.

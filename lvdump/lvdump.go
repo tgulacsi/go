@@ -15,6 +15,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+// Log is used for logging.
 var Log = func(...interface{}) error { return nil }
 
 // Dump records.

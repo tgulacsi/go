@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package loghlp collects some small log15 handlers
+// Package tsthlp collects some small log15 handlers for testing.
 package tsthlp
 
 import (

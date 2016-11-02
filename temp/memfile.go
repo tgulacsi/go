@@ -28,12 +28,16 @@ import (
 	"github.com/pkg/errors"
 )
 
+// MaxInMemorySlurp is the threshold for in-memory or on-disk storage
+// for slurped data.
 var MaxInMemorySlurp = 4 << 20 // 4MB.  *shrug*.
 
+// ReaderAt is the interface for ReadAt - read at position, without moving pointer.
 type ReaderAt interface {
 	ReadAt(p []byte, off int64) (n int, err error)
 }
 
+// Stater is the interface for os.Stat.
 type Stater interface {
 	Stat() (os.FileInfo, error)
 }
@@ -54,11 +58,12 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 		return rsc, nil
 	}
 
-	ms := NewMemorySlurper(blobRef)
+	ms := NewMemorySlurper(blobRef).(*memorySlurper)
 	n, err := io.Copy(ms, r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "copy from %v to %v", r, ms)
 	}
+
 	if ms.stat == nil {
 		if ms.file == nil {
 			ms.stat = dummyFileInfo{name: "memory", size: n, mtime: time.Now()}
@@ -92,11 +97,11 @@ type ReadWriteSeekCloser interface {
 	io.Writer
 }
 
-// NewMemorySlurper returns an *memorySlurper, which implements an,
-// ReadWriteSeekCloser, with some important constraints:
+// NewMemorySlurper returns an ReadWriteSeekCloser,
+// with some important constraints:
 // you can Write into it, but whenever you call Read or Seek on it,
 // Write is forbidden, will return an error.
-func NewMemorySlurper(blobRef string) *memorySlurper {
+func NewMemorySlurper(blobRef string) ReadWriteSeekCloser {
 	return &memorySlurper{
 		blobRef: filepath.Base(blobRef),
 		buf:     new(bytes.Buffer),

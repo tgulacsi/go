@@ -121,7 +121,7 @@ type Address struct {
 
 var wsRepl = strings.NewReplacer("\t", " ", "  ", " ")
 
-// Parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
+// ParseAddress parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
 func ParseAddress(address string) (*Address, error) {
 	//return newAddrParser(address).parseAddress()
 	address = wsRepl.Replace(address)
@@ -200,6 +200,7 @@ func (a *Address) String() string {
 	return b.String()
 }
 
+// WordDecoder decodes mime rords.
 var WordDecoder = &mime.WordDecoder{
 	CharsetReader: func(charset string, input io.Reader) (io.Reader, error) {
 		//enc, err := ianaindex.MIME.Get(charset)
@@ -210,6 +211,8 @@ var WordDecoder = &mime.WordDecoder{
 		return transform.NewReader(input, enc.NewDecoder()), nil
 	},
 }
+
+// AddressParser is a mail address parser.
 var AddressParser = &mail.AddressParser{WordDecoder: WordDecoder}
 
 type splitter struct {
@@ -272,6 +275,7 @@ func HeadDecode(head string) string {
 	return res
 }
 
+// DecodeRFC2047Word decodes the string as RFC2407.
 func DecodeRFC2047Word(s string) (string, error) {
 	fields := strings.Split(s, "?")
 	if len(fields) != 5 || fields[0] != "=" || fields[4] != "=" {

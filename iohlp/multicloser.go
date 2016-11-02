@@ -60,6 +60,7 @@ var _ = io.Closer(CloserFunc(nil))
 // CloserFunc implements the io.Closer.
 type CloserFunc func() error
 
+// Close calls the function.
 func (cf CloserFunc) Close() error {
 	return cf()
 }

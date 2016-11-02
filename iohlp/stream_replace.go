@@ -65,8 +65,10 @@ func NewBytesReplacer(patternReplacementPairs ...[]byte) BytesReplacer {
 	return BytesReplacer(pairs)
 }
 
+// BytesReplacer is a Replacer for bytes.
 type BytesReplacer [][2][]byte
 
+// Replace as strings.Replacer would do.
 func (br BytesReplacer) Replace(p []byte) []byte {
 	for _, pair := range br {
 		p = bytes.Replace(p, pair[0], pair[1], -1)

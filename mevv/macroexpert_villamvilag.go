@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package mevv: a MacroExpert VillámVilág szolgáltatásának elérése.
+// Package mevv is for accessing "MacroExpert VillámVilág" service.
 package mevv
 
 import (
@@ -41,23 +41,10 @@ import (
 
 const macroExpertURL = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
 
+// Log is used for logging.
 var Log = func(...interface{}) error { return nil }
 
-/*
-GetPDF visszaad egy PDF-et a megadott címen és koordinátákon
-
-    address M varchar(45) Keresett cím házszámmal
-    lat M float(8,5) Szélesség pl.: ‘47.17451’
-    lng M float(8,5) Hosszúság pl.: ‘17.04234’
-    from_date M date(YYYY-MM-DD) Kezdő datum pl.: ‘2014-11-25’
-    to_date M date(YYYY-MM-DD) Záró datum pl.: ‘2014-11-29’
-    contr_id O varchar(25) Kárszám pl.: ‘KSZ-112233’
-    needThunders O varchar(1) Villám adatokat kérek ‘1’–kérem, ‘0’-nem
-    needRains O varchar(1) Csapadék adatokat kérek ‘1’–kérem, ‘0’-nem
-    needWinds O varchar(1) Szél adatokat kérek ‘1’ – kérem, ‘0’-nem
-    needRainsInt O varchar(1) Fix - ‘0’
-    language O varchar(2) Fix - ‘hu’
-*/
+// Options are the space/time coordinates and the required details.
 type Options struct {
 	Address                                                string
 	Lat, Lng                                               float64
@@ -75,6 +62,20 @@ func init() {
 	client.Transport = tr
 }
 
+// GetPDF returns the meteorological data in PDF form.
+/*
+address M varchar(45) Keresett cím házszámmal
+lat M float(8,5) Szélesség pl.: ‘47.17451’
+lng M float(8,5) Hosszúság pl.: ‘17.04234’
+from_date M date(YYYY-MM-DD) Kezdő datum pl.: ‘2014-11-25’
+to_date M date(YYYY-MM-DD) Záró datum pl.: ‘2014-11-29’
+contr_id O varchar(25) Kárszám pl.: ‘KSZ-112233’
+needThunders O varchar(1) Villám adatokat kérek ‘1’–kérem, ‘0’-nem
+needRains O varchar(1) Csapadék adatokat kérek ‘1’–kérem, ‘0’-nem
+needWinds O varchar(1) Szél adatokat kérek ‘1’ – kérem, ‘0’-nem
+needRainsInt O varchar(1) Fix - ‘0’
+language O varchar(2) Fix - ‘hu’
+*/
 func GetPDF(
 	ctx context.Context,
 	username, password string,
@@ -114,7 +115,7 @@ func GetPDF(
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return nil, "", "", errors.New("Authentication error: " + resp.Status)
 		}
-		return nil, "", "", errors.New(fmt.Sprintf("%s: egyéb hiba (%s)", resp.Status, req.URL))
+		return nil, "", "", errors.Errorf("%s: egyéb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -130,7 +131,7 @@ func GetPDF(
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
 		buf, _ := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, "", "", errors.New(fmt.Sprintf("998: %s", buf))
+		return nil, "", "", errors.Errorf("998: %s", buf)
 	}
 	var fn string
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
@@ -176,6 +177,7 @@ func fmtBool(b bool) string {
 
 var macroExpertUserPassw string
 
+// ReadUserPassw reads the user/passw from the given file.
 func ReadUserPassw(filename string) (string, string, error) {
 	fh, err := os.Open(filename)
 	if err != nil {

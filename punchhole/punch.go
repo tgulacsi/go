@@ -24,7 +24,7 @@ import (
 
 var errNoPunch = errors.New("punchHole not supported")
 
-// punchHole, if non-nil, punches a hole in f from offset to offset+size.
+// PunchHole punches a hole in f from offset to offset+size, if non-nil.
 var PunchHole func(file *os.File, offset, size int64) error
 
 type zeroReader struct {

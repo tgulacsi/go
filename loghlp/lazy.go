@@ -51,6 +51,7 @@ func LazyW(f func(io.Writer)) fmt.Stringer {
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 1024)) }}
 
+// StringerFunc is a function which returns a string.
 type StringerFunc func() string
 
 func (f StringerFunc) String() string { return f() }

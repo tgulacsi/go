@@ -2,7 +2,7 @@
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
-// orahlp package contains Oracle DB helper functions
+// Package orahlp contains Oracle DB helper functions
 package orahlp
 
 import (
@@ -15,6 +15,7 @@ import (
 	"github.com/tgulacsi/go/dber"
 )
 
+// SplitDSN splits the DSN (user/passw@sid).
 func SplitDSN(dsn string) (username, password, sid string) {
 	if strings.HasPrefix(dsn, "/@") {
 		return "", "", dsn[2:]
@@ -28,6 +29,7 @@ func SplitDSN(dsn string) (username, password, sid string) {
 	return
 }
 
+// Column is the described column.
 type Column struct {
 	Schema, Name                   string
 	Type, Length, Precision, Scale int
@@ -104,11 +106,13 @@ END;`, qry, &res,
 	return cols, nil
 }
 
+// Version data.
 type Version struct {
 	// major.maintenance.application-server.component-specific.platform-specific
 	Major, Maintenance, AppServer, Component, Platform int8
 }
 
+// GetVersion returns the Oracle product version.
 func GetVersion(db dber.Queryer) (Version, error) {
 	var s sql.NullString
 	if err := db.QueryRow("SELECT MIN(VERSION) FROM product_component_version " +

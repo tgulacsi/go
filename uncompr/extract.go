@@ -62,6 +62,7 @@ func (ze zipExtracter) Name() string {
 // Close of zipExtracter does nothing.
 func (ze zipExtracter) Close() error { return nil }
 
+// NewZipLister slurps the reader and returns a Listere for the zip.
 func NewZipLister(r io.Reader) (Lister, error) {
 	rsc, err := temp.MakeReadSeekCloser("", r)
 	if err != nil {

@@ -23,10 +23,10 @@ import (
 
 const (
 	// FALLOC_FL_KEEP_SIZE: default is extend size
-	falloc_fl_keep_size = 0x01
+	fallocFlKeepSize = 0x01
 
 	// FALLOC_FL_PUNCH_HOLE: de-allocates range
-	falloc_fl_punch_hole = 0x02
+	fallocFlPunchHole = 0x02
 )
 
 func init() {
@@ -37,7 +37,7 @@ func init() {
 // measuring "size" bytes
 func punchHoleLinux(file *os.File, offset int64, size int64) error {
 	err := syscall.Fallocate(int(file.Fd()),
-		falloc_fl_punch_hole|falloc_fl_keep_size,
+		fallocFlPunchHole|fallocFlKeepSize,
 		offset, size)
 	if err == syscall.ENOSYS || err == syscall.EOPNOTSUPP {
 		return errNoPunch

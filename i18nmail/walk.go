@@ -25,6 +25,7 @@ import (
 	"github.com/tgulacsi/go/temp"
 )
 
+// MaxWalkDepth is the maximum depth Walk will descend.
 const MaxWalkDepth = 32
 
 var (
@@ -40,7 +41,7 @@ var (
 	// SaveBadInput is true if we should save bad input
 	SaveBadInput = false
 
-	// ErrStop
+	// ErrStopWalk shall be returned by the TodoFunc to stop the walk silently.
 	ErrStopWalk = errors.New("Stop the walk")
 )
 

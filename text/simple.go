@@ -124,6 +124,7 @@ func GetEncoding(name string) encoding.Encoding {
 	return nil
 }
 
+// ISO8859_1 is the Encoding for ISO-8859-1
 var ISO8859_1 encoding.Encoding = cmap("ISO8859-1")
 
 type cmap string

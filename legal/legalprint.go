@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package legalprint provides a printing helper for the legal package.
+// Package legal provides a printing helper for the legal package.
 package legal
 
 import (

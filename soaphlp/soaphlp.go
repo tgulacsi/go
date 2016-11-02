@@ -17,9 +17,16 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Log is the logging function in use.
 var Log = func(...interface{}) error { return nil }
 
-func NewClient(endpointURL, soapActionBase string, cl *http.Client) *soapClient {
+// Caller is the client interface.
+type Caller interface {
+	Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, io.Closer, error)
+}
+
+// NewClient returns a new client for the given endpoint.
+func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
 	if cl == nil {
 		cl = http.DefaultClient
 	}
@@ -93,6 +100,7 @@ func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.R
 	return d, resp.Body, io.EOF
 }
 
+// GetLog returns the Log function from the Context.
 func GetLog(ctx context.Context) func(keyvalue ...interface{}) error {
 	if Log, _ := ctx.Value("Log").(func(...interface{}) error); Log != nil {
 		return Log
