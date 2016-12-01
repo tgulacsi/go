@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"gopkg.in/rana/ora.v3"
+	"gopkg.in/rana/ora.v4"
 )
 
 func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, oneTx bool) (int, error) {
@@ -23,6 +23,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 	if err != nil {
 		return 0, err
 	}
+	log.Printf("st=%#v", st)
 	var (
 		stmt     *ora.Stmt
 		tx       *ora.Tx
@@ -71,6 +72,7 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 		for _, s := range st.FixParams {
 			values = append(values, s)
 		}
+		//log.Printf("%q %#v", st.Qry, values)
 		if _, err = stmt.Exe(values...); err != nil {
 			log.Printf("values=%d ParamCount=%d", len(values), st.ParamCount)
 			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
@@ -126,6 +128,46 @@ type Statement struct {
 
 func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error) {
 	var st Statement
+	args := make([]Arg, 0, 32)
+	fun = strings.TrimSpace(fun)
+
+	if strings.HasPrefix(fun, "BEGIN ") && strings.HasSuffix(fun, "END;") {
+		st.Qry = fun
+		if i := strings.IndexByte(fun, '('); i >= 0 && strings.Contains(fun[5:i], ":=") { //function
+			st.Returns = true
+		}
+		var nm []byte
+		var state uint8
+		names := make([]string, 0, strings.Count(fun, ":"))
+		strings.Map(func(r rune) rune {
+			switch state {
+			case 0:
+				if r == ':' {
+					state = 1
+					nm = nm[:0]
+				}
+			case 1:
+				if 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' ||
+					'0' <= r && r <= '9' ||
+					len(nm) > 0 && r == '_' {
+					nm = append(nm, byte(r))
+				} else {
+					names = append(names, string(nm))
+					nm = nm[:0]
+					state = 0
+				}
+			}
+			return -1
+		},
+			fun)
+		if len(nm) > 0 {
+			names = append(names, string(nm))
+		}
+		st.ParamCount = len(names)
+		st.Converters = make([]ConvFunc, len(names))
+		return st, nil
+	}
+
 	parts := strings.Split(fun, ".")
 	qry := "SELECT argument_name, data_type, in_out, data_length, data_precision, data_scale FROM "
 	params := make([]interface{}, 0, 3)
@@ -148,13 +190,12 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		return st, errors.Wrapf(err, qry)
 	}
 
-	type Arg struct {
-		Name, Type, InOut        string
-		Length, Precision, Scale int
-	}
-	args := make([]Arg, 0, 32)
 	for rset.Next() {
-		arg := Arg{Name: rset.Row[0].(string), Type: rset.Row[1].(string), InOut: rset.Row[2].(string)}
+		arg := Arg{
+			Name:  rset.Row[0].(string),
+			Type:  rset.Row[1].(string),
+			InOut: rset.Row[2].(string),
+		}
 		if rset.Row[3] != nil {
 			arg.Length = int(rset.Row[3].(float64))
 			if rset.Row[4] != nil {
@@ -167,7 +208,7 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		args = append(args, arg)
 	}
 	if rset.Err != nil {
-		return st, errors.Wrapf(rset.Err, qry)
+		return st, errors.Wrap(rset.Err(), qry)
 	}
 	if len(args) == 0 {
 		return st, errors.New(fun + " has no arguments!")
@@ -220,6 +261,11 @@ ArgLoop:
 	st.ParamCount = i
 	st.Qry += fun + "(" + strings.Join(vals, ", ") + "); END;"
 	return st, err
+}
+
+type Arg struct {
+	Name, Type, InOut        string
+	Length, Precision, Scale int
 }
 
 func strToDate(s string) (interface{}, error) {
@@ -275,3 +321,5 @@ func deref(in []interface{}) []string {
 	}
 	return out
 }
+
+// vim: set fileencoding=utf-8 noet:

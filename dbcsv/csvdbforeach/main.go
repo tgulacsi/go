@@ -19,17 +19,17 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/tgulacsi/go/orahlp"
-
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 
-	"gopkg.in/rana/ora.v3"
+	"gopkg.in/rana/ora.v4"
 )
 
 var (
 	stdout = io.Writer(os.Stdout)
 	stderr = io.Writer(os.Stderr)
+
+	//Log = func(keyvals ...interface{}) error { return nil }
 )
 
 func main() {
@@ -59,6 +59,7 @@ func main() {
 	flagCharset := flag.String("charset", "utf-8", "input charset")
 	flagSkip := flag.Int("skip", 1, "skip first N rows")
 	flagColumns := flag.String("columns", "", "column numbers to use, separated by comma, in param order, starts with 1")
+	//flagVerbose := flag.Bool("v", false, "verbose logging")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `%s
 
@@ -220,24 +221,17 @@ Usage:
 		rows = filtered
 	}
 
-	env, err := ora.OpenEnv(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer env.Close()
 	dsn := os.ExpandEnv(*flagConnect)
-	username, password, sid := orahlp.SplitDSN(dsn)
-	srv, err := env.OpenSrv(&ora.SrvCfg{Dblink: sid})
+	sesPool, err := ora.NewPool(dsn, 1)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer srv.Close()
-
-	ses, err := srv.OpenSes(&ora.SesCfg{Username: username, Password: password})
+	defer sesPool.Close()
+	ses, err := sesPool.Get()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer ses.Close()
+	defer sesPool.Put(ses)
 
 	var n int
 	start := time.Now()
@@ -253,3 +247,5 @@ Usage:
 	}
 	log.Printf("Processed %d rows in %s.", n, d)
 }
+
+// vim: set fileencoding=utf-8 noet:
