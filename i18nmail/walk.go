@@ -132,7 +132,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		b := make([]byte, 4096)
 		n, _ := io.ReadAtLeast(br, b, 2048)
 		infof("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
-		return errors.Wrapf(e, "WalkMail")
+		return errors.WithMessage(e, "WalkMail")
 	}
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
@@ -316,7 +316,7 @@ func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	))
 	if e != nil && m == nil {
 		infof("ERROR ReadMessage: %v", e)
-		return nil, "", e
+		return nil, "", errors.Wrap(e, buf.String())
 	}
 	h.Write(bytes.TrimSpace(buf.Bytes()))
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil
