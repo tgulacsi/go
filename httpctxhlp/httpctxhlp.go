@@ -18,12 +18,13 @@
 package httpctxhlp
 
 import (
+	"crypto/rand"
 	"net/http"
 	"time"
 
 	"golang.org/x/net/context"
 
-	"github.com/renstrom/shortuuid"
+	"github.com/oklog/ulid"
 	"github.com/spkg/httpctx"
 	"github.com/tgulacsi/go/loghlp/kitloghlp"
 )
@@ -37,12 +38,12 @@ func AddLogger(Log func(...interface{}) error, h httpctx.Handler) httpctx.Handle
 				id, _ = idI.(string)
 			}
 			if id == "" {
-				id = shortuuid.New()
+				id = NewULID().String()
 				ctx = context.WithValue(ctx, "reqid", id)
 			}
 			Log := Log
 			if lg, _ := ctx.Value("Log").(func(...interface{}) error); lg != nil {
-				Log = kigloghlp.With(Log, "reqid", id)
+				Log = kitloghlp.With(Log, "reqid", id)
 				ctx = context.WithValue(ctx, "Log", Log)
 			}
 			w.Header().Set("X-Req-Id", id)
@@ -55,13 +56,17 @@ func AddLogger(Log func(...interface{}) error, h httpctx.Handler) httpctx.Handle
 		})
 }
 
+func NewULID() ulid.ULID {
+	return ulid.MustNew(ulid.Now(), rand.Reader)
+}
+
 func GetLog(Log func(...interface{}) error, ctx context.Context) (func(...interface{}) error, context.Context) {
 	if lgI, _ := ctx.Value("Log").(func(...interface{}) error); lgI != nil {
 		Log = lgI
 	}
 	id, _ := ctx.Value("reqid").(string)
 	if id == "" {
-		id = shortuuid.New()
+		id = NewULID().String()
 		ctx = context.WithValue(ctx, "reqid", id)
 		Log = kitloghlp.With(Log, "reqid", id)
 	}
