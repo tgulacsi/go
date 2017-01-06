@@ -74,6 +74,13 @@ func TestMapToSlice(t *testing.T) {
 			       F_ssz = 0 AND F_lev_azon = /*:lev_azon*/:3)`,
 			[]interface{}{"dazon", "lev_azon", "lev_azon"},
 		},
+
+		{
+			`INSERT INTO PERSON(NAME) VALUES('hello') RETURNING ID INTO :ID`,
+			`INSERT INTO PERSON(NAME) VALUES('hello') RETURNING ID INTO :1`,
+			[]interface{}{"ID"},
+		},
+
 		{
 			`DECLARE
   i1 PLS_INTEGER;

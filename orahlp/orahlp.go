@@ -138,6 +138,19 @@ func MapToSlice(qry string, metParam func(string) interface{}) (string, []interf
 	var buf bytes.Buffer
 	state, p, last := 0, 0, 0
 	var prev rune
+
+	Add := func(i int) {
+		state = 0
+		if i-p <= 1 { // :=
+			return
+		}
+		arr = append(arr, metParam(qry[p+1:i]))
+		param := fmt.Sprintf(":%d", len(arr))
+		buf.WriteString(qry[last:p])
+		buf.WriteString(param)
+		last = i
+	}
+
 	for i, r := range qry {
 		switch state {
 		case 2:
@@ -168,18 +181,13 @@ func MapToSlice(qry string, metParam func(string) interface{}) (string, []interf
 			if !('A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' ||
 				(i-p > 1 && ('0' <= r && r <= '9' || r == '$' || r == '_' || r == '#'))) {
 
-				state = 0
-				if i-p <= 1 { // :=
-					continue
-				}
-				arr = append(arr, metParam(qry[p+1:i]))
-				param := fmt.Sprintf(":%d", len(arr))
-				buf.WriteString(qry[last:p])
-				buf.WriteString(param)
-				last = i
+				Add(i)
 			}
 		}
 		prev = r
+	}
+	if state == 1 {
+		Add(len(qry))
 	}
 	if last <= len(qry)-1 {
 		buf.WriteString(qry[last:])
