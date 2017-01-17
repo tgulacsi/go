@@ -67,8 +67,10 @@ BEGIN
                   CHR(10);
       v_idx := rec_tab.NEXT(v_idx);
     END LOOP;
-  DBMS_SQL.CLOSE_CURSOR(c);
+	--Loop ended, close cursor
+    DBMS_SQL.CLOSE_CURSOR(c);
   EXCEPTION WHEN OTHERS THEN NULL;
+    --Error happened, close cursor anyway!
     DBMS_SQL.CLOSE_CURSOR(c);
 	RAISE;
   END;
