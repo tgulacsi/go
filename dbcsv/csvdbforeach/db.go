@@ -190,6 +190,7 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		return st, errors.Wrapf(err, qry)
 	}
 
+	log.Println(qry, params)
 	for rset.Next() {
 		arg := Arg{
 			Name:  rset.Row[0].(string),
@@ -207,8 +208,8 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		}
 		args = append(args, arg)
 	}
-	if rset.Err != nil {
-		return st, errors.Wrap(rset.Err(), qry)
+	if err := rset.Err(); err != nil {
+		return st, errors.Wrap(err, qry)
 	}
 	if len(args) == 0 {
 		return st, errors.New(fun + " has no arguments!")

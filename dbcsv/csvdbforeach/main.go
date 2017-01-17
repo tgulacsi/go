@@ -94,14 +94,16 @@ Usage:
 	}{FileName: flag.Arg(0)}
 	var fixParams [][2]string
 	var buf bytes.Buffer
-	for _, tup := range strings.Split(*flagFixParams, ",") {
-		parts := strings.SplitN(tup, "=>", 2)
-		tpl := template.Must(template.New(parts[0]).Parse(parts[1]))
-		buf.Reset()
-		if err := tpl.Execute(&buf, ctxData); err != nil {
-			log.Fatal(err)
+	if strings.TrimSpace(*flagFixParams) != "" {
+		for _, tup := range strings.Split(*flagFixParams, ",") {
+			parts := strings.SplitN(tup, "=>", 2)
+			tpl := template.Must(template.New(parts[0]).Parse(parts[1]))
+			buf.Reset()
+			if err := tpl.Execute(&buf, ctxData); err != nil {
+				log.Fatal(err)
+			}
+			fixParams = append(fixParams, [2]string{parts[0], buf.String()})
 		}
-		fixParams = append(fixParams, [2]string{parts[0], buf.String()})
 	}
 
 	inp := os.Stdin
