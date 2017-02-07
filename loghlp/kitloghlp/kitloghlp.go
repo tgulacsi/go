@@ -20,6 +20,7 @@ package kitloghlp
 import (
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/go-kit/kit/log"
 )
@@ -27,14 +28,15 @@ import (
 // LogFunc is the Log function.
 type LogFunc func(...interface{}) error
 
-// New returns a log.Context, using Logfmt logger on w.
-func New(w io.Writer) *log.Context {
+// New returns a LogContext, using Logfmt logger on w.
+func New(w io.Writer) *LogContext {
 	return NewContext(log.NewLogfmtLogger(w))
 }
 
 // NewContext wraps the given logger with Stringify, and adds a default ts timestamp.
-func NewContext(logger log.Logger) *log.Context {
-	return log.NewContext(Stringify{logger}).With("ts", log.DefaultTimestamp)
+func NewContext(logger log.Logger) *LogContext {
+	return (&LogContext{Context: log.NewContext(Stringify{logger})}).
+		With("ts", log.DefaultTimestamp)
 }
 
 // With appends the given plus keyvals to the LogFunc.
@@ -98,3 +100,40 @@ type StringWrap struct {
 func (sw StringWrap) String() string {
 	return fmt.Sprintf("%v", sw.Value)
 }
+
+type LogContext struct {
+	*log.Context
+	keys []string
+}
+
+func (c *LogContext) With(keyvals ...interface{}) *LogContext {
+	keys := c.keys[:len(c.keys):len(c.keys)]
+	for i := 0; i < len(keyvals); i += 2 {
+		var k string
+		switch x := keyvals[i].(type) {
+		case string:
+			k = x
+		case fmt.Stringer:
+			k = x.String()
+		default:
+			k = fmt.Sprintf("%v", x)
+		}
+		j := sort.SearchStrings(keys, k)
+		if !(j < len(keys) && keys[j] == k) {
+			keys = append(append(keys[:j], k), keys[j:]...)
+		}
+	}
+	return &LogContext{
+		Context: c.Context.With(keyvals...),
+		keys:    keys,
+	}
+}
+func (c *LogContext) Keys() []string {
+	return c.keys
+}
+func (c *LogContext) HasKey(k string) bool {
+	j := sort.SearchStrings(c.keys, k)
+	return j < len(c.keys) && c.keys[j] == k
+}
+
+// vim: set fileencoding=utf-8 noet:
