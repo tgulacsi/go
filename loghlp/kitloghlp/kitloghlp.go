@@ -35,8 +35,7 @@ func New(w io.Writer) *LogContext {
 
 // NewContext wraps the given logger with Stringify, and adds a default ts timestamp.
 func NewContext(logger log.Logger) *LogContext {
-	return (&LogContext{Context: log.NewContext(Stringify{logger})}).
-		With("ts", log.DefaultTimestamp)
+	return (&LogContext{Context: log.NewContext(Stringify{logger})})
 }
 
 // With appends the given plus keyvals to the LogFunc.
@@ -108,16 +107,9 @@ type LogContext struct {
 
 func (c *LogContext) With(keyvals ...interface{}) *LogContext {
 	keys := c.keys[:len(c.keys):len(c.keys)]
+	keysToString(keyvals)
 	for i := 0; i < len(keyvals); i += 2 {
-		var k string
-		switch x := keyvals[i].(type) {
-		case string:
-			k = x
-		case fmt.Stringer:
-			k = x.String()
-		default:
-			k = fmt.Sprintf("%v", x)
-		}
+		k := keyvals[i].(string)
 		j := sort.SearchStrings(keys, k)
 		if !(j < len(keys) && keys[j] == k) {
 			keys = append(append(keys[:j], k), keys[j:]...)
@@ -128,12 +120,37 @@ func (c *LogContext) With(keyvals ...interface{}) *LogContext {
 		keys:    keys,
 	}
 }
+func (c *LogContext) WithNoDup(keyvals ...interface{}) *LogContext {
+	keysToString(keyvals)
+	for i := len(keyvals) - 2; i >= 0; i -= 2 {
+		k := keyvals[i].(string)
+		if j := sort.SearchStrings(c.keys, k); j < len(c.keys) && c.keys[j] == k {
+			keyvals[i], keyvals[i+1] = keyvals[0], keyvals[1]
+			keyvals = keyvals[2:]
+			i += 2
+		}
+	}
+	return c.With(keyvals...)
+}
+
 func (c *LogContext) Keys() []string {
 	return c.keys
 }
 func (c *LogContext) HasKey(k string) bool {
 	j := sort.SearchStrings(c.keys, k)
 	return j < len(c.keys) && c.keys[j] == k
+}
+
+func keysToString(keyvals ...interface{}) {
+	for i := 0; i < len(keyvals); i += 2 {
+		switch x := keyvals[i].(type) {
+		case string:
+		case fmt.Stringer:
+			keyvals[i] = x.String()
+		default:
+			keyvals[i] = fmt.Sprintf("%v", x)
+		}
+	}
 }
 
 // vim: set fileencoding=utf-8 noet:
