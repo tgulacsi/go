@@ -46,12 +46,9 @@ func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc 
 }
 
 // NewTestLogger returns a Context wrapping a testing.TB.Log.
-func NewTestLogger(t testLogger) *log.Context {
-	return log.NewContext(
-		Stringify{log.NewLogfmtLogger(testLog{t})},
-	).With(
-		"file", log.Caller(4),
-	)
+func NewTestLogger(t testLogger) *LogContext {
+	return NewContext(log.NewLogfmtLogger(testLog{t})).
+		With("file", log.Caller(4))
 }
 
 type testLogger interface {
