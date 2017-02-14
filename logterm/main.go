@@ -69,17 +69,18 @@ func Main() error {
 		},
 	}
 	samples := &memoryStorage{
-		URL:     u,
-		types:   make(map[string]metricType),
-		samples: make(map[model.Fingerprint]gauge),
-		filter:  func(m model.Metric) bool { return pattern.FindString(m.String()) != "" },
+		URL:        u,
+		types:      make(map[string]metricType),
+		gauges:     make(map[model.Fingerprint]*gauge),
+		filter:     func(m model.Metric) bool { return pattern.FindString(m.String()) != "" },
+		newUIGauge: func(_ string) func(int) { return func(_ int) {} },
 	}
 	mngr := retrieval.NewTargetManager(samples)
 	mngr.ApplyConfig(cfg)
 	defer mngr.Stop()
 	go mngr.Run()
 
-	if true {
+	if false {
 		time.Sleep(1 * time.Second)
 		log.Println(mngr.Targets())
 		select {}
@@ -94,6 +95,28 @@ func Main() error {
 			mngr.Stop()
 			ui.StopLoop()
 		})
+
+		sGrp := ui.NewSparklines()
+		sGrp.Height = 8 * 3
+		sGrp.Width = ui.TermWidth()
+		samples.newUIGauge = func(name string) func(int) {
+			sl := ui.NewSparkline()
+			sl.Title = name
+			sl.Height = 2
+			sl.Data = make([]int, sGrp.Width)
+			sGrp.Add(sl)
+
+			return func(p int) {
+				copy(sl.Data[0:], sl.Data[1:])
+				sl.Data[len(sl.Data)-1] = p
+			}
+		}
+
+		go func() {
+			for range time.Tick(*flagInterval) {
+				ui.Render(sGrp)
+			}
+		}()
 
 		ui.Loop()
 	}
@@ -111,15 +134,18 @@ const (
 )
 
 type gauge struct {
-	*model.Sample
-	*ui.Gauge
+	Name       string
+	Type       metricType
+	Last       model.SampleValue
+	SetPercent func(int)
 }
 type memoryStorage struct {
 	*url.URL
 	*http.Client
-	types   map[string]metricType
-	samples map[model.Fingerprint]gauge
-	filter  func(model.Metric) bool
+	types      map[string]metricType
+	gauges     map[model.Fingerprint]*gauge
+	filter     func(model.Metric) bool
+	newUIGauge func(name string) (SetPercent func(int))
 }
 
 func (a *memoryStorage) NeedsThrottling() bool { return false }
@@ -128,32 +154,33 @@ func (a *memoryStorage) Append(sample *model.Sample) error {
 	if !a.filter(sample.Metric) {
 		return nil
 	}
-	log.Println(sample.Metric, sample.Value)
 	k := sample.Metric.Fingerprint()
-	if g, ok := a.samples[k]; ok {
-		g.Sample = sample
-		g.Percent = int(sample.Value * 1000)
-		ui.Render(g)
-		return nil
-	}
-	s := sample.Metric.String()
-	if i := strings.IndexByte(s, '{'); i >= 0 {
-		s = s[:i]
-	}
-	t, err := a.GetTypeOf(s)
-	if err != nil {
-		return err
-	}
-	log.Printf("%s=%d", s, t)
+	g, ok := a.gauges[k]
+	if !ok {
+		full := sample.Metric.String()
+		base := full
+		if i := strings.IndexByte(base, '{'); i >= 0 {
+			base = base[:i]
+		}
+		t, err := a.GetTypeOf(base)
+		if err != nil {
+			return err
+		}
 
-	g := gauge{
-		Sample: sample,
-		Gauge:  ui.NewGauge(),
+		g = &gauge{Name: full, Type: t, SetPercent: a.newUIGauge(full)}
+		a.gauges[k] = g
 	}
-	g.Width = 100
-	g.BorderLabel = g.Sample.String()
-	ui.Render(g)
-	a.samples[k] = g
+
+	v := sample.Value
+	if g.Type == Counter || g.Type == Untyped {
+		if g.Last == 0 {
+			v = 0
+		} else {
+			v -= g.Last
+		}
+	}
+	g.SetPercent(int(v))
+	g.Last = sample.Value
 	return nil
 }
 
