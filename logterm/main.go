@@ -4,14 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
-	ui "github.com/gizak/termui"
+	ui "github.com/jroimartin/gocui"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
@@ -28,7 +31,7 @@ func main() {
 
 func Main() error {
 	flagAddress := flag.String("addr", ":9100", "Prometheus metrics address")
-	flagInterval := flag.Duration("interval", time.Second, "scrape interval")
+	flagInterval := flag.Duration("interval", 5*time.Second, "scrape interval")
 	flag.Parse()
 
 	if !strings.Contains(*flagAddress, "/") {
@@ -42,7 +45,11 @@ func Main() error {
 		return errors.Wrap(err, *flagAddress)
 	}
 
-	pattern := regexp.MustCompile(strings.Join(flag.Args(), "|"))
+	patternS := strings.Join(flag.Args(), "|")
+	if patternS == "" {
+		patternS = "."
+	}
+	pattern := regexp.MustCompile(patternS)
 
 	cfg := &config.Config{
 		GlobalConfig: config.GlobalConfig{
@@ -69,11 +76,10 @@ func Main() error {
 		},
 	}
 	samples := &memoryStorage{
-		URL:        u,
-		types:      make(map[string]metricType),
-		gauges:     make(map[model.Fingerprint]*gauge),
-		filter:     func(m model.Metric) bool { return pattern.FindString(m.String()) != "" },
-		newUIGauge: func(_ string) func(int) { return func(_ int) {} },
+		URL:    u,
+		types:  make(map[string]metricType),
+		gauges: make(map[model.Fingerprint]*gauge),
+		filter: func(m model.Metric) bool { return pattern.FindString(m.String()) != "" },
 	}
 	mngr := retrieval.NewTargetManager(samples)
 	mngr.ApplyConfig(cfg)
@@ -85,40 +91,103 @@ func Main() error {
 		log.Println(mngr.Targets())
 		select {}
 	} else {
-		if err := ui.Init(); err != nil {
+		g, err := ui.NewGui(ui.OutputNormal)
+		if err != nil {
 			panic(err)
 		}
-		defer ui.Close()
+		defer g.Close()
 
-		ui.Handle("/sys/kbd/q", func(ui.Event) {
-			// press q to quit
-			mngr.Stop()
-			ui.StopLoop()
-		})
-
-		sGrp := ui.NewSparklines()
-		sGrp.Height = 8 * 3
-		sGrp.Width = ui.TermWidth()
-		samples.newUIGauge = func(name string) func(int) {
-			sl := ui.NewSparkline()
-			sl.Title = name
-			sl.Height = 2
-			sl.Data = make([]int, sGrp.Width)
-			sGrp.Add(sl)
-
-			return func(p int) {
-				copy(sl.Data[0:], sl.Data[1:])
-				sl.Data[len(sl.Data)-1] = p
-			}
+		quit := func(g *ui.Gui, v *ui.View) error {
+			go mngr.Stop()
+			return ui.ErrQuit
 		}
 
+		layout := func(g *ui.Gui) error {
+			maxX, maxY := g.Size()
+			if v, err := g.SetView("metrics", 0, 0, maxX-1, maxY/2); err != nil {
+				if err != ui.ErrUnknownView {
+					return err
+				}
+				v.Title = "speed"
+				v.Frame = true
+			}
+			if v, err := g.SetView("stdin", 0, maxY/2, maxX-1, maxY); err != nil {
+				if err != ui.ErrUnknownView {
+					return err
+				}
+				v.Title = "stdin"
+				v.Frame = false
+				v.Autoscroll = true
+			}
+			return nil
+		}
+
+		g.SetManagerFunc(layout)
+
 		go func() {
-			for range time.Tick(*flagInterval) {
-				ui.Render(sGrp)
+			var linesMu sync.RWMutex
+			lines := make([]string, 0, 128)
+			go func() {
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					linesMu.Lock()
+					lines = append(lines, scanner.Text())
+					if cap(lines) == len(lines) {
+						lines = lines[1:]
+					}
+					linesMu.Unlock()
+				}
+			}()
+
+			for range time.Tick(time.Second) {
+				g.Execute(func(g *ui.Gui) error {
+					v, err := g.View("stdin")
+					if err != nil {
+						return err
+					}
+					v.Clear()
+					linesMu.RLock()
+					for _, line := range lines {
+						v.Write([]byte(line))
+						v.Write([]byte{'\n'})
+					}
+					linesMu.RUnlock()
+
+					return nil
+				})
 			}
 		}()
 
-		ui.Loop()
+		go func() {
+			for range time.Tick(*flagInterval) {
+				g.Execute(func(g *ui.Gui) error {
+					v, err := g.View("metrics")
+					if err != nil {
+						return err
+					}
+					v.Clear()
+					samples.RLock()
+					for _, g := range samples.gauges {
+						g.RLock()
+						fmt.Fprintf(v, "%s: %v\n", g.Name, g.SampleValue)
+						g.RUnlock()
+					}
+					samples.RUnlock()
+
+					return nil
+				})
+			}
+		}()
+
+		if err := g.SetKeybinding("", 'q', ui.ModNone, quit); err != nil {
+			panic(err)
+		}
+		if err := g.SetKeybinding("", ui.KeyCtrlC, ui.ModNone, quit); err != nil {
+			panic(err)
+		}
+		if err := g.MainLoop(); err != nil && err != ui.ErrQuit {
+			panic(err)
+		}
 	}
 	return nil
 }
@@ -134,18 +203,18 @@ const (
 )
 
 type gauge struct {
-	Name       string
-	Type       metricType
-	Last       model.SampleValue
-	SetPercent func(int)
+	sync.RWMutex
+	Name string
+	model.SampleValue
+	Type metricType
 }
 type memoryStorage struct {
 	*url.URL
 	*http.Client
-	types      map[string]metricType
-	gauges     map[model.Fingerprint]*gauge
-	filter     func(model.Metric) bool
-	newUIGauge func(name string) (SetPercent func(int))
+	sync.RWMutex
+	types  map[string]metricType
+	gauges map[model.Fingerprint]*gauge
+	filter func(model.Metric) bool
 }
 
 func (a *memoryStorage) NeedsThrottling() bool { return false }
@@ -155,37 +224,38 @@ func (a *memoryStorage) Append(sample *model.Sample) error {
 		return nil
 	}
 	k := sample.Metric.Fingerprint()
+	a.RLock()
 	g, ok := a.gauges[k]
-	if !ok {
-		full := sample.Metric.String()
-		base := full
-		if i := strings.IndexByte(base, '{'); i >= 0 {
-			base = base[:i]
-		}
-		t, err := a.GetTypeOf(base)
-		if err != nil {
-			return err
-		}
-
-		g = &gauge{Name: full, Type: t, SetPercent: a.newUIGauge(full)}
-		a.gauges[k] = g
+	a.RUnlock()
+	if ok {
+		g.Lock()
+		g.SampleValue = sample.Value
+		g.Unlock()
+		return nil
+	}
+	full := sample.Metric.String()
+	base := full
+	if i := strings.IndexByte(base, '{'); i >= 0 {
+		base = base[:i]
+	}
+	t, err := a.GetTypeOf(base)
+	if err != nil {
+		return err
 	}
 
-	v := sample.Value
-	if g.Type == Counter || g.Type == Untyped {
-		if g.Last == 0 {
-			v = 0
-		} else {
-			v -= g.Last
-		}
-	}
-	g.SetPercent(int(v))
-	g.Last = sample.Value
+	g = &gauge{SampleValue: sample.Value, Type: t, Name: full}
+	a.Lock()
+	a.gauges[k] = g
+	a.Unlock()
+
 	return nil
 }
 
 func (a *memoryStorage) GetTypeOf(s string) (metricType, error) {
-	if t, ok := a.types[s]; ok {
+	a.RLock()
+	t, ok := a.types[s]
+	a.RUnlock()
+	if ok {
 		return t, nil
 	}
 
@@ -199,6 +269,8 @@ func (a *memoryStorage) GetTypeOf(s string) (metricType, error) {
 	}
 	defer resp.Body.Close()
 	scanner := bufio.NewScanner(resp.Body)
+	a.Lock()
+	defer a.Unlock()
 	for scanner.Scan() {
 		if !bytes.HasPrefix(scanner.Bytes(), []byte("# TYPE ")) {
 			continue
