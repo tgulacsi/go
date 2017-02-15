@@ -18,13 +18,15 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -33,7 +35,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/retrieval"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/storage/local"
 )
 
 //go:generate rm -rf $GOPATH/src/github.com/prometheus/prometheus/vendor/github.com/prometheus/common/model
@@ -60,12 +65,6 @@ func Main() error {
 		return errors.Wrap(err, *flagAddress)
 	}
 
-	patternS := strings.Join(flag.Args(), "|")
-	if patternS == "" {
-		patternS = "."
-	}
-	pattern := regexp.MustCompile(patternS)
-
 	cfg := &config.Config{
 		GlobalConfig: config.GlobalConfig{
 			ScrapeInterval:     model.Duration(*flagInterval),
@@ -90,11 +89,22 @@ func Main() error {
 			},
 		},
 	}
+
+	storage, storCloser := local.NewTestStorage(log.New(os.Stderr, "[promstor] ", 0), 0)
+	defer storCloser.Close()
+	engine := promql.NewEngine(storage, &promql.EngineOptions{
+		MaxConcurrentQueries: 8, Timeout: time.Duration(cfg.GlobalConfig.ScrapeTimeout),
+	})
+
 	samples := &memoryStorage{
-		URL:    u,
-		types:  make(map[string]metricType),
-		gauges: make(map[model.Fingerprint]*gauge),
-		filter: func(m model.Metric) bool { return pattern.FindString(m.String()) != "" },
+		URL:     u,
+		types:   make(map[string]metricType),
+		gauges:  make(map[model.Fingerprint]*gauge),
+		storage: storage,
+	}
+	queries := flag.Args()
+	if len(queries) == 0 {
+		queries = append(queries, "*")
 	}
 	mngr := retrieval.NewTargetManager(samples)
 	mngr.ApplyConfig(cfg)
@@ -104,6 +114,27 @@ func Main() error {
 	if false {
 		time.Sleep(1 * time.Second)
 		log.Println(mngr.Targets())
+		v := os.Stderr
+		for t := range time.Tick(*flagInterval) {
+			now := model.TimeFromUnix(t.Unix())
+			ctx, cancel := context.WithDeadline(context.Background(), t.Add(*flagInterval-1))
+			for _, qs := range queries {
+				qry, err := engine.NewRangeQuery(qs, now-100, now, 1*time.Second)
+				log.Printf("%q => %v/%v", qs, qry, err)
+				if err != nil {
+					fmt.Fprintf(v, "%q: %v\n", qs, err)
+					return errors.Wrap(err, qs)
+				}
+				res := qry.Exec(ctx)
+				log.Printf("res=%#v", res)
+				if res.Err != nil {
+					fmt.Fprintf(v, "%q: %v\n", qs, err)
+					return errors.Wrap(err, qs)
+				}
+				fmt.Fprintf(v, "%s\n", res.Value.String())
+			}
+			cancel()
+		}
 		select {}
 	} else {
 		g, err := ui.NewGui(ui.OutputNormal)
@@ -174,7 +205,7 @@ func Main() error {
 		}()
 
 		go func() {
-			for range time.Tick(*flagInterval) {
+			for t := range time.Tick(*flagInterval) {
 				g.Execute(func(g *ui.Gui) error {
 					v, err := g.View("metrics")
 					if err != nil {
@@ -182,12 +213,32 @@ func Main() error {
 					}
 					v.Clear()
 					samples.RLock()
-					for _, g := range samples.gauges {
-						g.RLock()
-						fmt.Fprintf(v, "%s: %v\n", g.Name, g.SampleValue)
-						g.RUnlock()
+					if false {
+						for _, g := range samples.gauges {
+							g.RLock()
+							fmt.Fprintf(v, "%s: %v\n", g.Name, g.SampleValue)
+							g.RUnlock()
+						}
 					}
 					samples.RUnlock()
+
+					ctx, cancel := context.WithDeadline(context.Background(), t.Add(*flagInterval-1))
+					defer cancel()
+
+					now := model.TimeFromUnix(t.Unix())
+					for _, qs := range queries {
+						qry, err := engine.NewInstantQuery(qs, now)
+						if err != nil {
+							fmt.Fprintf(v, "%q: %v\n", qs, err)
+							return errors.Wrap(err, qs)
+						}
+						res := qry.Exec(ctx)
+						if res.Err != nil {
+							fmt.Fprintf(v, "%q: %v\n", qs, err)
+							return errors.Wrap(err, qs)
+						}
+						printQueryRes(v, qry.Statement().String(), res.Value)
+					}
 
 					return nil
 				})
@@ -227,16 +278,16 @@ type memoryStorage struct {
 	*url.URL
 	*http.Client
 	sync.RWMutex
-	types  map[string]metricType
-	gauges map[model.Fingerprint]*gauge
-	filter func(model.Metric) bool
+	types   map[string]metricType
+	gauges  map[model.Fingerprint]*gauge
+	storage storage.SampleAppender
 }
 
 func (a *memoryStorage) NeedsThrottling() bool { return false }
 
 func (a *memoryStorage) Append(sample *model.Sample) error {
-	if !a.filter(sample.Metric) {
-		return nil
+	if a.storage != nil {
+		a.storage.Append(sample)
 	}
 	k := sample.Metric.Fingerprint()
 	a.RLock()
@@ -310,3 +361,42 @@ func (a *memoryStorage) GetTypeOf(s string) (metricType, error) {
 	}
 	return a.types[s], scanner.Err()
 }
+
+func printQueryRes(w io.Writer, name string, v model.Value) {
+	if v == nil {
+		return
+	}
+	switch v.Type() {
+	case model.ValScalar:
+		fmt.Fprintf(w, "%s: %v\n", name, v.(*model.Scalar).Value)
+	case model.ValVector:
+		vv := v.(model.Vector)
+		sort.Sort(vecByName(vv))
+		for _, s := range vv {
+			fmt.Fprintf(w, "%s: %v\n", s.Metric.String(), s.Value)
+		}
+	case model.ValMatrix:
+		m := v.(model.Matrix)
+		sort.Sort(mtxByName(m))
+		for _, ss := range m {
+			nm := ss.Metric.String()
+			for _, vv := range ss.Values {
+				fmt.Fprintf(w, "%s: %v", nm, vv)
+			}
+		}
+	default:
+		fmt.Fprintf(w, "%s: %s\n", name, v.String())
+	}
+}
+
+type vecByName model.Vector
+
+func (v vecByName) Len() int           { return len(v) }
+func (v vecByName) Swap(i, j int)      { v[i], v[j] = v[j], v[i] }
+func (v vecByName) Less(i, j int) bool { return v[i].Metric.String() < v[j].Metric.String() }
+
+type mtxByName model.Matrix
+
+func (m mtxByName) Len() int           { return len(m) }
+func (m mtxByName) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
+func (m mtxByName) Less(i, j int) bool { return m[i].Metric.String() < m[j].Metric.String() }
