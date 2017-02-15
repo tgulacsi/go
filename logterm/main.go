@@ -50,9 +50,10 @@ func main() {
 }
 
 func Main() error {
-	flagAddress := flag.String("addr", ":9100", "Prometheus metrics address")
-	flagInterval := flag.Duration("interval", 5*time.Second, "scrape interval")
-	flag.Parse()
+	fs := flag.NewFlagSet("", flag.ExitOnError)
+	flagAddress := fs.String("addr", ":9100", "Prometheus metrics address")
+	flagInterval := fs.Duration("interval", 5*time.Second, "scrape interval")
+	fs.Parse(os.Args[1:])
 
 	if !strings.Contains(*flagAddress, "/") {
 		*flagAddress += "/metrics"
@@ -102,7 +103,7 @@ func Main() error {
 		gauges:  make(map[model.Fingerprint]*gauge),
 		storage: storage,
 	}
-	queries := flag.Args()
+	queries := fs.Args()
 	if len(queries) == 0 {
 		queries = append(queries, "*")
 	}
@@ -211,6 +212,7 @@ func Main() error {
 					if err != nil {
 						return err
 					}
+					width, _ := v.Size()
 					v.Clear()
 					samples.RLock()
 					if false {
@@ -237,7 +239,11 @@ func Main() error {
 							fmt.Fprintf(v, "%q: %v\n", qs, err)
 							return errors.Wrap(err, qs)
 						}
-						printQueryRes(v, qry.Statement().String(), res.Value)
+						printQueryRes(
+							wrapWriter{Writer: v, Width: width - 1},
+							qry.Statement().String(),
+							res.Value,
+						)
 					}
 
 					return nil
@@ -389,6 +395,30 @@ func printQueryRes(w io.Writer, name string, v model.Value) {
 	}
 }
 
+type wrapWriter struct {
+	Width int
+	io.Writer
+}
+
+func (w wrapWriter) Write(p []byte) (int, error) {
+	if len(p) <= w.Width {
+		return w.Writer.Write(p)
+	}
+	ew := &errWriter{Writer: w.Writer}
+	for len(p) > w.Width {
+		if i := bytes.LastIndexAny(p[:w.Width], "{},"); i > 1 {
+			if p[i] != '{' {
+				i++
+			}
+			ew.Write(p[:i])
+			p = p[i:]
+		}
+		ew.Write([]byte{'\n', ' ', ' '})
+	}
+	ew.Write(p)
+	return ew.N, ew.Err
+}
+
 type vecByName model.Vector
 
 func (v vecByName) Len() int           { return len(v) }
@@ -400,3 +430,19 @@ type mtxByName model.Matrix
 func (m mtxByName) Len() int           { return len(m) }
 func (m mtxByName) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
 func (m mtxByName) Less(i, j int) bool { return m[i].Metric.String() < m[j].Metric.String() }
+
+type errWriter struct {
+	io.Writer
+	N   int
+	Err error
+}
+
+func (w *errWriter) Write(p []byte) (int, error) {
+	if w.Err != nil {
+		return 0, w.Err
+	}
+	n, err := w.Writer.Write(p)
+	w.N += n
+	w.Err = err
+	return n, err
+}
