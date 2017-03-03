@@ -31,7 +31,7 @@ import (
 
 	"github.com/tgulacsi/go/dber"
 	"github.com/tgulacsi/go/orahlp"
-	"gopkg.in/rana/ora.v3"
+	_ "gopkg.in/rana/ora.v4"
 
 	"github.com/pkg/errors"
 )
@@ -232,7 +232,6 @@ func main() {
 			columns = flag.Args()[2:]
 		}
 	}
-	ora.Register(nil)
 	//ora.Log = lg15.Log
 	//lg15.Log.SetHandler(log15.StderrHandler)
 	db, err := sql.Open("ora", *flagConnect)

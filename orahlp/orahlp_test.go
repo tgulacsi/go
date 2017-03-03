@@ -8,17 +8,14 @@ import (
 	"database/sql"
 	"flag"
 	"reflect"
-	"sync"
 	"testing"
 
 	"github.com/kylelemons/godebug/diff"
 	"github.com/tgulacsi/go/dber"
-	"gopkg.in/rana/ora.v3"
+	_ "gopkg.in/rana/ora.v4"
 )
 
 var flagConnect = flag.String("connect", "", "user/passw@sid to connect to")
-
-var registerOnce sync.Once
 
 func init() {
 	flag.Parse()
@@ -138,10 +135,11 @@ func TestGetCompileErrors(t *testing.T) {
 }
 
 func getConnection(t *testing.T) dber.DBer {
-	registerOnce.Do(func() { ora.Register(nil) })
 	db, err := sql.Open("ora", *flagConnect)
 	if err != nil {
 		t.Fatalf("cannot connect to %q: %v", *flagConnect, err)
 	}
 	return dber.SqlDBer{db}
 }
+
+// vim: se noet fileencoding=utf-8:
