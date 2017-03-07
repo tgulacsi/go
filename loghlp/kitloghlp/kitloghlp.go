@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ func New(w io.Writer) *LogContext {
 
 // NewContext wraps the given logger with Stringify, and adds a default ts timestamp.
 func NewContext(logger log.Logger) *LogContext {
-	return (&LogContext{Context: log.NewContext(Stringify{logger})})
+	return (&LogContext{Logger: log.With(Stringify{logger})})
 }
 
 // With appends the given plus keyvals to the LogFunc.
@@ -98,7 +98,7 @@ func (sw StringWrap) String() string {
 }
 
 type LogContext struct {
-	*log.Context
+	log.Logger
 	keys []string
 }
 
@@ -113,8 +113,8 @@ func (c *LogContext) With(keyvals ...interface{}) *LogContext {
 		}
 	}
 	return &LogContext{
-		Context: c.Context.With(keyvals...),
-		keys:    keys,
+		Logger: log.With(c.Logger, keyvals...),
+		keys:   keys,
 	}
 }
 func (c *LogContext) WithNoDup(keyvals ...interface{}) *LogContext {
