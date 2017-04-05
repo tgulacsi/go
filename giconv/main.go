@@ -19,11 +19,11 @@ func main() {
 
 	f, err := get(*flagFrom)
 	if err != nil {
-		log.Fatal(errors.Wrap(err, *flagFrom))
+		log.Fatal(err)
 	}
 	t, err := get(*flagTo)
 	if err != nil {
-		log.Fatal(errors.Wrap(err, *flagFrom))
+		log.Fatal(err)
 	}
 
 	_, err = io.Copy(
@@ -44,6 +44,6 @@ func get(name string) (encoding.Encoding, error) {
 	case "UTF8", "UTF-8":
 		return encoding.Nop, nil
 	default:
-		return encoding.Nop, err
+		return encoding.Nop, errors.Wrap(err, name)
 	}
 }
