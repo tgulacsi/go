@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/text/encoding"
@@ -16,11 +17,11 @@ func main() {
 	flagTo := flag.String("t", "UTF8", "charset to")
 	flag.Parse()
 
-	f, err := htmlindex.Get(*flagFrom)
+	f, err := get(*flagFrom)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, *flagFrom))
 	}
-	t, err := htmlindex.Get(*flagTo)
+	t, err := get(*flagTo)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, *flagFrom))
 	}
@@ -31,5 +32,18 @@ func main() {
 	)
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func get(name string) (encoding.Encoding, error) {
+	e, err := htmlindex.Get(name)
+	if err == nil {
+		return e, nil
+	}
+	switch strings.ToUpper(name) {
+	case "UTF8", "UTF-8":
+		return encoding.Nop, nil
+	default:
+		return encoding.Nop, err
 	}
 }
