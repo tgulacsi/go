@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -100,7 +101,8 @@ func Main() error {
 		return errors.Wrap(err, src)
 	}
 
-	rowsCh := make(chan []string, *flagConcurrency)
+	rowsCh := make(chan [][]string, *flagConcurrency)
+	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, 64) }}
 
 	var grp errgroup.Group
 	for i := 0; i < *flagConcurrency; i++ {
@@ -116,20 +118,25 @@ func Main() error {
 			}
 			var rowI []interface{}
 
-			for row := range rowsCh {
-				rowI = rowI[:0]
-				for _, v := range row {
-					rowI = append(rowI, v)
+			for chunk := range rowsCh {
+				for _, row := range chunk {
+					rowI = rowI[:0]
+					for _, v := range row {
+						rowI = append(rowI, v)
+					}
+					if _, err := stmt.Exec(rowI...); err != nil {
+						chunkPool.Put(chunk)
+						return errors.Wrapf(err, "%s, %q", qry, row)
+					}
 				}
-				if _, err := stmt.Exec(rowI...); err != nil {
-					return errors.Wrapf(err, "%s, %q", qry, row)
-				}
+				chunkPool.Put(chunk)
 			}
 			return tx.Commit()
 		})
 	}
 
 	var n int64
+	chunk := chunkPool.Get().([][]string)[:0]
 	for {
 		row, err := rdr.Read()
 		if err != nil {
@@ -143,7 +150,15 @@ func Main() error {
 		if n == 1 {
 			continue
 		}
-		rowsCh <- row
+		chunk = append(chunk, row)
+		if len(chunk) != cap(chunk) {
+			continue
+		}
+		rowsCh <- chunk
+		chunk = chunkPool.Get().([][]string)[:0]
+	}
+	if len(chunk) != 0 {
+		rowsCh <- chunk
 	}
 	close(rowsCh)
 
