@@ -262,7 +262,11 @@ func CreateTable(db *sql.DB, tbl string, rows *csv.Reader, truncate bool, tables
 			if i != 0 {
 				buf.WriteString(",\n")
 			}
-			fmt.Fprintf(&buf, "  %s %s(%s)", c.Name, c.Type.String(), c.Length)
+			length := c.Length
+			if length == 0 {
+				length = 1
+			}
+			fmt.Fprintf(&buf, "  %s %s(%d)", c.Name, c.Type.String(), length)
 		}
 		buf.WriteString("\n)")
 		if tablespace != "" {
