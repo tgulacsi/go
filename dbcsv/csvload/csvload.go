@@ -4,8 +4,8 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/csv"
+	"database/sql"
 	"flag"
 	"fmt"
 	"io"
@@ -19,7 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/htmlindex"
-	_ "gopkg.in/rana/ora.v4"
+	ora "gopkg.in/rana/ora.v4"
 )
 
 func main() {
@@ -102,34 +102,62 @@ func Main() error {
 	}
 
 	rowsCh := make(chan [][]string, *flagConcurrency)
-	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, 64) }}
+	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, 128) }}
+
+	pool, err := ora.NewPool(*flagDB, *flagConcurrency)
+	if err != nil {
+		return errors.Wrap(err, *flagDB)
+	}
+	defer pool.Close()
 
 	var grp errgroup.Group
 	for i := 0; i < *flagConcurrency; i++ {
 		grp.Go(func() error {
-			tx, err := db.Begin()
+			ses, err := pool.Get()
+			if err != nil {
+				return err
+			}
+			defer ses.Close()
+			tx, err := ses.StartTx()
 			if err != nil {
 				return err
 			}
 			defer tx.Rollback()
-			stmt, err := tx.Prepare(qry)
+			stmt, err := ses.Prep(qry)
 			if err != nil {
 				return errors.Wrap(err, qry)
 			}
-			var rowI []interface{}
+			var cols [][]string
+			var rowsI []interface{}
 
 			for chunk := range rowsCh {
-				for _, row := range chunk {
-					rowI = rowI[:0]
-					for _, v := range row {
-						rowI = append(rowI, v)
-					}
-					if _, err := stmt.Exec(rowI...); err != nil {
-						chunkPool.Put(chunk)
-						return errors.Wrapf(err, "%s, %q", qry, row)
+				if len(chunk) == 0 {
+					continue
+				}
+				n := len(chunk[0])
+				if cap(cols) < n {
+					cols = make([][]string, n)
+				} else {
+					cols = cols[:n]
+					for j := range cols {
+						cols[j] = cols[j][:0]
 					}
 				}
+				for _, row := range chunk {
+					for j, v := range row {
+						cols[j] = append(cols[j], v)
+					}
+				}
+				rowsI = rowsI[:0]
+				for _, col := range cols {
+					rowsI = append(rowsI, col)
+				}
+
+				_, err := stmt.Exe(rowsI...)
 				chunkPool.Put(chunk)
+				if err != nil {
+					return errors.Wrapf(err, "%s, %q", qry, rowsI)
+				}
 			}
 			return tx.Commit()
 		})
