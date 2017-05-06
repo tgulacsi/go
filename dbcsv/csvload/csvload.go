@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"database/sql"
 	"flag"
@@ -28,6 +29,8 @@ func main() {
 	}
 }
 
+var dateFormat = "2006-01-02 15:04:05"
+
 func Main() error {
 	encName := os.Getenv("LANG")
 	if i := strings.IndexByte(encName, '.'); i >= 0 {
@@ -42,6 +45,7 @@ func Main() error {
 	flagTablespace := flag.String("tablespace", "DATA", "tablespace to create table in")
 	flagSep := flag.String("sep", ";", "CSV separator")
 	flagConcurrency := flag.Int("concurrency", 8, "concurrency")
+	flag.StringVar(&dateFormat, "date", dateFormat, "date format, in Go notation")
 	flag.Parse()
 
 	enc, err := htmlindex.Get(*flagEnc)
@@ -57,6 +61,9 @@ func Main() error {
 	}
 	defer db.Close()
 
+	db.SetMaxIdleConns(*flagConcurrency)
+	db.SetMaxOpenConns(*flagConcurrency+2)
+
 	tbl := strings.ToUpper(flag.Arg(0))
 	src := flag.Arg(1)
 	if src == "" {
@@ -71,20 +78,20 @@ func Main() error {
 	defer in.Close()
 
 	rows, _ := getReader(in, *flagSep, enc)
-	cols, err := CreateTable(db, tbl, rows, *flagTruncate, *flagTablespace)
+	columns, err := CreateTable(db, tbl, rows, *flagTruncate, *flagTablespace)
 	if err != nil {
 		return err
 	}
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, `INSERT INTO "%s" (`, tbl)
-	for i, c := range cols {
+	for i, c := range columns {
 		if i != 0 {
 			buf.WriteString(", ")
 		}
 		buf.WriteString(c.Name)
 	}
 	buf.WriteString(") VALUES (")
-	for i, _ := range cols {
+	for i, _ := range columns {
 		if i != 0 {
 			buf.WriteString(", ")
 		}
@@ -101,8 +108,9 @@ func Main() error {
 		return errors.Wrap(err, src)
 	}
 
+	const chunkSize = 128
 	rowsCh := make(chan [][]string, *flagConcurrency)
-	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, 128) }}
+	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, chunkSize) }}
 
 	pool, err := ora.NewPool(*flagDB, *flagConcurrency)
 	if err != nil {
@@ -110,7 +118,7 @@ func Main() error {
 	}
 	defer pool.Close()
 
-	var grp errgroup.Group
+	grp, ctx := errgroup.WithContext(context.Background())
 	for i := 0; i < *flagConcurrency; i++ {
 		grp.Go(func() error {
 			ses, err := pool.Get()
@@ -131,6 +139,9 @@ func Main() error {
 			var rowsI []interface{}
 
 			for chunk := range rowsCh {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				if len(chunk) == 0 {
 					continue
 				}
@@ -149,8 +160,8 @@ func Main() error {
 					}
 				}
 				rowsI = rowsI[:0]
-				for _, col := range cols {
-					rowsI = append(rowsI, col)
+				for i, col := range cols {
+					rowsI = append(rowsI, columns[i].FromString(col))
 				}
 
 				_, err := stmt.Exe(rowsI...)
@@ -166,6 +177,10 @@ func Main() error {
 	var n int64
 	chunk := chunkPool.Get().([][]string)[:0]
 	for {
+		if err := ctx.Err(); err != nil {
+			chunk = chunk[:0]
+			break
+		}
 		row, err := rdr.Read()
 		if err != nil {
 			if err != io.EOF {
@@ -179,10 +194,12 @@ func Main() error {
 			continue
 		}
 		chunk = append(chunk, row)
-		if len(chunk) != cap(chunk) {
+		if len(chunk) < chunkSize {
 			continue
 		}
+
 		rowsCh <- chunk
+
 		chunk = chunkPool.Get().([][]string)[:0]
 	}
 	if len(chunk) != 0 {
@@ -198,7 +215,9 @@ func Main() error {
 
 func getReader(f io.ReadSeeker, sep string, enc encoding.Encoding) (*csv.Reader, error) {
 	p, err := f.Seek(0, io.SeekCurrent)
-	if err == nil && p != 0 {
+	if err != nil {
+		err = nil
+	} else if p != 0 {
 		_, err = f.Seek(0, io.SeekStart)
 	}
 	r := io.Reader(f)
@@ -352,4 +371,18 @@ func (t Type) String() string {
 	default:
 		return "VARCHAR2"
 	}
+}
+
+func (c Column) FromString(ss []string) interface{} {
+	if c.DataType != "DATE"  {
+		return ss
+	}
+	res := make([]time.Time, len(ss))
+	for i, s := range ss {
+		if s == "" {
+			continue
+		}
+		res[i], _ = time.Parse(dateFormat, s)
+	}
+	return res
 }
