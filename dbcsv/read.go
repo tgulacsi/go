@@ -1,8 +1,6 @@
-// Copyright 2011-2015, Tamás Gulácsi.
-// All rights reserved.
-// For details, see the LICENSE file.
+// Copyright 2017 Tamás Gulácsi. All rights reserved.
 
-package main
+package dbcsv
 
 import (
 	"bufio"
@@ -11,18 +9,135 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/htmlindex"
+	"golang.org/x/text/transform"
 
 	"github.com/extrame/xls"
 	"github.com/pkg/errors"
 	"github.com/tealeg/xlsx"
 )
 
+var DefaultEncoding = encoding.Replacement
+
+func init() {
+	encName := os.Getenv("LANG")
+	if i := strings.IndexByte(encName, '.'); i >= 0 {
+		if enc, err := htmlindex.Get(encName[i+1:]); err == nil {
+			DefaultEncoding = enc
+		}
+	}
+}
+
+type FileType string
+
 const (
-	dateFormat     = "20060102"
-	dateTimeFormat = "20060102150405"
+	Unknown = FileType("")
+	Csv     = FileType("csv")
+	Xls     = FileType("xls")
+	XlsX    = FileType("xlsx")
+)
+
+func DetectReaderType(r io.Reader, fileName string) (FileType, error) {
+	// detect file type
+	var b [4]byte
+	if _, err := io.ReadFull(r, b[:]); err != nil {
+		return Unknown, err
+	}
+	if bytes.Equal(b[:], []byte{0xd0, 0xcf, 0x11, 0xe0}) { // OLE2
+		return Xls, nil
+	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
+		return XlsX, nil
+	} else if bytes.Equal(b[:1], []byte{'"'}) { // CSV
+		return Csv, nil
+	}
+	switch filepath.Ext(fileName) {
+	case ".xls":
+		return Xls, nil
+	case ".xlsx":
+		return XlsX, nil
+	default:
+		return Csv, nil
+	}
+}
+
+type Config struct {
+	Type          FileType
+	Sheet, Skip   int
+	Delim         string
+	Charset       string
+	ColumnsString string
+}
+
+func (cfg Config) Encoding() (encoding.Encoding, error) {
+	if cfg.Charset == "" {
+		return DefaultEncoding, nil
+	}
+	return htmlindex.Get(cfg.Charset)
+}
+
+func (cfg Config) Columns() ([]int, error) {
+	if cfg.ColumnsString == "" {
+		return nil, nil
+	}
+	columns := make([]int, 0, strings.Count(cfg.ColumnsString, ",")+1)
+	for _, x := range strings.Split(cfg.ColumnsString, ",") {
+		i, err := strconv.Atoi(x)
+		if err != nil {
+			return columns, errors.Wrap(err, x)
+		}
+		columns = append(columns, i-1)
+	}
+	return columns, nil
+}
+
+func (cfg Config) ReadRows(rows chan<- Row, fileName string) error {
+	dst := rows
+	if cfg.Skip != 0 {
+		inter := make(chan Row, 1)
+		dst = inter
+		go func() {
+			defer close(inter)
+			for i := 0; i < cfg.Skip; i++ {
+				<-inter
+			}
+			for row := range inter {
+				rows <- row
+			}
+		}()
+	}
+
+	switch cfg.Type {
+	case Xls:
+		return ReadXLSFile(dst, fileName, cfg.Charset, cfg.Sheet)
+	case XlsX:
+		return ReadXLSXFile(dst, fileName, cfg.Sheet)
+	}
+	enc, err := cfg.Encoding()
+	if err != nil {
+		return err
+	}
+	fh, err := os.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	r := transform.NewReader(fh, enc.NewDecoder())
+	return ReadCSV(dst, r, cfg.Delim)
+}
+
+const (
+	//dateFormat = "2006-01-02 15:04:05"
+
+	DateFormat     = "20060102"
+	DateTimeFormat = "20060102150405"
 )
 
 var timeReplacer = strings.NewReplacer(
@@ -43,7 +158,7 @@ var timeReplacer = strings.NewReplacer(
 	".0", ".9999",
 )
 
-func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
+func ReadXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 	xlFile, err := xlsx.OpenFile(filename)
 	if err != nil {
 		return errors.Wrapf(err, "open %q", filename)
@@ -70,7 +185,7 @@ func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 				if err != nil {
 					return errors.Wrapf(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
 				}
-				vals = append(vals, dt.Format(dateFormat))
+				vals = append(vals, dt.Format(DateFormat))
 			} else {
 				vals = append(vals, cell.String())
 			}
@@ -81,7 +196,7 @@ func readXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 	return nil
 }
 
-func readXLSFile(rows chan<- Row, filename string, charset string, sheetIndex int) error {
+func ReadXLSFile(rows chan<- Row, filename string, charset string, sheetIndex int) error {
 	wb, err := xls.Open(filename, charset)
 	if err != nil {
 		return errors.Wrapf(err, "open %q", filename)
@@ -111,7 +226,7 @@ func readXLSFile(rows chan<- Row, filename string, charset string, sheetIndex in
 	return nil
 }
 
-func readCSV(rows chan<- Row, r io.Reader, delim string) error {
+func ReadCSV(rows chan<- Row, r io.Reader, delim string) error {
 	if delim == "" {
 		br := bufio.NewReader(r)
 		b, _ := br.Peek(1024)
@@ -138,6 +253,7 @@ func readCSV(rows chan<- Row, r io.Reader, delim string) error {
 	cr := csv.NewReader(r)
 
 	cr.Comma = ([]rune(delim))[0]
+	cr.LazyQuotes = true
 	n := 0
 	for {
 		row, err := cr.Read()

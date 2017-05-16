@@ -12,13 +12,12 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
 
+	"github.com/tgulacsi/go/dbcsv"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 
@@ -49,16 +48,17 @@ func main() {
 	defer bw.Flush()
 	stdout = bw
 
-	flagSheet := flag.Int("sheet", 0, "Index of sheet to convert, zero based")
+	var cfg dbcsv.Config
+	flag.IntVar(&cfg.Sheet, "sheet", 0, "Index of sheet to convert, zero based")
 	flagConnect := flag.String("connect", "$BRUNO_ID", "database connection string")
 	flagFunc := flag.String("call", "DBMS_OUTPUT.PUT_LINE", "function name to be called with each line")
 	flagFixParams := flag.String("fix", "p_file_name=>{{.FileName}}", "fix parameters to add; uses text/template")
 	flagFuncRetOk := flag.Int("call-ret-ok", 0, "OK return value")
 	flagOneTx := flag.Bool("one-tx", true, "one transaction, or commit after each row")
-	flagDelim := flag.String("d", "", "Delimiter to use between fields")
-	flagCharset := flag.String("charset", "utf-8", "input charset")
-	flagSkip := flag.Int("skip", 1, "skip first N rows")
-	flagColumns := flag.String("columns", "", "column numbers to use, separated by comma, in param order, starts with 1")
+	flag.StringVar(&cfg.Delim, "d", "", "Delimiter to use between fields")
+	flag.StringVar(&cfg.Charset, "charset", "utf-8", "input charset")
+	flag.IntVar(&cfg.Skip, "skip", 1, "skip first N rows")
+	flag.StringVar(&cfg.ColumnsString, "columns", "", "column numbers to use, separated by comma, in param order, starts with 1")
 	//flagVerbose := flag.Bool("v", false, "verbose logging")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `%s
@@ -76,17 +76,6 @@ Usage:
 	if flag.NArg() != 1 {
 		flag.Usage()
 		os.Exit(1)
-	}
-
-	var columns []int
-	if *flagColumns != "" {
-		for _, x := range strings.Split(*flagColumns, ",") {
-			i, err := strconv.Atoi(x)
-			if err != nil {
-				log.Fatalf("column %q: %v", x, err)
-			}
-			columns = append(columns, i-1)
-		}
 	}
 
 	ctxData := struct {
@@ -115,7 +104,7 @@ Usage:
 	}
 	defer inp.Close()
 
-	rows := make(chan Row, 8)
+	rows := make(chan dbcsv.Row, 8)
 	errch := make(chan error, 8)
 	errs := make([]string, 0, 8)
 	var errWg sync.WaitGroup
@@ -130,63 +119,15 @@ Usage:
 		}
 	}()
 
-	// detect file type
-	var (
-		b       [4]byte
-		R       func(rows chan<- Row, inp io.Reader, inpfn string) error
-		rdrName string
-	)
-	if _, err := io.ReadFull(inp, b[:]); err != nil {
-		log.Fatal("read %q: %v", inp, err)
-	}
-	if bytes.Equal(b[:], []byte{0xd0, 0xcf, 0x11, 0xe0}) { // OLE2
-		rdrName = "xls"
-	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
-		rdrName = "xlsx"
-	} else if bytes.Equal(b[:1], []byte{'"'}) { // CSV
-		rdrName = "csv"
-	} else {
-		switch filepath.Ext(inp.Name()) {
-		case ".xls":
-			rdrName = "xls"
-		case ".xlsx":
-			rdrName = "xlsx"
-		default:
-			rdrName = "csv"
-		}
-	}
-	log.Printf("File starts with %q (% x), so using %s reader.", b, b, rdrName)
-
-	switch rdrName {
-	case "xls":
-		R = func(rows chan<- Row, _ io.Reader, fn string) error {
-			return readXLSFile(rows, fn, *flagCharset, *flagSheet)
-		}
-	case "xlsx":
-		R = func(rows chan<- Row, _ io.Reader, fn string) error {
-			return readXLSXFile(rows, fn, *flagSheet)
-		}
-	default:
-		enc, err := htmlindex.Get(*flagCharset)
-		if err != nil {
-			log.Fatalf("Get encoding for name %q: %v", *flagCharset, err)
-		}
-		R = func(rows chan<- Row, inp io.Reader, _ string) error {
-			r := transform.NewReader(
-				io.MultiReader(bytes.NewReader(b[:]), inp),
-				enc.NewDecoder())
-			return readCSV(rows, r, *flagDelim)
-		}
-	}
-	go func(rows chan<- Row) {
+	go func(rows chan<- dbcsv.Row) {
 		defer close(rows)
-		errch <- R(rows, inp, flag.Arg(0))
+		errch <- cfg.ReadRows(rows, inp.Name())
 	}(rows)
 
 	// filter out empty rows
 	{
-		filtered := make(chan Row, 8)
-		go func(filtered chan<- Row, rows <-chan Row) {
+		filtered := make(chan dbcsv.Row, 8)
+		go func(filtered chan<- dbcsv.Row, rows <-chan dbcsv.Row) {
 			defer close(filtered)
 			for row := range rows {
 				for _, s := range row.Values {
@@ -200,16 +141,17 @@ Usage:
 		rows = filtered
 	}
 
-	for i := 0; i < *flagSkip; i++ {
-		<-rows
+	columns, err := cfg.Columns()
+	if err != nil {
+		log.Fatal(err)
 	}
 	if len(columns) > 0 {
 		// change column order
-		filtered := make(chan Row, 8)
-		go func(filtered chan<- Row, rows <-chan Row) {
+		filtered := make(chan dbcsv.Row, 8)
+		go func(filtered chan<- dbcsv.Row, rows <-chan dbcsv.Row) {
 			defer close(filtered)
 			for row := range rows {
-				row2 := Row{Line: row.Line, Values: make([]string, len(columns))}
+				row2 := dbcsv.Row{Line: row.Line, Values: make([]string, len(columns))}
 				for i, j := range columns {
 					if j < len(row.Values) {
 						row2.Values[i] = row.Values[j]

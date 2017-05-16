@@ -15,10 +15,16 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/tgulacsi/go/dbcsv"
 	"gopkg.in/rana/ora.v4"
 )
 
-func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan Row, oneTx bool) (int, error) {
+const (
+	dateFormat     = dbcsv.DateFormat
+	dateTimeFormat = dbcsv.DateTimeFormat
+)
+
+func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan dbcsv.Row, oneTx bool) (int, error) {
 	st, err := getQuery(ses, fun, fixParams)
 	if err != nil {
 		return 0, err
