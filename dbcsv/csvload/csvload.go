@@ -5,8 +5,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/csv"
 	"database/sql"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -62,7 +62,7 @@ func Main() error {
 	defer db.Close()
 
 	db.SetMaxIdleConns(*flagConcurrency)
-	db.SetMaxOpenConns(*flagConcurrency+2)
+	db.SetMaxOpenConns(*flagConcurrency + 2)
 
 	tbl := strings.ToUpper(flag.Arg(0))
 	src := flag.Arg(1)
@@ -167,7 +167,24 @@ func Main() error {
 				_, err := stmt.Exe(rowsI...)
 				chunkPool.Put(chunk)
 				if err != nil {
-					return errors.Wrapf(err, "%s, %q", qry, rowsI)
+					err = errors.Wrapf(err, "%s, %q", qry, rowsI)
+					log.Println(err)
+
+					rowsI2 := make([]interface{}, len(rowsI))
+					for j := range cols[0] {
+						rowsI2 = rowsI2[:0]
+						for i, col := range cols {
+							rowsI2 = append(rowsI2, columns[i].FromString(col[j:j+1]))
+						}
+						if _, err := stmt.Exe(rowsI2...); err != nil {
+							err = errors.Wrapf(err, "%s, %q", qry, rowsI2)
+							log.Println(err)
+							return err
+							break
+						}
+					}
+
+					return err
 				}
 			}
 			return tx.Commit()
@@ -198,7 +215,11 @@ func Main() error {
 			continue
 		}
 
-		rowsCh <- chunk
+		select {
+		case rowsCh <- chunk:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 
 		chunk = chunkPool.Get().([][]string)[:0]
 	}
@@ -238,7 +259,9 @@ func typeOf(s string) Type {
 	}
 	var hasNonDigit bool
 	var dotCount int
+	var length int
 	strings.Map(func(r rune) rune {
+		length++
 		if r == '.' {
 			dotCount++
 		} else {
@@ -252,7 +275,7 @@ func typeOf(s string) Type {
 		if dotCount == 1 {
 			return Float
 		}
-		if dotCount == 0 {
+		if false && dotCount == 0 { // Force String
 			return Int
 		}
 	}
@@ -374,7 +397,12 @@ func (t Type) String() string {
 }
 
 func (c Column) FromString(ss []string) interface{} {
-	if c.DataType != "DATE"  {
+	if c.DataType != "DATE" {
+		for _, s := range ss {
+			if len(s) > c.Length {
+				panic(errors.Errorf("%q is longer (%d) then allowed (%d) for column %v", s, len(s), c.Length, c))
+			}
+		}
 		return ss
 	}
 	res := make([]time.Time, len(ss))
