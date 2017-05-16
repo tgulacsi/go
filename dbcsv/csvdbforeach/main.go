@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -119,9 +120,11 @@ Usage:
 		}
 	}()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	go func(rows chan<- dbcsv.Row) {
 		defer close(rows)
-		errch <- cfg.ReadRows(rows, inp.Name())
+		errch <- cfg.ReadRows(ctx, rows, inp.Name())
 	}(rows)
 
 	// filter out empty rows

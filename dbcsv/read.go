@@ -5,9 +5,11 @@ package dbcsv
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -69,56 +71,103 @@ func DetectReaderType(r io.Reader, fileName string) (FileType, error) {
 }
 
 type Config struct {
-	Type          FileType
+	typ           FileType
 	Sheet, Skip   int
 	Delim         string
 	Charset       string
 	ColumnsString string
+	encoding      encoding.Encoding
+	columns       []int
+	fileName      string
 }
 
-func (cfg Config) Encoding() (encoding.Encoding, error) {
+func (cfg *Config) Encoding() (encoding.Encoding, error) {
+	if cfg.encoding != nil {
+		return cfg.encoding, nil
+	}
 	if cfg.Charset == "" {
 		return DefaultEncoding, nil
 	}
-	return htmlindex.Get(cfg.Charset)
+	var err error
+	cfg.encoding, err = htmlindex.Get(cfg.Charset)
+	return cfg.encoding, err
 }
 
-func (cfg Config) Columns() ([]int, error) {
+func (cfg *Config) Columns() ([]int, error) {
 	if cfg.ColumnsString == "" {
 		return nil, nil
 	}
-	columns := make([]int, 0, strings.Count(cfg.ColumnsString, ",")+1)
+	if cfg.columns != nil {
+		return cfg.columns, nil
+	}
+	cfg.columns = make([]int, 0, strings.Count(cfg.ColumnsString, ",")+1)
 	for _, x := range strings.Split(cfg.ColumnsString, ",") {
 		i, err := strconv.Atoi(x)
 		if err != nil {
-			return columns, errors.Wrap(err, x)
+			return cfg.columns, errors.Wrap(err, x)
 		}
-		columns = append(columns, i-1)
+		cfg.columns = append(cfg.columns, i-1)
 	}
-	return columns, nil
+	return cfg.columns, nil
 }
 
-func (cfg Config) ReadRows(rows chan<- Row, fileName string) error {
-	dst := rows
-	if cfg.Skip != 0 {
-		inter := make(chan Row, 1)
-		dst = inter
-		go func() {
-			defer close(inter)
-			for i := 0; i < cfg.Skip; i++ {
-				<-inter
-			}
-			for row := range inter {
-				rows <- row
-			}
-		}()
+func (cfg *Config) Type(fileName string) (FileType, error) {
+	if cfg.typ != Unknown {
+		return cfg.typ, nil
+	}
+	fh, err := os.Open(fileName)
+	if err != nil {
+		return Unknown, err
+	}
+	defer fh.Close()
+	cfg.typ, err = DetectReaderType(fh, fileName)
+	return cfg.typ, err
+}
+
+func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName string) (err error) {
+	defer func() {
+		if err != nil {
+			log.Printf("ReadRows(%q): %v", fileName, err)
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	columns, err := cfg.Columns()
+	if err != nil {
+		return err
 	}
 
-	switch cfg.Type {
+	if fileName == "-" || fileName == "" {
+		panic(fileName)
+		if cfg.fileName != "" {
+			fileName = cfg.fileName
+		}
+		fh, err := ioutil.TempFile("", "ReadRows-")
+		if err != nil {
+			return err
+		}
+		cfg.fileName = fh.Name()
+		fileName = cfg.fileName
+		defer fh.Close()
+		//defer os.Remove(fileName)
+		if _, err := io.Copy(fh, os.Stdin); err != nil {
+			return err
+		}
+		if err := fh.Close(); err != nil {
+			return err
+		}
+	}
+
+	typ, err := cfg.Type(fileName)
+	if err != nil {
+		return err
+	}
+	switch typ {
 	case Xls:
-		return ReadXLSFile(dst, fileName, cfg.Charset, cfg.Sheet)
+		return ReadXLSFile(ctx, rows, fileName, cfg.Charset, cfg.Sheet, columns, cfg.Skip)
 	case XlsX:
-		return ReadXLSXFile(dst, fileName, cfg.Sheet)
+		return ReadXLSXFile(ctx, rows, fileName, cfg.Sheet, columns, cfg.Skip)
 	}
 	enc, err := cfg.Encoding()
 	if err != nil {
@@ -130,12 +179,10 @@ func (cfg Config) ReadRows(rows chan<- Row, fileName string) error {
 	}
 	defer fh.Close()
 	r := transform.NewReader(fh, enc.NewDecoder())
-	return ReadCSV(dst, r, cfg.Delim)
+	return ReadCSV(ctx, rows, r, cfg.Delim, columns, cfg.Skip)
 }
 
 const (
-	//dateFormat = "2006-01-02 15:04:05"
-
 	DateFormat     = "20060102"
 	DateTimeFormat = "20060102150405"
 )
@@ -158,7 +205,11 @@ var timeReplacer = strings.NewReplacer(
 	".0", ".9999",
 )
 
-func ReadXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
+func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIndex int, columns []int, skip int) error {
+	defer close(rows)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	xlFile, err := xlsx.OpenFile(filename)
 	if err != nil {
 		return errors.Wrapf(err, "open %q", filename)
@@ -172,31 +223,60 @@ func ReadXLSXFile(rows chan<- Row, filename string, sheetIndex int) error {
 	}
 	sheet := xlFile.Sheets[sheetIndex]
 	n := 0
-	for _, row := range sheet.Rows {
+	var need map[int]bool
+	if columns != nil {
+		need = make(map[int]bool, len(columns))
+		for _, i := range columns {
+			need[i] = true
+		}
+	}
+	for i, row := range sheet.Rows {
+		if i < skip {
+			continue
+		}
 		if row == nil {
 			continue
 		}
-		vals := make([]string, 0, len(row.Cells))
-		for _, cell := range row.Cells {
-			numFmt := cell.GetNumberFormat()
-			if strings.Contains(numFmt, "yy") || strings.Contains(numFmt, "mm") || strings.Contains(numFmt, "dd") {
-				goFmt := timeReplacer.Replace(numFmt)
-				dt, err := time.Parse(goFmt, cell.String())
-				if err != nil {
-					return errors.Wrapf(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
-				}
-				vals = append(vals, dt.Format(DateFormat))
-			} else {
-				vals = append(vals, cell.String())
-			}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		rows <- Row{Line: n, Values: vals}
+		vals := make([]string, 0, len(row.Cells))
+		for i, cell := range row.Cells {
+			if need != nil && !need[i] {
+				continue
+			}
+			if cell.String() == "" {
+				vals = append(vals, "")
+				continue
+			}
+			numFmt := cell.GetNumberFormat()
+			if !(strings.Contains(numFmt, "yy") || strings.Contains(numFmt, "mm") || strings.Contains(numFmt, "dd")) {
+				vals = append(vals, cell.String())
+				continue
+			}
+
+			goFmt := timeReplacer.Replace(numFmt)
+			dt, err := time.Parse(goFmt, cell.String())
+			if err != nil {
+				return errors.Wrapf(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
+			}
+			vals = append(vals, dt.Format(DateFormat))
+		}
+		select {
+		case rows <- Row{Line: n, Values: vals}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		n++
 	}
 	return nil
 }
 
-func ReadXLSFile(rows chan<- Row, filename string, charset string, sheetIndex int) error {
+func ReadXLSFile(ctx context.Context, rows chan<- Row, filename string, charset string, sheetIndex int, columns []int, skip int) error {
+	defer close(rows)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	wb, err := xls.Open(filename, charset)
 	if err != nil {
 		return errors.Wrapf(err, "open %q", filename)
@@ -205,13 +285,29 @@ func ReadXLSFile(rows chan<- Row, filename string, charset string, sheetIndex in
 	if sheet == nil {
 		return errors.New(fmt.Sprintf("This XLS file does not contain sheet no %d!", sheetIndex))
 	}
+	var need map[int]bool
+	if columns != nil {
+		need = make(map[int]bool, len(columns))
+		for _, i := range columns {
+			need[i] = true
+		}
+	}
 	var maxWidth int
 	for n, row := range sheet.Rows {
+		if n < uint16(skip) {
+			continue
+		}
 		if row == nil {
 			continue
 		}
-		vals := make([]string, maxWidth)
-		for _, col := range row.Cols {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		vals := make([]string, 0, maxWidth)
+		for j, col := range row.Cols {
+			if need != nil && !need[int(j)] {
+				continue
+			}
 			if len(vals) <= int(col.LastCol()) {
 				maxWidth = int(col.LastCol()) + 1
 				vals = append(vals, make([]string, maxWidth-len(vals))...)
@@ -221,12 +317,20 @@ func ReadXLSFile(rows chan<- Row, filename string, charset string, sheetIndex in
 				vals[off+i] = s
 			}
 		}
-		rows <- Row{Line: int(n), Values: vals}
+		select {
+		case rows <- Row{Line: int(n), Values: vals}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	return nil
 }
 
-func ReadCSV(rows chan<- Row, r io.Reader, delim string) error {
+func ReadCSV(ctx context.Context, rows chan<- Row, r io.Reader, delim string, columns []int, skip int) error {
+	defer close(rows)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if delim == "" {
 		br := bufio.NewReader(r)
 		b, _ := br.Peek(1024)
@@ -256,6 +360,9 @@ func ReadCSV(rows chan<- Row, r io.Reader, delim string) error {
 	cr.LazyQuotes = true
 	n := 0
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		row, err := cr.Read()
 		if err != nil {
 			if err == io.EOF {
@@ -263,8 +370,22 @@ func ReadCSV(rows chan<- Row, r io.Reader, delim string) error {
 			}
 			return err
 		}
-		rows <- Row{Line: n, Values: row}
 		n++
+		if n < skip {
+			continue
+		}
+		if columns != nil {
+			r2 := make([]string, len(columns))
+			for i, j := range columns {
+				r2[i] = row[j]
+			}
+			row = r2
+		}
+		select {
+		case rows <- Row{Line: n - 1, Values: row}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	return nil
 }
