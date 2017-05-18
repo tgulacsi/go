@@ -214,6 +214,9 @@ func Main() error {
 		if n == 1 {
 			continue
 		}
+		for i, s := range row.Values {
+			row.Values[i] = strings.TrimSpace(s)
+		}
 		chunk = append(chunk, row.Values)
 		if len(chunk) < chunkSize {
 			continue
@@ -260,7 +263,7 @@ func typeOf(s string) Type {
 		if dotCount == 1 {
 			return Float
 		}
-		if false && dotCount == 0 { // Force String
+		if dotCount == 0 {
 			return Int
 		}
 	}
@@ -394,20 +397,55 @@ func (t Type) String() string {
 }
 
 func (c Column) FromString(ss []string) interface{} {
-	if c.DataType != "DATE" {
-		for _, s := range ss {
+	if c.DataType == "DATE" {
+		res := make([]time.Time, len(ss))
+		for i, s := range ss {
+			if s == "" {
+				continue
+			}
+			res[i], _ = time.Parse(dateFormat, s)
+		}
+		return res
+	}
+
+	if strings.HasPrefix(c.DataType, "VARCHAR2") {
+		for i, s := range ss {
 			if len(s) > c.Length {
-				panic(errors.Errorf("%q is longer (%d) then allowed (%d) for column %v", s, len(s), c.Length, c))
+				fmt.Fprintf(os.Stderr, "%q is longer (%d) then allowed (%d) for column %v", s, len(s), c.Length, c)
+				ss[i] = s[:c.Length]
+			}
+			return ss
+		}
+	}
+	if c.Type == Int {
+		for i, s := range ss {
+			e := strings.Map(func(r rune) rune {
+				if !('0' <= r && r <= '9' || r == '-') {
+					return r
+				}
+				return -1
+			}, s)
+			if e != "" {
+				fmt.Fprintf(os.Stderr, "%q is not integer (%q)", s, e)
+				ss[i] = ""
 			}
 		}
 		return ss
 	}
-	res := make([]time.Time, len(ss))
-	for i, s := range ss {
-		if s == "" {
-			continue
+	if c.Type == Float {
+		for i, s := range ss {
+			e := strings.Map(func(r rune) rune {
+				if !('0' <= r && r <= '9' || r == '-' || r == '.') {
+					return r
+				}
+				return -1
+			}, s)
+			if e != "" {
+				fmt.Fprintf(os.Stderr, "%q is not float (%q)", s, e)
+				ss[i] = ""
+			}
 		}
-		res[i], _ = time.Parse(dateFormat, s)
+		return ss
 	}
-	return res
+	return ss
 }
