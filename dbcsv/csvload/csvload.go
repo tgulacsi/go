@@ -29,6 +29,8 @@ func main() {
 
 var dateFormat = "2006-01-02 15:04:05"
 
+var ForceString bool
+
 func Main() error {
 	encName := os.Getenv("LANG")
 	if i := strings.IndexByte(encName, '.'); i >= 0 {
@@ -48,6 +50,7 @@ func Main() error {
 	flag.IntVar(&cfg.Skip, "skip", 0, "skip rows")
 	flag.IntVar(&cfg.Sheet, "sheet", 0, "sheet of spreadsheet")
 	flag.StringVar(&cfg.ColumnsString, "columns", "", "columns, comma separated indexes")
+	flag.BoolVar(&ForceString, "force-string", false, "force all columns to be VARCHAR2")
 	flag.Parse()
 
 	if flag.NArg() != 2 {
@@ -178,6 +181,9 @@ func Main() error {
 					for j := range cols[0] {
 						rowsI2 = rowsI2[:0]
 						for i, col := range cols {
+							if len(col) <= j {
+								break
+							}
 							rowsI2 = append(rowsI2, columns[i].FromString(col[j:j+1]))
 						}
 						for i := len(cols); i < len(columns); i++ {
@@ -242,6 +248,10 @@ func Main() error {
 }
 
 func typeOf(s string) Type {
+	if ForceString {
+		return String
+	}
+
 	if len(s) == 0 {
 		return Unknown
 	}
