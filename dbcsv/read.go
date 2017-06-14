@@ -245,20 +245,24 @@ func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIn
 			if need != nil && !need[i] {
 				continue
 			}
-			if cell.String() == "" {
+			s, err := cell.String()
+			if err != nil {
+				return err
+			}
+			if s == "" {
 				vals = append(vals, "")
 				continue
 			}
 			numFmt := cell.GetNumberFormat()
 			if !(strings.Contains(numFmt, "yy") || strings.Contains(numFmt, "mm") || strings.Contains(numFmt, "dd")) {
-				vals = append(vals, cell.String())
+				vals = append(vals, s)
 				continue
 			}
 
 			goFmt := timeReplacer.Replace(numFmt)
-			dt, err := time.Parse(goFmt, cell.String())
+			dt, err := time.Parse(goFmt, s)
 			if err != nil {
-				return errors.Wrapf(err, "parse %q as %q (from %q)", cell.String(), goFmt, numFmt)
+				return errors.Wrapf(err, "parse %q as %q (from %q)", s, goFmt, numFmt)
 			}
 			vals = append(vals, dt.Format(DateFormat))
 		}
@@ -293,8 +297,9 @@ func ReadXLSFile(ctx context.Context, rows chan<- Row, filename string, charset 
 		}
 	}
 	var maxWidth int
-	for n, row := range sheet.Rows {
-		if n < uint16(skip) {
+	for n := 0; n < int(sheet.MaxRow); n++ {
+		row := sheet.Row(n)
+		if n < skip {
 			continue
 		}
 		if row == nil {
@@ -304,18 +309,17 @@ func ReadXLSFile(ctx context.Context, rows chan<- Row, filename string, charset 
 			return err
 		}
 		vals := make([]string, 0, maxWidth)
-		for j, col := range row.Cols {
+		off := row.FirstCol()
+		if len(vals) <= row.LastCol() {
+			maxWidth = row.LastCol() + 1
+			vals = append(vals, make([]string, maxWidth-len(vals))...)
+		}
+
+		for j := off; j < row.LastCol(); j++ {
 			if need != nil && !need[int(j)] {
 				continue
 			}
-			if len(vals) <= int(col.LastCol()) {
-				maxWidth = int(col.LastCol()) + 1
-				vals = append(vals, make([]string, maxWidth-len(vals))...)
-			}
-			off := int(col.FirstCol())
-			for i, s := range col.String(wb) {
-				vals[off+i] = s
-			}
+			vals[j] = row.Col(j)
 		}
 		select {
 		case rows <- Row{Line: int(n), Values: vals}:
