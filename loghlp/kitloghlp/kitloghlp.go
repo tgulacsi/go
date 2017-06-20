@@ -20,7 +20,6 @@ package kitloghlp
 import (
 	"fmt"
 	"io"
-	"sort"
 
 	"github.com/go-kit/kit/log"
 )
@@ -28,27 +27,14 @@ import (
 // LogFunc is the Log function.
 type LogFunc func(...interface{}) error
 
-// New returns a LogContext, using Logfmt logger on w.
-func New(w io.Writer) *LogContext {
-	return NewContext(log.NewLogfmtLogger(w))
-}
-
-// NewContext wraps the given logger with Stringify, and adds a default ts timestamp.
-func NewContext(logger log.Logger) *LogContext {
-	return (&LogContext{Logger: log.With(Stringify{logger})})
-}
-
-// With appends the given plus keyvals to the LogFunc.
-func With(oLog func(keyvals ...interface{}) error, plus ...interface{}) LogFunc {
-	return LogFunc(func(keyvals ...interface{}) error {
-		return oLog(append(keyvals, plus...)...)
-	})
+// New returns a Logger, using Logfmt logger with Stringify on w.
+func New(w io.Writer) Stringify {
+	return Stringify{log.NewLogfmtLogger(w)}
 }
 
 // NewTestLogger returns a Context wrapping a testing.TB.Log.
-func NewTestLogger(t testLogger) *LogContext {
-	return NewContext(log.NewLogfmtLogger(testLog{t})).
-		With("file", log.Caller(4))
+func NewTestLogger(t testLogger) log.Logger {
+	return log.With(New(testLog{t}), "file", log.Caller(4))
 }
 
 type testLogger interface {
@@ -97,57 +83,16 @@ func (sw StringWrap) String() string {
 	return fmt.Sprintf("%v", sw.Value)
 }
 
-type LogContext struct {
-	log.Logger
-	keys []string
-}
+type MultiLogger []log.Logger
 
-func (c *LogContext) With(keyvals ...interface{}) *LogContext {
-	keys := c.keys[:len(c.keys):len(c.keys)]
-	keysToString(keyvals)
-	for i := 0; i < len(keyvals); i += 2 {
-		k := keyvals[i].(string)
-		j := sort.SearchStrings(keys, k)
-		if !(j < len(keys) && keys[j] == k) {
-			keys = append(append(keys[:j], k), keys[j:]...)
+func (m MultiLogger) Log(keyvals ...interface{}) error {
+	var firstErr error
+	for _, lgr := range m {
+		if err := lgr.Log(keyvals...); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
-	return &LogContext{
-		Logger: log.With(c.Logger, keyvals...),
-		keys:   keys,
-	}
-}
-func (c *LogContext) WithNoDup(keyvals ...interface{}) *LogContext {
-	keysToString(keyvals)
-	for i := len(keyvals) - 2; i >= 0; i -= 2 {
-		k := keyvals[i].(string)
-		if j := sort.SearchStrings(c.keys, k); j < len(c.keys) && c.keys[j] == k {
-			keyvals[i], keyvals[i+1] = keyvals[0], keyvals[1]
-			keyvals = keyvals[2:]
-			i += 2
-		}
-	}
-	return c.With(keyvals...)
-}
-
-func (c *LogContext) Keys() []string {
-	return c.keys
-}
-func (c *LogContext) HasKey(k string) bool {
-	j := sort.SearchStrings(c.keys, k)
-	return j < len(c.keys) && c.keys[j] == k
-}
-
-func keysToString(keyvals ...interface{}) {
-	for i := 0; i < len(keyvals); i += 2 {
-		switch x := keyvals[i].(type) {
-		case string:
-		case fmt.Stringer:
-			keyvals[i] = x.String()
-		default:
-			keyvals[i] = fmt.Sprintf("%v", x)
-		}
-	}
+	return firstErr
 }
 
 // vim: set fileencoding=utf-8 noet:
