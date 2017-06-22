@@ -1,5 +1,5 @@
 /*
-   Copyright 2016 Tamás Gulácsi
+   Copyright 2017 Tamás Gulácsi
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"flag"
@@ -27,6 +28,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tgulacsi/go/dber"
@@ -51,7 +53,7 @@ func getQuery(table, where string, columns []string) string {
 	return "SELECT " + cols + " FROM " + table + " WHERE " + where
 }
 
-func dump(w io.Writer, db dber.DBer, qry string) error {
+func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string) error {
 	columns, err := GetColumns(db, qry)
 	if err != nil {
 		return err
@@ -63,23 +65,26 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 	defer rows.Close()
 	//log.Printf("columns: %#v", columns)
 
+	sepB := []byte(sep)
 	dest := make([]interface{}, len(columns))
 	bw := bufio.NewWriterSize(w, 65536)
 	defer bw.Flush()
 	values := make([]stringer, len(columns))
 	for i, col := range columns {
-		if i > 0 {
-			bw.Write([]byte{';'})
-		}
-		bw.Write([]byte{'"'})
-		bw.WriteString(col.Name)
-		bw.Write([]byte{'"'})
-
-		c := col.Converter()
+		c := col.Converter(sep)
 		values[i] = c
 		dest[i] = c.Pointer()
 	}
-	bw.Write([]byte{'\n'})
+	if header {
+		for i, col := range columns {
+			if i > 0 {
+				bw.Write(sepB)
+			}
+			csvQuote(bw, sep, col.Name)
+		}
+		bw.Write([]byte{'\n'})
+	}
+
 	n := 0
 	for rows.Next() {
 		if err = rows.Scan(dest...); err != nil {
@@ -87,7 +92,7 @@ func dump(w io.Writer, db dber.DBer, qry string) error {
 		}
 		for i, data := range dest {
 			if i > 0 {
-				bw.Write([]byte{';'})
+				bw.Write(sepB)
 			}
 			if data == nil {
 				continue
@@ -109,8 +114,8 @@ type Column struct {
 	orahlp.Column
 }
 
-func (col Column) Converter() stringer {
-	return getColConverter(col.Column)
+func (col Column) Converter(sep string) stringer {
+	return getColConverter(col.Column, sep)
 }
 
 func GetColumns(db dber.Execer, qry string) (cols []Column, err error) {
@@ -131,10 +136,11 @@ type stringer interface {
 }
 
 type ValString struct {
+	Sep   string
 	Value sql.NullString
 }
 
-func (v ValString) String() string        { return `"` + v.Value.String + `"` }
+func (v ValString) String() string        { return csvQuoteString(v.Sep, v.Value.String) }
 func (v *ValString) Pointer() interface{} { return &v.Value }
 
 type ValInt struct {
@@ -194,7 +200,7 @@ func (vt *ValTime) Scan(v interface{}) error {
 }
 func (v *ValTime) Pointer() interface{} { return v }
 
-func getColConverter(col orahlp.Column) stringer {
+func getColConverter(col orahlp.Column, sep string) stringer {
 	switch col.Type {
 	case 2:
 		if col.Scale == 0 {
@@ -204,7 +210,7 @@ func getColConverter(col orahlp.Column) stringer {
 	case 12:
 		return &ValTime{}
 	default:
-		return &ValString{}
+		return &ValString{Sep: sep}
 	}
 }
 
@@ -216,6 +222,8 @@ func main() {
 
 	flagConnect := flag.String("connect", os.Getenv("BRUNO_ID"), "user/passw@sid to connect to")
 	flagDateFormat := flag.String("date", dateFormat, "date format, in Go notation")
+	flagSep := flag.String("sep", ";", "separator")
+	flagHeader := flag.Bool("header", true, "print header")
 	flag.Parse()
 	dateFormat = *flagDateFormat
 	dEnd = `"` + strings.NewReplacer(
@@ -240,13 +248,43 @@ func main() {
 		os.Exit(2)
 	}
 	qry := getQuery(flag.Arg(0), where, columns)
-	err = dump(os.Stdout, dber.SqlDBer{DB: db}, qry)
+	err = dump(os.Stdout, dber.SqlDBer{DB: db}, qry, *flagHeader, *flagSep)
 	_ = db.Close()
 	if err != nil {
 		log.Printf("error dumping: %s", err)
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
+
+func csvQuoteString(sep, s string) string {
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	csvQuote(buf, sep, s)
+	return buf.String()
+}
+
+func csvQuote(w io.Writer, sep, s string) (int, error) {
+	hasSep := strings.Contains(s, sep)
+	hasQ := strings.Contains(s, `"`)
+	var n int
+	if !(hasSep || hasQ) {
+		return io.WriteString(w, s)
+	}
+	var err error
+	if n, err = w.Write([]byte{'"'}); err != nil {
+		return n, err
+	}
+	m, err := io.WriteString(w, strings.Replace(s, `"`, `""`, -1))
+	n += m
+	if err != nil {
+		return n, err
+	}
+	m, err = w.Write([]byte{'"'})
+	return n + m, err
 }
 
 // vim: se noet fileencoding=utf-8:
