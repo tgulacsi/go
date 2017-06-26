@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors. All rights reserved.
+// Copyright 2017 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -15,10 +15,10 @@ import (
 	"github.com/tgulacsi/go/lvdump"
 )
 
-var logger = log.NewContext(kitloghlp.Stringify{Logger: log.NewLogfmtLogger(os.Stderr)})
+var logger = kitloghlp.Stringify{Logger: log.NewLogfmtLogger(os.Stderr)}
 
 func main() {
-	lvdump.Log = logger.With("lib", "lvdump").Log
+	lvdump.Log = log.With(logger, "lib", "lvdump").Log
 
 	flag.Parse()
 	if err := lvdump.Dump(flag.Arg(0)); err != nil {
