@@ -314,10 +314,14 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 							return 'o'
 						case 'ü', 'ű', 'ú':
 							return 'u'
-						case ' ':
+						case '_':
+							return '_'
+						default:
+							if 'a' <= r && r <= 'z' || '0' <= r && r <= '9' {
+								return r
+							}
 							return '_'
 						}
-						return r
 					},
 						v)
 					if len(v) > 30 {
