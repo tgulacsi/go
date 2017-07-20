@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,18 +39,26 @@ import (
 	"github.com/pkg/errors"
 )
 
-const macroExpertURL = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
+const (
+	macroExpertURLv0 = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
+	macroExpertURLv1 = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
+	macroExpertURLv2 = `https://macrometeo.hu/meteo-api-app/api/pdf/query`
+)
 
 // Log is used for logging.
 var Log = func(...interface{}) error { return nil }
 
 // Options are the space/time coordinates and the required details.
 type Options struct {
-	Address                                                string
-	Lat, Lng                                               float64
-	Since, Till                                            time.Time
-	ContractID                                             string
-	NeedThunders, NeedRains, NeedWinds, NeedRainsIntensity bool
+	Address                          string
+	Lat, Lng                         float64
+	Since, Till                      time.Time
+	At                               time.Time
+	Interval                         int
+	ContractID                       string
+	NeedThunders, NeedIce, NeedWinds bool
+	NeedRains, NeedRainsIntensity    bool
+	ExtendedLightning                float64
 }
 
 var client = &http.Client{}
@@ -60,6 +68,30 @@ func init() {
 	*tr = *(http.DefaultTransport.(*http.Transport))
 	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	client.Transport = tr
+}
+
+type mevv struct {
+	version Version
+}
+type Version string
+
+const (
+	V0 = Version("v0")
+	V1 = Version("v1")
+	V2 = Version("v2")
+)
+
+func (V Version) URL() string {
+	switch V {
+	case V0:
+		return macroExpertURLv0
+	case V1:
+		return macroExpertURLv1
+	case V2:
+		return macroExpertURLv2
+	default:
+		return ""
+	}
 }
 
 // GetPDF returns the meteorological data in PDF form.
@@ -76,25 +108,67 @@ needWinds O varchar(1) Szél adatokat kérek ‘1’ – kérem, ‘0’-nem
 needRainsInt O varchar(1) Fix - ‘0’
 language O varchar(2) Fix - ‘hu’
 */
-func GetPDF(
+func (V Version) GetPDF(
 	ctx context.Context,
 	username, password string,
 	opt Options,
 ) (rc io.ReadCloser, fileName, mimeType string, err error) {
 	params := url.Values(map[string][]string{
-		"address":   {opt.Address},
-		"lat":       {fmt.Sprintf("%.5f", opt.Lat)},
-		"lng":       {fmt.Sprintf("%.5f", opt.Lng)},
-		"from_date": {fmtDate(opt.Since)}, "to_date": {fmtDate(opt.Till)},
-		"contr_id":     {opt.ContractID},
-		"needThunders": {fmtBool(opt.NeedThunders)},
-		"needRains":    {fmtBool(opt.NeedRains)},
-		"needWinds":    {fmtBool(opt.NeedWinds)},
-		"needRainsInt": {fmtBool(opt.NeedRainsIntensity)},
-		"language":     {"hu"},
+		"address":  {opt.Address},
+		"lat":      {fmt.Sprintf("%.5f", opt.Lat)},
+		"lng":      {fmt.Sprintf("%.5f", opt.Lng)},
+		"contr_id": {opt.ContractID},
 	})
 
-	meURL := macroExpertURL + "?" + params.Encode()
+	if V == V0 || V == V1 {
+		params["needThunders"] = []string{fmtBool(opt.NeedThunders)}
+		params["needRains"] = []string{fmtBool(opt.NeedRains)}
+		params["needWinds"] = []string{fmtBool(opt.NeedWinds)}
+		params["needRainsInt"] = []string{fmtBool(opt.NeedRainsIntensity)}
+	}
+
+	if V == V0 {
+		params["language"] = []string{"hu"}
+		params["from_date"] = []string{V.fmtDate(opt.Since)}
+		params["to_date"] = []string{V.fmtDate(opt.Till)}
+	} else {
+		params["language"] = []string{"hu_HU"}
+		params["date"] = []string{V.fmtDate(opt.At)}
+		if opt.Interval == 0 {
+			opt.Interval = 5
+		}
+		params["interval"] = []string{strconv.Itoa(opt.Interval)}
+
+		if V == V2 {
+			params["lon"] = params["lng"]
+			delete(params, "lon")
+			params["referenceNo"] = params["contr_id"]
+			delete(params, "contr_id")
+			if opt.ExtendedLightning != 0 {
+				params["extended"] = []string{fmt.Sprintf("%.5f", opt.ExtendedLightning)}
+			}
+			if opt.NeedThunders {
+				params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
+			}
+			if opt.NeedWinds {
+				params["operation"] = append(params["operation"], "QUERY_WIND")
+			}
+			if opt.NeedIce {
+				params["operation"] = append(params["operation"], "QUERY_ICE")
+			}
+			if opt.NeedRains {
+				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION")
+			}
+			if opt.NeedRainsIntensity {
+				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
+			}
+			if opt.NeedRainsIntensity {
+				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
+			}
+		}
+	}
+
+	meURL := V.URL() + "?" + params.Encode()
 	req, err := http.NewRequest("GET", meURL, nil)
 	if err != nil {
 		return nil, "", "", errors.Wrapf(err, "url=%q", meURL)
@@ -162,11 +236,14 @@ func (mr meResponse) ErrNum() int {
 
 func (mr meResponse) Error() string { return fmt.Sprintf("%s: %s", mr.Code, mr.Text) }
 
-func fmtDate(t time.Time) string {
+func (V Version) fmtDate(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.Format("2006-01-02")
+	if V == V0 {
+		return t.Format("2006-01-02")
+	}
+	return t.Format("2006.01.02")
 }
 func fmtBool(b bool) string {
 	if b {
