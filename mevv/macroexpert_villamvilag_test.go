@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ limitations under the License.
 package mevv_test
 
 import (
+	"context"
 	"io"
 	"io/ioutil"
 	"os"
@@ -61,7 +62,9 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 		}, false},
 	} {
 
-		ct, r, err := mevv.GetPDF(username, password, tc.Options)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		r, _, ct, err := mevv.V2.GetPDF(ctx, username, password, tc.Options)
+		cancel()
 		t.Logf("%d. ct=%q err=%v", i, ct, err)
 		if r != nil {
 			defer r.Close()
@@ -77,3 +80,5 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 		}
 	}
 }
+
+// vim: set noet fileencoding=utf-8:

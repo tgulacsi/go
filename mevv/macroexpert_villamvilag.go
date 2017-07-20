@@ -58,7 +58,8 @@ type Options struct {
 	ContractID                       string
 	NeedThunders, NeedIce, NeedWinds bool
 	NeedRains, NeedRainsIntensity    bool
-	ExtendedLightning                float64
+	ExtendedLightning                bool
+	WithStatistics                   bool
 }
 
 var client = &http.Client{}
@@ -140,6 +141,15 @@ func (V Version) GetPDF(
 				opt.Interval = int(d/(24*time.Hour)) + 1
 			}
 		}
+		switch {
+		case opt.Interval < 15:
+			opt.Interval = 5
+		case opt.Interval < 90:
+			opt.Interval = 30
+		default:
+			opt.Interval = 180
+		}
+
 		params["date"] = []string{V.fmtDate(opt.At)}
 		if opt.Interval == 0 {
 			opt.Interval = 5
@@ -151,8 +161,11 @@ func (V Version) GetPDF(
 			delete(params, "lon")
 			params["referenceNo"] = params["contr_id"]
 			delete(params, "contr_id")
-			if opt.ExtendedLightning != 0 {
-				params["extended"] = []string{fmt.Sprintf("%.5f", opt.ExtendedLightning)}
+			if opt.ExtendedLightning {
+				params["extended"] = []string{"1"}
+			}
+			if opt.WithStatistics {
+				params["withStatistics"] = []string{"1"}
 			}
 			if opt.NeedThunders {
 				params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
