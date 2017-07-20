@@ -133,6 +133,13 @@ func (V Version) GetPDF(
 		params["to_date"] = []string{V.fmtDate(opt.Till)}
 	} else {
 		params["language"] = []string{"hu_HU"}
+		if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
+			d := opt.Till.Sub(opt.Since) / 2
+			opt.At = opt.Since.Add(d)
+			if opt.Interval == 0 {
+				opt.Interval = int(d/(24*time.Hour)) + 1
+			}
+		}
 		params["date"] = []string{V.fmtDate(opt.At)}
 		if opt.Interval == 0 {
 			opt.Interval = 5
