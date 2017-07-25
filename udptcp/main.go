@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log"
@@ -35,7 +36,8 @@ func main() {
 				log.Println(err)
 				continue
 			}
-			go handleConnection(conn)
+			ctx := context.Background()
+			go handleConnection(ctx, conn)
 		}
 		return
 	}
@@ -51,7 +53,8 @@ func main() {
 		}
 		log.Println(conn, err)
 		if conn != nil {
-			if err := handleConnection(conn); err != nil {
+			ctx := context.Background()
+			if err := handleConnection(ctx, conn); err != nil {
 				log.Println("handle:", err)
 			}
 			conn.Close()
@@ -61,9 +64,12 @@ func main() {
 	}
 }
 
-func connForwarder(typ, addr string) func(conn net.Conn) error {
+func connForwarder(typ, addr string) func(ctx context.Context, conn net.Conn) error {
 	var conns sync.Map
-	return func(down net.Conn) error {
+	return func(ctx context.Context, down net.Conn) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		key := down.RemoteAddr()
 		log.Println("received connection from", key)
 		var up net.Conn
@@ -78,7 +84,7 @@ func connForwarder(typ, addr string) func(conn net.Conn) error {
 			conns.Store(key, up)
 		}
 		defer conns.Delete(key)
-		var grp errgroup.Group
+		grp, _ := errgroup.WithContext(ctx)
 		grp.Go(func() error { _, err := io.Copy(up, down); return err })
 		grp.Go(func() error { _, err := io.Copy(down, up); return err })
 		return grp.Wait()
