@@ -135,8 +135,9 @@ func (V Version) GetPDF(
 		params["to_date"] = []string{V.fmtDate(opt.Till)}
 	} else {
 		params["language"] = []string{"hu_HU"}
+		var d time.Duration
 		if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
-			d := opt.Till.Sub(opt.Since) / 2
+			d = opt.Till.Sub(opt.Since) / 2
 			opt.At = opt.Since.Add(d)
 			if opt.Interval == 0 {
 				opt.Interval = int(d/(24*time.Hour)) + 1
@@ -147,8 +148,14 @@ func (V Version) GetPDF(
 			opt.Interval = 5
 		case opt.Interval < 90:
 			opt.Interval = 30
+			if d != 0 {
+				opt.At = opt.Since
+			}
 		default:
 			opt.Interval = 180
+			if d != 0 {
+				opt.At = opt.Since
+			}
 		}
 
 		params["date"] = []string{V.fmtDate(opt.At)}
