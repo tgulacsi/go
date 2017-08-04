@@ -39,6 +39,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrAuth = errors.New("authentication error")
+
 const (
 	macroExpertURLv0 = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
 	macroExpertURLv1 = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
@@ -220,7 +222,7 @@ func (V Version) GetPDF(
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, "", "", errors.New("Authentication error: " + resp.Status)
+			return nil, "", "", errors.Wrap(ErrAuth, resp.Status)
 		}
 		return nil, "", "", errors.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
