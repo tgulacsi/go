@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package mevv is for accessing "MacroExpert VillámVilág" service.
+// Package mevv is for accessing "MacroExpert VillĂĄmVilĂĄg" service.
 package mevv
 
 import (
@@ -60,6 +60,7 @@ type Options struct {
 	NeedRains, NeedRainsIntensity    bool
 	ExtendedLightning                bool
 	WithStatistics                   bool
+	Host                             string
 }
 
 var client = &http.Client{}
@@ -97,17 +98,17 @@ func (V Version) URL() string {
 
 // GetPDF returns the meteorological data in PDF form.
 /*
-address M varchar(45) Keresett cím házszámmal
-lat M float(8,5) Szélesség pl.: ‘47.17451’
-lng M float(8,5) Hosszúság pl.: ‘17.04234’
-from_date M date(YYYY-MM-DD) Kezdő datum pl.: ‘2014-11-25’
-to_date M date(YYYY-MM-DD) Záró datum pl.: ‘2014-11-29’
-contr_id O varchar(25) Kárszám pl.: ‘KSZ-112233’
-needThunders O varchar(1) Villám adatokat kérek ‘1’–kérem, ‘0’-nem
-needRains O varchar(1) Csapadék adatokat kérek ‘1’–kérem, ‘0’-nem
-needWinds O varchar(1) Szél adatokat kérek ‘1’ – kérem, ‘0’-nem
-needRainsInt O varchar(1) Fix - ‘0’
-language O varchar(2) Fix - ‘hu’
+address M varchar(45) Keresett cĂ­m hĂĄzszĂĄmmal
+lat M float(8,5) SzĂŠlessĂŠg pl.: â47.17451â
+lng M float(8,5) HosszĂşsĂĄg pl.: â17.04234â
+from_date M date(YYYY-MM-DD) KezdĹ datum pl.: â2014-11-25â
+to_date M date(YYYY-MM-DD) ZĂĄrĂł datum pl.: â2014-11-29â
+contr_id O varchar(25) KĂĄrszĂĄm pl.: âKSZ-112233â
+needThunders O varchar(1) VillĂĄm adatokat kĂŠrek â1ââkĂŠrem, â0â-nem
+needRains O varchar(1) CsapadĂŠk adatokat kĂŠrek â1ââkĂŠrem, â0â-nem
+needWinds O varchar(1) SzĂŠl adatokat kĂŠrek â1â â kĂŠrem, â0â-nem
+needRainsInt O varchar(1) Fix - â0â
+language O varchar(2) Fix - âhuâ
 */
 func (V Version) GetPDF(
 	ctx context.Context,
@@ -189,6 +190,11 @@ func (V Version) GetPDF(
 	}
 
 	meURL := V.URL() + "?" + params.Encode()
+	if opt.Host != "" {
+		u, _ := url.Parse(meURL)
+		u.Host = opt.Host
+		meURL = u.String()
+	}
 	req, err := http.NewRequest("GET", meURL, nil)
 	if err != nil {
 		return nil, "", "", errors.Wrapf(err, "url=%q", meURL)
@@ -202,14 +208,14 @@ func (V Version) GetPDF(
 	Log("msg", "Get", "url", req.URL)
 	resp, err := ctxhttp.Do(ctx, client, req)
 	if err != nil {
-		return nil, "", "", errors.Wrapf(err, "Do %#v", req)
+		return nil, "", "", errors.Wrapf(err, "Do %#v", req.URL.String())
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return nil, "", "", errors.New("Authentication error: " + resp.Status)
 		}
-		return nil, "", "", errors.Errorf("%s: egyéb hiba (%s)", resp.Status, req.URL)
+		return nil, "", "", errors.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -298,3 +304,5 @@ func ReadUserPassw(filename string) (string, string, error) {
 	}
 	return "", "", io.EOF
 }
+
+// vim: set fileencoding=utf-8 noet:
