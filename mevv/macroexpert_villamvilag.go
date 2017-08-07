@@ -98,6 +98,20 @@ func (V Version) URL() string {
 	}
 }
 
+func (V Version) LngKey() string {
+	if V == V2 {
+		return "lon"
+	}
+	return "lng"
+}
+
+func (V Version) RefKey() string {
+	if V == V2 {
+		return "referenceNo"
+	}
+	return "contr_id"
+}
+
 // GetPDF returns the meteorological data in PDF form.
 /*
 address M varchar(45) Keresett cĂ­m hĂĄzszĂĄmmal
@@ -120,8 +134,8 @@ func (V Version) GetPDF(
 	params := url.Values(map[string][]string{
 		"address":  {opt.Address},
 		"lat":      {fmt.Sprintf("%.5f", opt.Lat)},
-		"lng":      {fmt.Sprintf("%.5f", opt.Lng)},
-		"contr_id": {opt.ContractID},
+		V.LngKey(): {fmt.Sprintf("%.5f", opt.Lng)},
+		V.RefKey(): {opt.ContractID},
 	})
 
 	if V == V0 || V == V1 {
@@ -167,10 +181,6 @@ func (V Version) GetPDF(
 		params["interval"] = []string{strconv.Itoa(opt.Interval)}
 
 		if V == V2 {
-			params["lon"] = params["lng"]
-			delete(params, "lon")
-			params["referenceNo"] = params["contr_id"]
-			delete(params, "contr_id")
 			if opt.ExtendedLightning {
 				params["extended"] = []string{"1"}
 			}
@@ -275,10 +285,7 @@ func (V Version) fmtDate(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	if V == V0 {
-		return t.Format("2006-01-02")
-	}
-	return t.Format("2006.01.02")
+	return t.Format("2006-01-02")
 }
 func fmtBool(b bool) string {
 	if b {
