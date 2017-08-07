@@ -20,6 +20,7 @@ package mevv
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
@@ -32,9 +33,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/net/context"
-	"golang.org/x/net/context/ctxhttp"
 
 	"github.com/pkg/errors"
 )
@@ -205,6 +203,10 @@ func (V Version) GetPDF(
 			if opt.NeedRainsIntensity {
 				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
 			}
+
+			if len(params["operation"]) == 0 {
+				params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
+			}
 		}
 	}
 
@@ -218,14 +220,11 @@ func (V Version) GetPDF(
 	if err != nil {
 		return nil, "", "", errors.Wrapf(err, "url=%q", meURL)
 	}
+	Log("msg", "MEVV", "username", username, "password", password)
 	req.SetBasicAuth(username, password)
-	select {
-	case <-ctx.Done():
-		return nil, "", "", ctx.Err()
-	default:
-	}
-	Log("msg", "Get", "url", req.URL)
-	resp, err := ctxhttp.Do(ctx, client, req)
+	req = req.WithContext(ctx)
+	Log("msg", "Get", "url", req.URL, "headers", req.Header)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, "", "", errors.Wrapf(err, "Do %#v", req.URL.String())
 	}
