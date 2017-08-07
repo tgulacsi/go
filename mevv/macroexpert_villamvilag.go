@@ -43,6 +43,8 @@ const (
 	macroExpertURLv0 = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
 	macroExpertURLv1 = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
 	macroExpertURLv2 = `https://macrometeo.hu/meteo-api-app/api/pdf/query`
+
+	TestHost = "40.68.241.196"
 )
 
 // Log is used for logging.
