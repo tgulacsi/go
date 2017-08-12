@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/context/ctxhttp"
@@ -47,6 +48,8 @@ type soapClient struct {
 	SOAPActionBase string
 }
 
+var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
+
 func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, io.Closer, error) {
 	if s.SOAPActionBase != "" {
 		method = s.SOAPActionBase + "/" + method
@@ -54,8 +57,10 @@ func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*x
 	return s.CallAction(ctx, method, body)
 }
 func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.Reader) (*xml.Decoder, io.Closer, error) {
-	var buf bytes.Buffer
-	_, err := io.Copy(&buf, io.MultiReader(
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	_, err := io.Copy(buf, io.MultiReader(
 		strings.NewReader(`<?xml version="1.0" encoding="utf-8"?>
 <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
