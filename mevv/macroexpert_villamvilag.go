@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package mevv is for accessing "MacroExpert VillámVilág" service.
+// Package mevv is for accessing "MacroExpert VillĂĄmVilĂĄg" service.
 package mevv
 
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
@@ -33,16 +34,17 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/context/ctxhttp"
-
 	"github.com/pkg/errors"
 )
+
+var ErrAuth = errors.New("authentication error")
 
 const (
 	macroExpertURLv0 = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
 	macroExpertURLv1 = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
 	macroExpertURLv2 = `https://macrometeo.hu/meteo-api-app/api/pdf/query`
+
+	TestHost = "40.68.241.196"
 )
 
 // Log is used for logging.
@@ -60,6 +62,7 @@ type Options struct {
 	NeedRains, NeedRainsIntensity    bool
 	ExtendedLightning                bool
 	WithStatistics                   bool
+	Host                             string
 }
 
 var client = &http.Client{}
@@ -95,19 +98,33 @@ func (V Version) URL() string {
 	}
 }
 
+func (V Version) LngKey() string {
+	if V == V2 {
+		return "lon"
+	}
+	return "lng"
+}
+
+func (V Version) RefKey() string {
+	if V == V2 {
+		return "referenceNo"
+	}
+	return "contr_id"
+}
+
 // GetPDF returns the meteorological data in PDF form.
 /*
-address M varchar(45) Keresett cím házszámmal
-lat M float(8,5) Szélesség pl.: ‘47.17451’
-lng M float(8,5) Hosszúság pl.: ‘17.04234’
-from_date M date(YYYY-MM-DD) Kezdő datum pl.: ‘2014-11-25’
-to_date M date(YYYY-MM-DD) Záró datum pl.: ‘2014-11-29’
-contr_id O varchar(25) Kárszám pl.: ‘KSZ-112233’
-needThunders O varchar(1) Villám adatokat kérek ‘1’–kérem, ‘0’-nem
-needRains O varchar(1) Csapadék adatokat kérek ‘1’–kérem, ‘0’-nem
-needWinds O varchar(1) Szél adatokat kérek ‘1’ – kérem, ‘0’-nem
-needRainsInt O varchar(1) Fix - ‘0’
-language O varchar(2) Fix - ‘hu’
+address M varchar(45) Keresett cĂ­m hĂĄzszĂĄmmal
+lat M float(8,5) SzĂŠlessĂŠg pl.: â47.17451â
+lng M float(8,5) HosszĂşsĂĄg pl.: â17.04234â
+from_date M date(YYYY-MM-DD) KezdĹ datum pl.: â2014-11-25â
+to_date M date(YYYY-MM-DD) ZĂĄrĂł datum pl.: â2014-11-29â
+contr_id O varchar(25) KĂĄrszĂĄm pl.: âKSZ-112233â
+needThunders O varchar(1) VillĂĄm adatokat kĂŠrek â1ââkĂŠrem, â0â-nem
+needRains O varchar(1) CsapadĂŠk adatokat kĂŠrek â1ââkĂŠrem, â0â-nem
+needWinds O varchar(1) SzĂŠl adatokat kĂŠrek â1â â kĂŠrem, â0â-nem
+needRainsInt O varchar(1) Fix - â0â
+language O varchar(2) Fix - âhuâ
 */
 func (V Version) GetPDF(
 	ctx context.Context,
@@ -117,8 +134,8 @@ func (V Version) GetPDF(
 	params := url.Values(map[string][]string{
 		"address":  {opt.Address},
 		"lat":      {fmt.Sprintf("%.5f", opt.Lat)},
-		"lng":      {fmt.Sprintf("%.5f", opt.Lng)},
-		"contr_id": {opt.ContractID},
+		V.LngKey(): {fmt.Sprintf("%.5f", opt.Lng)},
+		V.RefKey(): {opt.ContractID},
 	})
 
 	if V == V0 || V == V1 {
@@ -164,10 +181,6 @@ func (V Version) GetPDF(
 		params["interval"] = []string{strconv.Itoa(opt.Interval)}
 
 		if V == V2 {
-			params["lon"] = params["lng"]
-			delete(params, "lon")
-			params["referenceNo"] = params["contr_id"]
-			delete(params, "contr_id")
 			if opt.ExtendedLightning {
 				params["extended"] = []string{"1"}
 			}
@@ -192,31 +205,37 @@ func (V Version) GetPDF(
 			if opt.NeedRainsIntensity {
 				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
 			}
+
+			if len(params["operation"]) == 0 {
+				params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
+			}
 		}
 	}
 
 	meURL := V.URL() + "?" + params.Encode()
+	if opt.Host != "" {
+		u, _ := url.Parse(meURL)
+		u.Host = opt.Host
+		meURL = u.String()
+	}
 	req, err := http.NewRequest("GET", meURL, nil)
 	if err != nil {
 		return nil, "", "", errors.Wrapf(err, "url=%q", meURL)
 	}
+	Log("msg", "MEVV", "username", username, "password", password)
 	req.SetBasicAuth(username, password)
-	select {
-	case <-ctx.Done():
-		return nil, "", "", ctx.Err()
-	default:
-	}
-	Log("msg", "Get", "url", req.URL)
-	resp, err := ctxhttp.Do(ctx, client, req)
+	req = req.WithContext(ctx)
+	Log("msg", "Get", "url", req.URL, "headers", req.Header)
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "", "", errors.Wrapf(err, "Do %#v", req)
+		return nil, "", "", errors.Wrapf(err, "Do %#v", req.URL.String())
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, "", "", errors.New("Authentication error: " + resp.Status)
+			return nil, "", "", errors.Wrap(ErrAuth, resp.Status)
 		}
-		return nil, "", "", errors.Errorf("%s: egyéb hiba (%s)", resp.Status, req.URL)
+		return nil, "", "", errors.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -267,10 +286,7 @@ func (V Version) fmtDate(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	if V == V0 {
-		return t.Format("2006-01-02")
-	}
-	return t.Format("2006.01.02")
+	return t.Format("2006-01-02")
 }
 func fmtBool(b bool) string {
 	if b {
@@ -305,3 +321,5 @@ func ReadUserPassw(filename string) (string, string, error) {
 	}
 	return "", "", io.EOF
 }
+
+// vim: set fileencoding=utf-8 noet:

@@ -29,6 +29,7 @@ import (
 
 func TestMacroExpertVillamVilagPDF(t *testing.T) {
 	username, password := os.Getenv("MEVV_USERNAME"), os.Getenv("MEVV_PASSWORD")
+	testHost := os.Getenv("MEVV_HOST")
 	if username == "" && password == "" {
 		t.Logf("Environment variables MEVV_USERNAME and MEVV_PASSWORD are empty, reading from .password")
 		var err error
@@ -48,6 +49,7 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 			Lat:        47.47809,
 			Lng:        19.16839,
 			ContractID: "TESZT",
+			Host:       testHost,
 		}, true},
 		{mevv.Options{
 			Address:      "Budapest, Venyige utca 3",
@@ -59,6 +61,7 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 			NeedThunders: true,
 			NeedWinds:    true,
 			NeedRains:    true, NeedRainsIntensity: true,
+			Host: testHost,
 		}, false},
 	} {
 
