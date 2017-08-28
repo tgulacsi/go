@@ -361,6 +361,7 @@ func ReadCSV(ctx context.Context, rows chan<- Row, r io.Reader, delim string, co
 	cr := csv.NewReader(r)
 
 	cr.Comma = ([]rune(delim))[0]
+	cr.FieldsPerRecord = -1
 	cr.LazyQuotes = true
 	n := 0
 	for {
