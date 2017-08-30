@@ -222,7 +222,7 @@ func (V Version) GetPDF(
 	if err != nil {
 		return nil, "", "", errors.Wrapf(err, "url=%q", meURL)
 	}
-	Log("msg", "MEVV", "username", username, "password", password)
+	Log("msg", "MEVV", "username", username, "password", strings.Repeat("*", len(password)))
 	req.SetBasicAuth(username, password)
 	req = req.WithContext(ctx)
 	Log("msg", "Get", "url", req.URL, "headers", req.Header)
