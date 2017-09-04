@@ -2,6 +2,7 @@ package soaphlp
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"io"
 	"io/ioutil"
@@ -11,9 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/context/ctxhttp"
-
 	"github.com/kylewolfe/soaptrip"
 	"github.com/pkg/errors"
 )
@@ -21,10 +19,21 @@ import (
 // Log is the logging function in use.
 var Log = func(...interface{}) error { return nil }
 
+var ErrBodyNotFound = errors.New("body not found")
+
 // Caller is the client interface.
 type Caller interface {
 	Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, io.Closer, error)
 }
+
+// WithLog returns the context with the "Log" value set to the given Log.
+func WithLog(ctx context.Context, Log func(...interface{}) error) context.Context {
+	return context.WithValue(ctx, logKey, Log)
+}
+
+type contextKey string
+
+const logKey = contextKey("Log")
 
 // NewClient returns a new client for the given endpoint.
 func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
@@ -50,6 +59,30 @@ type soapClient struct {
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
+func FindBody(r io.Reader) (*xml.Decoder, error) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+	W := struct {
+		io.Writer
+	}{buf}
+	d := xml.NewDecoder(io.TeeReader(r, W))
+	for {
+		tok, err := d.Token()
+		if err != nil {
+			return d, errors.Wrap(err, buf.String())
+		}
+		switch x := tok.(type) {
+		case xml.StartElement:
+			if (x.Name.Space == "" || x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") && x.Name.Local == "Body" {
+				W.Writer = ioutil.Discard // do not cache anymore
+				return d, nil
+			}
+		}
+	}
+	return d, errors.Wrap(ErrBodyNotFound, buf.String())
+}
+
 func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, io.Closer, error) {
 	if s.SOAPActionBase != "" {
 		method = s.SOAPActionBase + "/" + method
@@ -57,6 +90,17 @@ func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*x
 	return s.CallAction(ctx, method, body)
 }
 func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.Reader) (*xml.Decoder, io.Closer, error) {
+	rc, err := s.CallActionRaw(ctx, soapAction, body)
+	if err != nil {
+		if rc != nil {
+			rc.Close()
+		}
+		return nil, nil, err
+	}
+	d, err := FindBody(rc)
+	return d, rc, err
+}
+func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
@@ -68,46 +112,36 @@ func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.R
 		body,
 		strings.NewReader("\n</Body></Envelope>")))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	req, err := http.NewRequest("POST", s.URL, bytes.NewReader(buf.Bytes()))
 	req.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	req.Header.Set("SOAPAction", soapAction)
 	Log := GetLog(ctx)
 	Log("msg", "calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
-	resp, err := ctxhttp.Do(ctx, s.Client, req)
+	resp, err := s.Client.Do(req.WithContext(ctx))
 	if err != nil {
 		if resp != nil && resp.Body != nil {
-			resp.Body.Close()
+			defer resp.Body.Close()
 		}
 		if urlErr, ok := err.(*url.Error); ok {
 			if fault, ok := urlErr.Err.(*soaptrip.SoapFault); ok {
 				b, _ := ioutil.ReadAll(fault.Response.Body)
-				return nil, ioutil.NopCloser(bytes.NewReader(b)), errors.Wrapf(err, "%v: %v\n%s", fault.FaultCode, fault.FaultString, b)
+				return nil, errors.Wrapf(err, "%v: %v\n%s", fault.FaultCode, fault.FaultString, b)
 			}
 		}
-		return nil, nil, err
+		return nil, err
 	}
-
-	d := xml.NewDecoder(resp.Body)
-	for {
-		tok, err := d.Token()
-		if err != nil {
-			return d, resp.Body, err
-		}
-		switch x := tok.(type) {
-		case xml.StartElement:
-			if x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/" && x.Name.Local == "Body" {
-				return d, resp.Body, nil
-			}
-		}
+	if resp.StatusCode > 299 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return nil, errors.Wrap(errors.New(resp.Status), string(b))
 	}
-	return d, resp.Body, io.EOF
+	return resp.Body, nil
 }
 
 // GetLog returns the Log function from the Context.
 func GetLog(ctx context.Context) func(keyvalue ...interface{}) error {
-	if Log, _ := ctx.Value("Log").(func(...interface{}) error); Log != nil {
+	if Log, _ := ctx.Value(logKey).(func(...interface{}) error); Log != nil {
 		return Log
 	}
 	return Log
