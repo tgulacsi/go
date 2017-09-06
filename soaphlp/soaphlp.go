@@ -23,7 +23,7 @@ var ErrBodyNotFound = errors.New("body not found")
 
 // Caller is the client interface.
 type Caller interface {
-	Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, io.Closer, error)
+	Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error)
 }
 
 // WithLog returns the context with the "Log" value set to the given Log.
@@ -59,46 +59,63 @@ type soapClient struct {
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
-func FindBody(r io.Reader) (*xml.Decoder, error) {
+func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-	W := struct {
-		io.Writer
-	}{buf}
-	d := xml.NewDecoder(io.TeeReader(r, W))
+	d := xml.NewDecoder(io.TeeReader(r, buf))
+	var n int
 	for {
+		n++
 		tok, err := d.Token()
 		if err != nil {
-			return d, errors.Wrap(err, buf.String())
+			if err == io.EOF {
+				if buf.Len() == 0 {
+					return nil, err
+				}
+				break
+			}
+			return nil, errors.Wrap(err, buf.String())
 		}
 		switch x := tok.(type) {
 		case xml.StartElement:
-			if (x.Name.Space == "" || x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") && x.Name.Local == "Body" {
-				W.Writer = ioutil.Discard // do not cache anymore
+			if x.Name.Local == "Body" &&
+				(x.Name.Space == "" || x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") {
+				start := d.InputOffset()
+				if err := d.Skip(); err != nil {
+					return nil, errors.Wrap(err, buf.String())
+				}
+				end := d.InputOffset()
+				//Log("start", start, "end", end, "bytes", start, end, buf.Len())
+				if _, err = w.Write(buf.Bytes()[start:end]); err != nil {
+					return nil, err
+				}
+				d := xml.NewDecoder(bytes.NewReader(buf.Bytes()))
+				for i := 0; i < n; i++ {
+					d.Token()
+				}
 				return d, nil
 			}
 		}
 	}
-	return d, errors.Wrap(ErrBodyNotFound, buf.String())
+	return nil, errors.Wrap(ErrBodyNotFound, buf.String())
 }
 
-func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, io.Closer, error) {
+func (s soapClient) Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error) {
 	if s.SOAPActionBase != "" {
 		method = s.SOAPActionBase + "/" + method
 	}
-	return s.CallAction(ctx, method, body)
+	return s.CallAction(ctx, w, method, body)
 }
-func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.Reader) (*xml.Decoder, io.Closer, error) {
+func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction string, body io.Reader) (*xml.Decoder, error) {
 	rc, err := s.CallActionRaw(ctx, soapAction, body)
 	if err != nil {
 		if rc != nil {
 			rc.Close()
 		}
-		return nil, nil, err
+		return nil, err
 	}
-	d, err := FindBody(rc)
-	return d, rc, err
+	return FindBody(w, rc)
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -133,8 +150,12 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		return nil, err
 	}
 	if resp.StatusCode > 299 {
+		err := errors.New(resp.Status)
 		b, _ := ioutil.ReadAll(resp.Body)
-		return nil, errors.Wrap(errors.New(resp.Status), string(b))
+		if len(b) == 0 {
+			return nil, err
+		}
+		return nil, errors.Wrap(err, string(b))
 	}
 	return resp.Body, nil
 }
