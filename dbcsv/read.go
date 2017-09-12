@@ -245,10 +245,7 @@ func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIn
 			if need != nil && !need[i] {
 				continue
 			}
-			s, err := cell.String()
-			if err != nil {
-				return err
-			}
+			s := cell.String()
 			if s == "" {
 				vals = append(vals, "")
 				continue
@@ -399,3 +396,5 @@ type Row struct {
 	Line   int
 	Values []string
 }
+
+// vim: set noet fileencoding=utf-8:
