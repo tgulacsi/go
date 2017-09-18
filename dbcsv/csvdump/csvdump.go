@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,26 +44,35 @@ import (
 	"github.com/pkg/errors"
 )
 
+var envEnc = namedEncoding{Encoding: encoding.Nop, Name: "utf-8"}
+
+type namedEncoding struct {
+	encoding.Encoding
+	Name string
+}
+
 func main() {
+	if e := os.Getenv("LANG"); e != "" {
+		if i := strings.LastIndexByte(e, '.'); i >= 0 {
+			e = e[i+1:]
+		}
+		if enc, err := encFromName(e); err != nil {
+			log.Println(err)
+		} else {
+			envEnc = enc
+		}
+	}
 	if err := Main(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("%+v", err)
 	}
 }
 
 func Main() error {
-	defaultEncoding := "utf-8"
-	if envEnc := os.Getenv("LANG"); envEnc != "" {
-		if i := strings.LastIndexByte(envEnc, '.'); i >= 0 {
-			envEnc = envEnc[i+1:]
-		}
-		defaultEncoding = envEnc
-	}
-
 	flagConnect := flag.String("connect", os.Getenv("BRUNO_ID"), "user/passw@sid to connect to")
 	flagDateFormat := flag.String("date", dateFormat, "date format, in Go notation")
 	flagSep := flag.String("sep", ";", "separator")
 	flagHeader := flag.Bool("header", true, "print header")
-	flagEnc := flag.String("encoding", defaultEncoding, "encoding to use for output")
+	flagEnc := flag.String("encoding", envEnc.Name, "encoding to use for output")
 	flagOut := flag.String("o", "-", "output (defaults to stdout)")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
 	flag.Parse()
@@ -86,15 +96,9 @@ func Main() error {
 		}
 	}
 
-	enc := encoding.Replacement
-	switch strings.NewReplacer("-", "", "_", "").Replace(strings.ToLower(*flagEnc)) {
-	case "", "utf8":
-	case "iso88591":
-		enc = charmap.ISO8859_1
-	case "iso88592":
-		enc = charmap.ISO8859_2
-	default:
-		return errors.Errorf("unknonw encoding %q", *flagEnc)
+	enc, err := encFromName(*flagEnc)
+	if err != nil {
+		return err
 	}
 	dateFormat = *flagDateFormat
 	dEnd = `"` + strings.NewReplacer(
@@ -121,10 +125,14 @@ func Main() error {
 		return errors.Wrap(err, *flagConnect)
 	}
 	defer db.Close()
-	qry := getQuery(flag.Arg(0), where, columns)
+	if Log != nil {
+		Log("env_encoding", envEnc.Name)
+	}
+	qry := getQuery(flag.Arg(0), where, columns, envEnc)
 
 	fh := os.Stdout
 	if !(*flagOut == "" || *flagOut == "-") {
+		os.MkdirAll(filepath.Dir(*flagOut), 0775)
 		if fh, err = os.Create(*flagOut); err != nil {
 			return errors.Wrap(err, *flagOut)
 		}
@@ -143,9 +151,12 @@ func Main() error {
 	return fh.Close()
 }
 
-func getQuery(table, where string, columns []string) string {
+func getQuery(table, where string, columns []string, enc encoding.Encoding) string {
 	if table == "" && where == "" && len(columns) == 0 {
-		b, err := ioutil.ReadAll(os.Stdin)
+		if enc == nil {
+			enc = encoding.Nop
+		}
+		b, err := ioutil.ReadAll(enc.NewDecoder().Reader(os.Stdin))
 		if err != nil {
 			panic(err)
 		}
@@ -361,6 +372,19 @@ func csvQuote(w io.Writer, sep, s string) (int, error) {
 	}
 	m, err = w.Write([]byte{'"'})
 	return n + m, err
+}
+
+func encFromName(e string) (namedEncoding, error) {
+	switch strings.NewReplacer("-", "", "_", "").Replace(strings.ToLower(e)) {
+	case "", "utf8":
+		return namedEncoding{Encoding: encoding.Nop, Name: "utf-8"}, nil
+	case "iso88591":
+		return namedEncoding{Encoding: charmap.ISO8859_1, Name: "iso-8859-1"}, nil
+	case "iso88592":
+		return namedEncoding{Encoding: charmap.ISO8859_2, Name: "iso-8859-2"}, nil
+	default:
+		return namedEncoding{Encoding: encoding.Nop, Name: e}, errors.Wrap(errors.New("unknown encoding"), e)
+	}
 }
 
 // vim: se noet fileencoding=utf-8:
