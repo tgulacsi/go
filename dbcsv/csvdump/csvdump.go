@@ -23,6 +23,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -63,7 +64,27 @@ func Main() error {
 	flagHeader := flag.Bool("header", true, "print header")
 	flagEnc := flag.String("encoding", defaultEncoding, "encoding to use for output")
 	flagOut := flag.String("o", "-", "output (defaults to stdout)")
+	flagVerbose := flag.Bool("v", false, "verbose logging")
 	flag.Parse()
+
+	var Log func(...interface{}) error
+	if *flagVerbose {
+		Log = func(keyvals ...interface{}) error {
+			if len(keyvals)%2 != 0 {
+				keyvals = append(keyvals, "")
+			}
+			vv := make([]interface{}, len(keyvals)/2)
+			for i := range vv {
+				v := fmt.Sprintf("%+v", keyvals[(i<<1)+1])
+				if strings.Contains(v, " ") {
+					v = `"` + v + `"`
+				}
+				vv[i] = fmt.Sprintf("%s=%s", keyvals[(i<<1)], v)
+			}
+			log.Println(vv...)
+			return nil
+		}
+	}
 
 	enc := encoding.Replacement
 	switch strings.NewReplacer("-", "", "_", "").Replace(strings.ToLower(*flagEnc)) {
@@ -110,9 +131,11 @@ func Main() error {
 	}
 	defer fh.Close()
 
-	log.Println("Writing to", fh.Name(), "with", enc)
+	if Log != nil {
+		Log("msg", "writing", "file", fh.Name(), "encoding", enc)
+	}
 	w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
-	err = dump(w, dber.SqlDBer{DB: db}, qry, *flagHeader, *flagSep)
+	err = dump(w, dber.SqlDBer{DB: db}, qry, *flagHeader, *flagSep, Log)
 	_ = db.Close()
 	if err != nil {
 		return errors.Wrap(err, "dump")
@@ -142,7 +165,7 @@ func getQuery(table, where string, columns []string) string {
 	return "SELECT " + cols + " FROM " + table + " WHERE " + where
 }
 
-func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string) error {
+func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string, Log func(...interface{}) error) error {
 	columns, err := GetColumns(db, qry)
 	if err != nil {
 		return err
@@ -174,6 +197,7 @@ func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string) error 
 		bw.Write([]byte{'\n'})
 	}
 
+	start := time.Now()
 	n := 0
 	for rows.Next() {
 		if err = rows.Scan(dest...); err != nil {
@@ -192,7 +216,10 @@ func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string) error 
 		n++
 	}
 	err = rows.Err()
-	log.Printf("written %d rows.", n)
+	dur := time.Since(start)
+	if Log != nil {
+		Log("msg", "dump finished", "rows", n, "dur", dur, "speed", float64(n)/float64(dur)*float64(time.Second), "error", err)
+	}
 	if err != nil {
 		return errors.Wrapf(err, "fetching rows")
 	}

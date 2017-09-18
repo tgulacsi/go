@@ -159,10 +159,10 @@ func Main() error {
 					}
 				}
 				for _, row := range chunk {
-						if len(row) > len(cols) {
-							log.Printf("More elements in the row (%d) then columns (%d)!", len(row), len(cols))
-							row = row[:len(cols)]
-						}
+					if len(row) > len(cols) {
+						log.Printf("More elements in the row (%d) then columns (%d)!", len(row), len(cols))
+						row = row[:len(cols)]
+					}
 					for j, v := range row {
 						cols[j] = append(cols[j], v)
 					}
@@ -467,4 +467,5 @@ func (c Column) FromString(ss []string) interface{} {
 	}
 	return ss
 }
+
 // vim: set fileencoding=utf-8 noet:

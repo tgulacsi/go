@@ -8,10 +8,10 @@ package orahlp
 import (
 	"bytes"
 	"database/sql"
-	"io"
-	"strconv"
 	"encoding/csv"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -84,7 +84,7 @@ BEGIN
 	RAISE;
   END;
   :2 := res;
-  END;`, qry, sql.Out{Dest:&res},
+  END;`, qry, sql.Out{Dest: &res},
 	); err != nil {
 		return nil, errors.Wrap(err, qry)
 	}
@@ -103,7 +103,7 @@ BEGIN
 		}
 		var nullable int
 		var col Column
-		for i, d := range []*int{&col.Type, &col.Length, &col.Precision, &col.Scale, &nullable, &col.CharsetID, &col.CharsetForm}{
+		for i, d := range []*int{&col.Type, &col.Length, &col.Precision, &col.Scale, &nullable, &col.CharsetID, &col.CharsetForm} {
 			if *d, err = strconv.Atoi(record[i]); err != nil {
 				return cols, errors.Wrapf(err, "parsing %q (%d.)", d, i)
 			}
