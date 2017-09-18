@@ -47,7 +47,7 @@ type Column struct {
 // dynamic queries.
 func DescribeQuery(db dber.Execer, qry string) ([]Column, error) {
 	//res := strings.Repeat("\x00", 32767)
-	res := make([]byte, 32767)
+	var res string
 	if _, err := db.Exec(`DECLARE
   c INTEGER;
   col_cnt INTEGER;
@@ -83,15 +83,12 @@ BEGIN
     DBMS_SQL.CLOSE_CURSOR(c);
 	RAISE;
   END;
-  :2 := UTL_RAW.CAST_TO_RAW(res);
+  :2 := res;
   END;`, qry, sql.Out{Dest:&res},
 	); err != nil {
 		return nil, errors.Wrap(err, qry)
 	}
-	if i := bytes.IndexByte(res, 0); i >= 0 {
-		res = res[:i]
-	}
-	cr := csv.NewReader(bytes.NewReader(res))
+	cr := csv.NewReader(strings.NewReader(res))
 	cr.FieldsPerRecord = 9
 	cr.ReuseRecord = true
 
