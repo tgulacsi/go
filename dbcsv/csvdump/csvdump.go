@@ -24,6 +24,7 @@ import (
 	"database/sql/driver"
 	"flag"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -31,14 +32,102 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+
 	"github.com/tgulacsi/go/dber"
 	"github.com/tgulacsi/go/orahlp"
-	_ "gopkg.in/rana/ora.v4"
+	_ "gopkg.in/goracle.v2"
 
 	"github.com/pkg/errors"
 )
 
+func main() {
+	if err := Main(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func Main() error {
+	defaultEncoding := "utf-8"
+	if envEnc := os.Getenv("LANG"); envEnc != "" {
+		if i := strings.LastIndexByte(envEnc, '.'); i >= 0 {
+			envEnc = envEnc[i+1:]
+		}
+		defaultEncoding = envEnc
+	}
+
+	flagConnect := flag.String("connect", os.Getenv("BRUNO_ID"), "user/passw@sid to connect to")
+	flagDateFormat := flag.String("date", dateFormat, "date format, in Go notation")
+	flagSep := flag.String("sep", ";", "separator")
+	flagHeader := flag.Bool("header", true, "print header")
+	flagEnc := flag.String("encoding", defaultEncoding, "encoding to use for output")
+	flagOut := flag.String("o", "-", "output (defaults to stdout)")
+	flag.Parse()
+
+	enc := encoding.Replacement
+	switch strings.NewReplacer("-", "", "_", "").Replace(strings.ToLower(*flagEnc)) {
+	case "", "utf8":
+	case "iso88591":
+		enc = charmap.ISO8859_1
+	case "iso88592":
+		enc = charmap.ISO8859_2
+	default:
+		return errors.Errorf("unknonw encoding %q", *flagEnc)
+	}
+	dateFormat = *flagDateFormat
+	dEnd = `"` + strings.NewReplacer(
+		"2006", "9999",
+		"01", "12",
+		"02", "31",
+		"15", "23",
+		"04", "59",
+		"05", "59",
+	).Replace(dateFormat) + `"`
+
+	var (
+		where   string
+		columns []string
+	)
+	if flag.NArg() > 1 {
+		where = flag.Arg(1)
+		if flag.NArg() > 2 {
+			columns = flag.Args()[2:]
+		}
+	}
+	db, err := sql.Open("goracle", *flagConnect)
+	if err != nil {
+		return errors.Wrap(err, *flagConnect)
+	}
+	defer db.Close()
+	qry := getQuery(flag.Arg(0), where, columns)
+
+	fh := os.Stdout
+	if !(*flagOut == "" || *flagOut == "-") {
+		if fh, err = os.Create(*flagOut); err != nil {
+			return errors.Wrap(err, *flagOut)
+		}
+	}
+	defer fh.Close()
+
+	log.Println("Writing to", fh.Name(), "with", enc)
+	w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
+	err = dump(w, dber.SqlDBer{DB: db}, qry, *flagHeader, *flagSep)
+	_ = db.Close()
+	if err != nil {
+		return errors.Wrap(err, "dump")
+	}
+	return fh.Close()
+}
+
 func getQuery(table, where string, columns []string) string {
+	if table == "" && where == "" && len(columns) == 0 {
+		b, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			panic(err)
+		}
+		return string(b)
+	}
 	table = strings.TrimSpace(table)
 	if len(table) > 6 && strings.HasPrefix(strings.ToUpper(table), "SELECT ") {
 		return table
@@ -63,7 +152,7 @@ func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string) error 
 		return errors.Wrapf(err, "executing %q", qry)
 	}
 	defer rows.Close()
-	//log.Printf("columns: %#v", columns)
+	//log.Printf("%q: columns: %#v", qry, columns)
 
 	sepB := []byte(sep)
 	dest := make([]interface{}, len(columns))
@@ -177,6 +266,9 @@ var (
 )
 
 func (v ValTime) String() string {
+	if v.Value.IsZero() {
+		return ""
+	}
 	if v.Value.Year() < 0 {
 		return dEnd
 	}
@@ -212,49 +304,6 @@ func getColConverter(col orahlp.Column, sep string) stringer {
 	default:
 		return &ValString{Sep: sep}
 	}
-}
-
-func main() {
-	var (
-		where   string
-		columns []string
-	)
-
-	flagConnect := flag.String("connect", os.Getenv("BRUNO_ID"), "user/passw@sid to connect to")
-	flagDateFormat := flag.String("date", dateFormat, "date format, in Go notation")
-	flagSep := flag.String("sep", ";", "separator")
-	flagHeader := flag.Bool("header", true, "print header")
-	flag.Parse()
-	dateFormat = *flagDateFormat
-	dEnd = `"` + strings.NewReplacer(
-		"2006", "9999",
-		"01", "12",
-		"02", "31",
-		"15", "23",
-		"04", "59",
-		"05", "59",
-	).Replace(dateFormat) + `"`
-	if flag.NArg() > 1 {
-		where = flag.Arg(1)
-		if flag.NArg() > 2 {
-			columns = flag.Args()[2:]
-		}
-	}
-	//ora.Log = lg15.Log
-	//lg15.Log.SetHandler(log15.StderrHandler)
-	db, err := sql.Open("ora", *flagConnect)
-	if err != nil {
-		log.Printf("error connecting to %s: %v", *flagConnect, err)
-		os.Exit(2)
-	}
-	qry := getQuery(flag.Arg(0), where, columns)
-	err = dump(os.Stdout, dber.SqlDBer{DB: db}, qry, *flagHeader, *flagSep)
-	_ = db.Close()
-	if err != nil {
-		log.Printf("error dumping: %s", err)
-		os.Exit(1)
-	}
-	os.Exit(0)
 }
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
