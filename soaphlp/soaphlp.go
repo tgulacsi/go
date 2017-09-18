@@ -132,6 +132,9 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		return nil, err
 	}
 	req, err := http.NewRequest("POST", s.URL, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		return nil, errors.Wrap(err, s.URL)
+	}
 	req.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	req.Header.Set("SOAPAction", soapAction)
 	Log := GetLog(ctx)
