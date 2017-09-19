@@ -29,6 +29,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,8 +38,6 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 
-	"github.com/tgulacsi/go/dber"
-	"github.com/tgulacsi/go/orahlp"
 	_ "gopkg.in/goracle.v2"
 
 	"github.com/pkg/errors"
@@ -143,7 +142,7 @@ func Main() error {
 		Log("msg", "writing", "file", fh.Name(), "encoding", enc)
 	}
 	w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
-	err = dump(w, dber.SqlDBer{DB: db}, qry, *flagHeader, *flagSep, Log)
+	err = dump(w, db, qry, *flagHeader, *flagSep, Log)
 	_ = db.Close()
 	if err != nil {
 		return errors.Wrap(err, "dump")
@@ -176,17 +175,19 @@ func getQuery(table, where string, columns []string, enc encoding.Encoding) stri
 	return "SELECT " + cols + " FROM " + table + " WHERE " + where
 }
 
-func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string, Log func(...interface{}) error) error {
-	columns, err := GetColumns(db, qry)
-	if err != nil {
-		return err
-	}
+type queryer interface {
+	Query(string, ...interface{}) (*sql.Rows, error)
+}
+
+func dump(w io.Writer, db queryer, qry string, header bool, sep string, Log func(...interface{}) error) error {
 	rows, err := db.Query(qry)
 	if err != nil {
 		return errors.Wrapf(err, "executing %q", qry)
 	}
 	defer rows.Close()
 	//log.Printf("%q: columns: %#v", qry, columns)
+
+	columns, err := getColumns(rows)
 
 	sepB := []byte(sep)
 	dest := make([]interface{}, len(columns))
@@ -238,23 +239,12 @@ func dump(w io.Writer, db dber.DBer, qry string, header bool, sep string, Log fu
 }
 
 type Column struct {
-	orahlp.Column
+	Name string
+	reflect.Type
 }
 
 func (col Column) Converter(sep string) stringer {
-	return getColConverter(col.Column, sep)
-}
-
-func GetColumns(db dber.Execer, qry string) (cols []Column, err error) {
-	desc, err := orahlp.DescribeQuery(db, qry)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Describe %q", qry)
-	}
-	cols = make([]Column, len(desc))
-	for i, col := range desc {
-		cols[i].Column = col
-	}
-	return cols, nil
+	return getColConverter(col.Type, sep)
 }
 
 type stringer interface {
@@ -296,6 +286,7 @@ func (v *ValFloat) Pointer() interface{} { return &v.Value }
 
 type ValTime struct {
 	Value time.Time
+	Quote bool
 }
 
 var (
@@ -310,7 +301,10 @@ func (v ValTime) String() string {
 	if v.Value.Year() < 0 {
 		return dEnd
 	}
-	return `"` + v.Value.Format(dateFormat) + `"`
+	if v.Quote {
+		return `"` + v.Value.Format(dateFormat) + `"`
+	}
+	return v.Value.Format(dateFormat)
 }
 func (vt ValTime) ConvertValue(v interface{}) (driver.Value, error) {
 	if v == nil {
@@ -330,18 +324,20 @@ func (vt *ValTime) Scan(v interface{}) error {
 }
 func (v *ValTime) Pointer() interface{} { return v }
 
-func getColConverter(col orahlp.Column, sep string) stringer {
-	switch col.Type {
-	case 2:
-		if col.Scale == 0 {
-			return &ValInt{}
-		}
-		return &ValFloat{}
-	case 12:
-		return &ValTime{}
-	default:
+func getColConverter(typ reflect.Type, sep string) stringer {
+	switch typ.Kind() {
+	case reflect.String:
 		return &ValString{Sep: sep}
+	case reflect.Float32, reflect.Float64:
+		return &ValFloat{}
+	case reflect.Int32, reflect.Int64, reflect.Int:
+		return &ValInt{}
 	}
+	switch typ {
+	case reflect.TypeOf(time.Time{}):
+		return &ValTime{Quote: strings.Contains(dateFormat, sep)}
+	}
+	return &ValString{Sep: sep}
 }
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
@@ -385,6 +381,18 @@ func encFromName(e string) (namedEncoding, error) {
 	default:
 		return namedEncoding{Encoding: encoding.Nop, Name: e}, errors.Wrap(errors.New("unknown encoding"), e)
 	}
+}
+
+func getColumns(rows *sql.Rows) ([]Column, error) {
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+	cols := make([]Column, len(types))
+	for i, t := range types {
+		cols[i] = Column{Name: t.Name(), Type: t.ScanType()}
+	}
+	return cols, nil
 }
 
 // vim: se noet fileencoding=utf-8:

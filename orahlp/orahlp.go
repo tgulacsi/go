@@ -45,6 +45,8 @@ type Column struct {
 //
 // This can help using unknown-at-compile-time, a.k.a.
 // dynamic queries.
+//
+// DEPRECATED: you can use database/sql.Rows.ColumnTypes()
 func DescribeQuery(db dber.Execer, qry string) ([]Column, error) {
 	//res := strings.Repeat("\x00", 32767)
 	var res string
