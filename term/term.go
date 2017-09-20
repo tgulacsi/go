@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import (
 
 	"github.com/go-kit/kit/log/term"
 	"github.com/tgulacsi/go/iohlp"
-	"github.com/tgulacsi/go/text"
 	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/htmlindex"
 )
 
 // IsTTY contains whether the stdout is a terminal.
@@ -36,7 +36,7 @@ func GetTTYEncoding() encoding.Encoding {
 	if enc != nil {
 		return enc
 	}
-	return text.GetEncoding("UTF-8")
+	return encoding.Nop
 }
 
 // GetRawTTYEncoding returns the TTY encoding, or nil if not found.
@@ -45,7 +45,11 @@ func GetRawTTYEncoding() encoding.Encoding {
 	if lang == "" {
 		return nil
 	}
-	return text.GetEncoding(lang)
+	enc, err := htmlindex.Get(lang)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // GetTTYEncodingName returns the TTY encoding's name, or empty if not found.
@@ -95,7 +99,7 @@ func MaskIn(in *os.File, enc encoding.Encoding) (*os.File, error) {
 	// in -> pw -> pr
 	go func() {
 		defer in.Close()
-		io.Copy(pw, text.NewReader(in, enc))
+		io.Copy(pw, enc.NewDecoder().Reader(in))
 
 	}()
 	return pr, nil
@@ -114,7 +118,7 @@ func MaskOut(out *os.File, enc encoding.Encoding) (*os.File, error) {
 	// pw -> pr -> out
 	go func() {
 		defer out.Close()
-		io.Copy(text.NewWriter(out, enc), pr)
+		io.Copy(enc.NewEncoder().Writer(out), pr)
 	}()
 	return pw, nil
 }
