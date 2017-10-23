@@ -18,6 +18,7 @@ package stream
 import (
 	"bytes"
 	"io"
+	//"log"
 	"unicode"
 
 	"golang.org/x/text/transform"
@@ -63,35 +64,61 @@ func NewTrimFix(w io.Writer, prefix, suffix string) io.WriteCloser {
 
 type trimTransform struct {
 	prefix, suffix []byte
-	buf            []byte
+	buf, scratch   []byte
 	middle         bool
 }
 
 func (tw *trimTransform) Reset() { tw.middle, tw.buf = false, tw.buf[:0] }
 func (tw *trimTransform) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
-	if !tw.middle && len(tw.buf)+len(src) < len(tw.prefix) {
-		return 0, 0, transform.ErrShortSrc
+	//log.Printf("dst=%d src=%q atEOF=%t", len(dst), src, atEOF)
+	if !atEOF {
+		if tw.middle {
+			if len(tw.buf)+len(src) < len(tw.suffix) {
+				//log.Println("a", string(tw.buf), string(src))
+				return 0, 0, transform.ErrShortSrc
+			}
+		} else {
+			if len(tw.buf)+len(src) < len(tw.prefix) {
+				//log.Println("b", string(tw.buf), string(src))
+				return 0, 0, transform.ErrShortSrc
+			}
+		}
 	}
-	if !atEOF && tw.middle && len(tw.buf)+len(src)-1 < len(tw.suffix) {
-		return 0, 0, transform.ErrShortSrc
-	}
-	x := append(tw.buf, src...)
+	tw.scratch = append(append(tw.scratch[:0], tw.buf...), src...)
+	x := tw.scratch
+	//log.Printf("x=%q middle=%t", x, tw.middle)
 	tw.buf = tw.buf[:0]
 	if !tw.middle {
+		tw.middle = true
 		x = bytes.TrimPrefix(x, tw.prefix)
 		if len(x) == 0 {
+			//log.Println("c", string(src))
 			return 0, len(src), nil
 		}
-		tw.middle = true
 	}
 	if atEOF {
 		x = bytes.TrimSuffix(x, tw.suffix)
+		//log.Println("end", string(x))
+		if len(dst) < len(x) {
+			return 0, 0, transform.ErrShortDst
+		}
 		return copy(dst, x), len(src), nil
 	}
-	y := bytes.TrimSuffix(x, tw.suffix)
-	if len(y) < len(x) {
-		tw.buf = append(tw.buf, x[len(y):]...)
-		x = y
+	i := len(x) - len(tw.suffix)
+	//log.Printf("e x[:%d]=%q buf=%q", i, x[:i], tw.buf)
+	//log.Printf("%q", x)
+	if i <= 0 {
+		tw.buf = append(tw.buf, x...)
+		//log.Println("F")
+		return 0, len(src), nil
 	}
-	return copy(dst, x), len(src), nil
+	//log.Printf("%q", x)
+	if len(dst) < i {
+		//log.Println("shodt")
+		return 0, 0, transform.ErrShortDst
+	}
+	//log.Printf("%q", x)
+	tw.buf = append(tw.buf, x[i:]...)
+	//log.Printf("f x[:%d]=%q buf=%q", i, x[:i], tw.buf)
+	return copy(dst, x[:i]), len(src), nil
 }
