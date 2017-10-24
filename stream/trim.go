@@ -30,13 +30,14 @@ func NewTrimSpace(w io.Writer) io.WriteCloser {
 }
 
 type trimSpacesTransform struct {
-	middle bool
-	buf    []byte
+	middle       bool
+	buf, scratch []byte
 }
 
 func (ts *trimSpacesTransform) Reset() { ts.middle, ts.buf = false, ts.buf[:0] }
 func (ts *trimSpacesTransform) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
-	x := append(ts.buf, src...)
+	ts.scratch = append(append(ts.scratch[:0], ts.buf...), src...)
+	x := ts.scratch
 	ts.buf = ts.buf[:0]
 	if !ts.middle {
 		x = bytes.TrimLeftFunc(x, unicode.IsSpace)
@@ -59,7 +60,10 @@ func (ts *trimSpacesTransform) Transform(dst, src []byte, atEOF bool) (nDst, nSr
 
 // NewTrimFix trims the given prefix, suffix on Write.
 func NewTrimFix(w io.Writer, prefix, suffix string) io.WriteCloser {
-	return transform.NewWriter(w, &trimTransform{prefix: []byte(prefix), suffix: []byte(suffix)})
+	return transform.NewWriter(w, &trimTransform{
+		prefix: []byte(prefix), suffix: []byte(suffix),
+		middle: prefix == "",
+	})
 }
 
 type trimTransform struct {
