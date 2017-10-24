@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"sort"
 
 	"github.com/kylelemons/godebug/diff"
+	"github.com/pkg/errors"
 )
 
 func Pretty(w io.Writer, data map[string]interface{}, indent string) error {
@@ -106,20 +107,20 @@ func Diff(a map[string]interface{}, b map[string]interface{}) string {
 func DiffStrings(a, b string) (string, error) {
 	mA := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(a), &mA); err != nil {
-		return "", err
+		return "", errors.Wrap(err, "unmarshal 1. arg")
 	}
 	var bA bytes.Buffer
 	if err := Pretty(&bA, mA, ""); err != nil {
-		return "", err
+		return "", errors.Wrap(err, "pretty-print 1. arg")
 	}
 
 	mB := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(b), &mB); err != nil {
-		return "", err
+		return "", errors.Wrap(err, "unmarshal 2. arg")
 	}
 	var bB bytes.Buffer
 	if err := Pretty(&bB, mB, ""); err != nil {
-		return "", err
+		return "", errors.Wrap(err, "pretty-print 2. arg")
 	}
 
 	return diff.Diff(bA.String(), bB.String()), nil
