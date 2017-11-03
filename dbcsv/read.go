@@ -15,16 +15,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 
+	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/extrame/xls"
 	"github.com/pkg/errors"
-	"github.com/tealeg/xlsx"
 )
 
 var DefaultEncoding = encoding.Replacement
@@ -210,18 +209,14 @@ func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIn
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	xlFile, err := xlsx.OpenFile(filename)
+	xlFile, err := excelize.OpenFile(filename)
 	if err != nil {
 		return errors.Wrapf(err, "open %q", filename)
 	}
-	sheetLen := len(xlFile.Sheets)
-	switch {
-	case sheetLen == 0:
-		return errors.New("This XLSX file contains no sheets.")
-	case sheetIndex >= sheetLen:
-		return errors.New(fmt.Sprintf("No sheet %d available, please select a sheet between 0 and %d\n", sheetIndex, sheetLen-1))
+	sheetName := xlFile.GetSheetName(sheetIndex)
+	if sheetName == "" {
+		return errors.Errorf("No sheet %d available", sheetIndex)
 	}
-	sheet := xlFile.Sheets[sheetIndex]
 	n := 0
 	var need map[int]bool
 	if columns != nil {
@@ -230,41 +225,15 @@ func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIn
 			need[i] = true
 		}
 	}
-	for i, row := range sheet.Rows {
+	for i, row := range xlFile.GetRows(sheetName) {
 		if i < skip {
 			continue
 		}
 		if row == nil {
 			continue
 		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		vals := make([]string, 0, len(row.Cells))
-		for i, cell := range row.Cells {
-			if need != nil && !need[i] {
-				continue
-			}
-			s := cell.String()
-			if s == "" {
-				vals = append(vals, "")
-				continue
-			}
-			numFmt := cell.GetNumberFormat()
-			if !(strings.Contains(numFmt, "yy") || strings.Contains(numFmt, "mm") || strings.Contains(numFmt, "dd")) {
-				vals = append(vals, s)
-				continue
-			}
-
-			goFmt := timeReplacer.Replace(numFmt)
-			dt, err := time.Parse(goFmt, s)
-			if err != nil {
-				return errors.Wrapf(err, "parse %q as %q (from %q)", s, goFmt, numFmt)
-			}
-			vals = append(vals, dt.Format(DateFormat))
-		}
 		select {
-		case rows <- Row{Line: n, Values: vals}:
+		case rows <- Row{Line: n, Values: row}:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
