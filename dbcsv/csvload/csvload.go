@@ -10,6 +10,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +21,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dbcsv"
 	"golang.org/x/sync/errgroup"
-	ora "gopkg.in/rana/ora.v4"
+
+	_ "gopkg.in/goracle.v2"
 )
 
 func main() {
@@ -51,23 +55,51 @@ func Main() error {
 	flag.IntVar(&cfg.Sheet, "sheet", 0, "sheet of spreadsheet")
 	flag.StringVar(&cfg.ColumnsString, "columns", "", "columns, comma separated indexes")
 	flag.BoolVar(&ForceString, "force-string", false, "force all columns to be VARCHAR2")
+	flagMemProf := flag.String("memprofile", "", "file to output memory profile to")
+	flagCPUProf := flag.String("cpuprofile", "", "file to output CPU profile to")
 	flag.Parse()
 
 	if flag.NArg() != 2 {
 		log.Fatal("Need two args: the table and the source.")
 	}
+	if *flagCPUProf != "" {
+		f, err := os.Create(*flagCPUProf)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	writeHeapProf := func() {}
+	if *flagMemProf != "" {
+		f, err := os.Create(*flagMemProf)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		writeHeapProf = func() {
+			log.Println("writeHeapProf")
+			f.Seek(0, 0)
+			runtime.GC() // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatal("could not write memory profile: ", err)
+			}
+		}
+	}
 
 	if strings.HasPrefix(*flagDB, "$") {
 		*flagDB = os.ExpandEnv(*flagDB)
 	}
-	db, err := sql.Open("ora", *flagDB)
+	db, err := sql.Open("goracle", *flagDB)
 	if err != nil {
 		return errors.Wrap(err, *flagDB)
 	}
 	defer db.Close()
 
 	db.SetMaxIdleConns(*flagConcurrency)
-	db.SetMaxOpenConns(*flagConcurrency + 2)
 
 	tbl := strings.ToUpper(flag.Arg(0))
 	src := flag.Arg(1)
@@ -113,29 +145,18 @@ func Main() error {
 	defer cancel()
 	grp, ctx = errgroup.WithContext(ctx)
 
-	const chunkSize = 128
+	const chunkSize = 512
 	rowsCh := make(chan [][]string, *flagConcurrency)
 	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, chunkSize) }}
 
-	pool, err := ora.NewPool(*flagDB, *flagConcurrency)
-	if err != nil {
-		return errors.Wrap(err, *flagDB)
-	}
-	defer pool.Close()
-
 	for i := 0; i < *flagConcurrency; i++ {
 		grp.Go(func() error {
-			ses, err := pool.Get()
-			if err != nil {
-				return err
-			}
-			defer ses.Close()
-			tx, err := ses.StartTx()
+			tx, err := db.BeginTx(ctx, nil)
 			if err != nil {
 				return err
 			}
 			defer tx.Rollback()
-			stmt, err := ses.Prep(qry)
+			stmt, err := tx.Prepare(qry)
 			if err != nil {
 				return errors.Wrap(err, qry)
 			}
@@ -166,34 +187,45 @@ func Main() error {
 					for j, v := range row {
 						cols[j] = append(cols[j], v)
 					}
+					for j := len(row); j < len(cols); j++ {
+						cols[j] = append(cols[j], "")
+					}
 				}
-				rowsI = rowsI[:0]
+				if cap(rowsI) < n {
+					rowsI = make([]interface{}, n)
+				} else {
+					rowsI = rowsI[:n]
+				}
 				for i, col := range cols {
-					rowsI = append(rowsI, columns[i].FromString(col))
+					rowsI[i] = columns[i].FromString(col)
 				}
 				for i := len(cols); i < len(columns); i++ {
-					rowsI = append(rowsI, make([]string, len(cols[0])))
+					rowsI[i] = make([]string, n)
 				}
 
-				_, err := stmt.Exe(rowsI...)
+				_, err := stmt.Exec(rowsI...)
 				chunkPool.Put(chunk)
 				if err != nil {
-					err = errors.Wrapf(err, "%s, %q", qry, rowsI)
+					err = errors.Wrapf(err, "%s", qry)
 					log.Println(err)
 
+					rowsR := make([]reflect.Value, len(rowsI))
 					rowsI2 := make([]interface{}, len(rowsI))
-					for j := range cols[0] {
-						rowsI2 = rowsI2[:0]
-						for i, col := range cols {
-							if len(col) <= j {
-								break
+					for j, I := range rowsI {
+						rowsR[j] = reflect.ValueOf(I)
+						rowsI2[j] = ""
+					}
+					R2 := reflect.ValueOf(rowsI2)
+					for j := range cols[0] { // rows
+						for i, r := range rowsR { // cols
+							if r.Len() <= j {
+								log.Printf("%d[%q]=%d", j, columns[i].Name, r.Len())
+								rowsI2[i] = ""
+								continue
 							}
-							rowsI2 = append(rowsI2, columns[i].FromString(col[j:j+1]))
+							R2.Index(i).Set(r.Index(j))
 						}
-						for i := len(cols); i < len(columns); i++ {
-							rowsI2 = append(rowsI2, []string{""})
-						}
-						if _, err := stmt.Exe(rowsI2...); err != nil {
+						if _, err := stmt.Exec(rowsI2...); err != nil {
 							err = errors.Wrapf(err, "%s, %q", qry, rowsI2)
 							log.Println(err)
 							return err
@@ -223,6 +255,8 @@ func Main() error {
 
 		if n == 1 {
 			continue
+		} else if n%10000 == 0 {
+			writeHeapProf()
 		}
 		for i, s := range row.Values {
 			row.Values[i] = strings.TrimSpace(s)
@@ -266,8 +300,8 @@ func typeOf(s string) Type {
 		length++
 		if r == '.' {
 			dotCount++
-		} else {
-			hasNonDigit = hasNonDigit || !('0' <= r && r <= '9')
+		} else if !hasNonDigit {
+			hasNonDigit = !('0' <= r && r <= '9')
 		}
 		return -1
 	},
@@ -279,6 +313,11 @@ func typeOf(s string) Type {
 		}
 		if dotCount == 0 {
 			return Int
+		}
+	}
+	if 10 <= len(s) && len(s) <= len(dateFormat) {
+		if _, err := time.Parse(dateFormat[:len(s)], s); err == nil {
+			return Date
 		}
 	}
 	return String
@@ -300,47 +339,52 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 	}
 
 	if n == 0 {
-		for row := range rows {
-			if cols == nil {
-				log.Printf("row: %q", row.Values)
-				cols = make([]Column, len(row.Values))
-				for i, v := range row.Values {
-					v = strings.Map(func(r rune) rune {
-						r = unicode.ToLower(r)
-						switch r {
-						case 'á':
-							return 'a'
-						case 'é':
-							return 'e'
-						case 'í':
-							return 'i'
-						case 'ö', 'ő', 'ó':
-							return 'o'
-						case 'ü', 'ű', 'ú':
-							return 'u'
-						case '_':
-							return '_'
-						default:
-							if 'a' <= r && r <= 'z' || '0' <= r && r <= '9' {
-								return r
-							}
-							return '_'
-						}
-					},
-						v)
-					if len(v) > 30 {
-						v = fmt.Sprintf("%s_%02d", v[:27], i)
+		row := <-rows
+		log.Printf("row: %q", row.Values)
+		cols = make([]Column, len(row.Values))
+		for i, v := range row.Values {
+			v = strings.Map(func(r rune) rune {
+				r = unicode.ToLower(r)
+				switch r {
+				case 'á':
+					return 'a'
+				case 'é':
+					return 'e'
+				case 'í':
+					return 'i'
+				case 'ö', 'ő', 'ó':
+					return 'o'
+				case 'ü', 'ű', 'ú':
+					return 'u'
+				case '_':
+					return '_'
+				default:
+					if 'a' <= r && r <= 'z' || '0' <= r && r <= '9' {
+						return r
 					}
-					cols[i].Name = v
+					return '_'
 				}
-				continue
+			},
+				v)
+			if len(v) > 30 {
+				v = fmt.Sprintf("%s_%02d", v[:27], i)
 			}
+			cols[i].Name = v
+		}
+
+		for row := range rows {
 			for i, v := range row.Values {
 				if len(v) > cols[i].Length {
 					cols[i].Length = len(v)
 				}
+				if cols[i].Type == String {
+					continue
+				}
+				typ := typeOf(v)
 				if cols[i].Type == Unknown {
-					cols[i].Type = typeOf(v)
+					cols[i].Type = typ
+				} else if typ != cols[i].Type {
+					cols[i].Type = String
 				}
 			}
 		}
@@ -349,6 +393,10 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 		for i, c := range cols {
 			if i != 0 {
 				buf.WriteString(",\n")
+			}
+			if c.Type == Date {
+				fmt.Fprintf(&buf, "  %s DATE", c.Name)
+				continue
 			}
 			length := c.Length
 			if length == 0 {
@@ -403,25 +451,28 @@ const (
 	String  = Type(1)
 	Int     = Type(2)
 	Float   = Type(3)
+	Date    = Type(4)
 )
 
 func (t Type) String() string {
 	switch t {
 	case Int, Float:
 		return "NUMBER"
+	case Date:
+		return "DATE"
 	default:
 		return "VARCHAR2"
 	}
 }
 
 func (c Column) FromString(ss []string) interface{} {
-	if c.DataType == "DATE" {
+	if c.DataType == "DATE" || c.Type == Date {
 		res := make([]time.Time, len(ss))
 		for i, s := range ss {
 			if s == "" {
 				continue
 			}
-			res[i], _ = time.Parse(dateFormat, s)
+			res[i], _ = time.Parse(dateFormat[:len(s)], s)
 		}
 		return res
 	}
