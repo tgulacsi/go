@@ -290,6 +290,7 @@ func typeOf(s string) Type {
 		return String
 	}
 
+	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return Unknown
 	}
@@ -305,9 +306,9 @@ func typeOf(s string) Type {
 		}
 		return -1
 	},
-		strings.TrimSpace(s))
+		s)
 
-	if !hasNonDigit {
+	if !hasNonDigit && s[0] != '0' {
 		if dotCount == 1 {
 			return Float
 		}
