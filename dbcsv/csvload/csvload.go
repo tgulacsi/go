@@ -35,6 +35,8 @@ var dateFormat = "2006-01-02 15:04:05"
 
 var ForceString bool
 
+const chunkSize = 1024
+
 func Main() error {
 	encName := os.Getenv("LANG")
 	if i := strings.IndexByte(encName, '.'); i >= 0 {
@@ -145,7 +147,6 @@ func Main() error {
 	defer cancel()
 	grp, ctx = errgroup.WithContext(ctx)
 
-	const chunkSize = 512
 	rowsCh := make(chan [][]string, *flagConcurrency)
 	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, chunkSize) }}
 
