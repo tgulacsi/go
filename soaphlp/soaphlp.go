@@ -137,6 +137,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 	}
 	req.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	req.Header.Set("SOAPAction", soapAction)
+	req.Header.Set("Content-Type", "text/xml")
 	Log := GetLog(ctx)
 	Log("msg", "calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
 	resp, err := s.Client.Do(req.WithContext(ctx))
