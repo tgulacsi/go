@@ -15,6 +15,7 @@ import (
 	"runtime/pprof"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -146,10 +147,16 @@ func Main() error {
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	grp, ctx = errgroup.WithContext(ctx)
+	//grp = &errgroup.Group{}
 
-	rowsCh := make(chan [][]string, *flagConcurrency)
+	type rowsType struct {
+		Rows  [][]string
+		Start int64
+	}
+	rowsCh := make(chan rowsType, *flagConcurrency)
 	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, chunkSize) }}
 
+	var inserted int64
 	for i := 0; i < *flagConcurrency; i++ {
 		grp.Go(func() error {
 			tx, err := db.BeginTx(ctx, nil)
@@ -161,81 +168,88 @@ func Main() error {
 			if err != nil {
 				return errors.Wrap(err, qry)
 			}
-			var cols [][]string
-			var rowsI []interface{}
+			nCols := len(columns)
+			cols := make([][]string, nCols)
+			rowsI := make([]interface{}, nCols)
 
-			for chunk := range rowsCh {
+			for rs := range rowsCh {
+				chunk := rs.Rows
 				if err := ctx.Err(); err != nil {
 					return err
 				}
 				if len(chunk) == 0 {
 					continue
 				}
-				n := len(chunk[0])
-				if cap(cols) < n {
-					cols = make([][]string, n)
-				} else {
-					cols = cols[:n]
-					for j := range cols {
-						cols[j] = cols[j][:0]
+				nRows := len(chunk)
+				for j := range cols {
+					if cap(cols[j]) < nRows {
+						cols[j] = make([]string, nRows)
+					} else {
+						cols[j] = cols[j][:nRows]
+						for i := range cols[j] {
+							cols[j][i] = ""
+						}
 					}
 				}
-				for _, row := range chunk {
+				for k, row := range chunk {
 					if len(row) > len(cols) {
-						log.Printf("More elements in the row (%d) then columns (%d)!", len(row), len(cols))
+						log.Printf("%d. more elements in the row (%d) then columns (%d)!", rs.Start+int64(k), len(row), len(cols))
 						row = row[:len(cols)]
 					}
 					for j, v := range row {
-						cols[j] = append(cols[j], v)
-					}
-					for j := len(row); j < len(cols); j++ {
-						cols[j] = append(cols[j], "")
+						cols[j][k] = v
 					}
 				}
-				if cap(rowsI) < n {
-					rowsI = make([]interface{}, n)
-				} else {
-					rowsI = rowsI[:n]
-				}
+
 				for i, col := range cols {
-					rowsI[i] = columns[i].FromString(col)
-				}
-				for i := len(cols); i < len(columns); i++ {
-					rowsI[i] = make([]string, n)
+					var err error
+					if rowsI[i], err = columns[i].FromString(col); err != nil {
+						log.Printf("%d. col: %+v", i, err)
+						for k, row := range chunk {
+							if _, err = columns[i].FromString(col[k : k+1]); err != nil {
+								log.Printf("%d.%q %q: %q", rs.Start+int64(k), columns[i].Name, col[k:k+1], row)
+								break
+							}
+						}
+
+						return errors.Wrapf(err, columns[i].Name)
+					}
 				}
 
 				_, err := stmt.Exec(rowsI...)
-				chunkPool.Put(chunk)
-				if err != nil {
-					err = errors.Wrapf(err, "%s", qry)
-					log.Println(err)
-
-					rowsR := make([]reflect.Value, len(rowsI))
-					rowsI2 := make([]interface{}, len(rowsI))
-					for j, I := range rowsI {
-						rowsR[j] = reflect.ValueOf(I)
-						rowsI2[j] = ""
-					}
-					R2 := reflect.ValueOf(rowsI2)
-					for j := range cols[0] { // rows
-						for i, r := range rowsR { // cols
-							if r.Len() <= j {
-								log.Printf("%d[%q]=%d", j, columns[i].Name, r.Len())
-								rowsI2[i] = ""
-								continue
-							}
-							R2.Index(i).Set(r.Index(j))
-						}
-						if _, err := stmt.Exec(rowsI2...); err != nil {
-							err = errors.Wrapf(err, "%s, %q", qry, rowsI2)
-							log.Println(err)
-							return err
-							break
-						}
-					}
-
-					return err
+				chunkPool.Put(chunk[:0])
+				if err == nil {
+					atomic.AddInt64(&inserted, int64(len(chunk)))
+					continue
 				}
+				err = errors.Wrapf(err, "%s", qry)
+				log.Println(err)
+
+				rowsR := make([]reflect.Value, len(rowsI))
+				rowsI2 := make([]interface{}, len(rowsI))
+				for j, I := range rowsI {
+					rowsR[j] = reflect.ValueOf(I)
+					rowsI2[j] = ""
+				}
+				R2 := reflect.ValueOf(rowsI2)
+				for j := range cols[0] { // rows
+					for i, r := range rowsR { // cols
+						if r.Len() <= j {
+							log.Printf("%d[%q]=%d", j, columns[i].Name, r.Len())
+							rowsI2[i] = ""
+							continue
+						}
+						R2.Index(i).Set(r.Index(j))
+					}
+					if _, err := stmt.Exec(rowsI2...); err != nil {
+						err = errors.Wrapf(err, "%s, %q", qry, rowsI2)
+						log.Println(err)
+						return err
+						break
+					}
+				}
+
+				return err
 			}
 			return tx.Commit()
 		})
@@ -246,15 +260,16 @@ func Main() error {
 		return cfg.ReadRows(ctx, rows, fileName)
 	})
 	var n int64
+	var headerSeen bool
 	chunk := chunkPool.Get().([][]string)[:0]
 	for row := range rows {
 		if err := ctx.Err(); err != nil {
 			chunk = chunk[:0]
 			break
 		}
-		n++
 
-		if n == 1 {
+		if !headerSeen {
+			headerSeen = true
 			continue
 		} else if n%10000 == 0 {
 			writeHeapProf()
@@ -268,7 +283,8 @@ func Main() error {
 		}
 
 		select {
-		case rowsCh <- chunk:
+		case rowsCh <- rowsType{Rows: chunk, Start: n}:
+			n += int64(len(chunk))
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -276,13 +292,14 @@ func Main() error {
 		chunk = chunkPool.Get().([][]string)[:0]
 	}
 	if len(chunk) != 0 {
-		rowsCh <- chunk
+		rowsCh <- rowsType{Rows: chunk, Start: n}
+		n += int64(len(chunk))
 	}
 	close(rowsCh)
 
 	err = grp.Wait()
 	dur := time.Since(start)
-	log.Printf("Imported %d rows from %q to %q in %s.", n, src, tbl, dur)
+	log.Printf("Read %d, inserted %d rows from %q to %q in %s.", n, inserted, src, tbl, dur)
 	return err
 }
 
@@ -467,26 +484,29 @@ func (t Type) String() string {
 	}
 }
 
-func (c Column) FromString(ss []string) interface{} {
+func (c Column) FromString(ss []string) (interface{}, error) {
 	if c.DataType == "DATE" || c.Type == Date {
 		res := make([]time.Time, len(ss))
 		for i, s := range ss {
 			if s == "" {
 				continue
 			}
-			res[i], _ = time.Parse(dateFormat[:len(s)], s)
+			var err error
+			if res[i], err = time.Parse(dateFormat[:len(s)], s); err != nil {
+				return res, errors.Wrapf(err, "%d. %q", i, s)
+			}
 		}
-		return res
+		return res, nil
 	}
 
 	if strings.HasPrefix(c.DataType, "VARCHAR2") {
 		for i, s := range ss {
 			if len(s) > c.Length {
-				fmt.Fprintf(os.Stderr, "%q is longer (%d) then allowed (%d) for column %v", s, len(s), c.Length, c)
 				ss[i] = s[:c.Length]
+				return ss, errors.Errorf("%d. %q is longer (%d) then allowed (%d) for column %v", i, s, len(s), c.Length, c)
 			}
-			return ss
 		}
+		return ss, nil
 	}
 	if c.Type == Int {
 		for i, s := range ss {
@@ -497,11 +517,11 @@ func (c Column) FromString(ss []string) interface{} {
 				return -1
 			}, s)
 			if e != "" {
-				fmt.Fprintf(os.Stderr, "%q is not integer (%q)", s, e)
 				ss[i] = ""
+				return ss, errors.Errorf("%d. %q is not integer (%q)", i, s, e)
 			}
 		}
-		return ss
+		return ss, nil
 	}
 	if c.Type == Float {
 		for i, s := range ss {
@@ -512,13 +532,13 @@ func (c Column) FromString(ss []string) interface{} {
 				return -1
 			}, s)
 			if e != "" {
-				fmt.Fprintf(os.Stderr, "%q is not float (%q)", s, e)
 				ss[i] = ""
+				return ss, errors.Errorf("%d. %q is not float (%q)", i, s, e)
 			}
 		}
-		return ss
+		return ss, nil
 	}
-	return ss
+	return ss, nil
 }
 
 // vim: set fileencoding=utf-8 noet:

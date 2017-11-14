@@ -331,9 +331,6 @@ func ReadCSV(ctx context.Context, rows chan<- Row, r io.Reader, delim string, co
 	cr.LazyQuotes = true
 	n := 0
 	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
 		row, err := cr.Read()
 		if err != nil {
 			if err == io.EOF {
