@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -53,3 +53,7 @@ func TestStringifyLogger(t *testing.T) {
 		t.Errorf("want %#v, have %#v", want, have)
 	}
 }
+
+type mymap map[int]int
+
+func (m mymap) String() string { return "special_behavior" }

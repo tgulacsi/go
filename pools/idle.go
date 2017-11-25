@@ -37,7 +37,6 @@ func (p *IdlePool) Evict(dur time.Duration) {
 		e.Close()
 		p.elems[i] = nil
 	}
-	return
 }
 
 // NewIdlePool returns an IdlePool.

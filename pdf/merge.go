@@ -181,9 +181,5 @@ func mergePageTrees(file *pdf.File, catalogs []pdf.Dictionary) (pdf.ObjectRefere
 			"Count": pageCount,
 		},
 	})
-	if err != nil {
-		return pageTreeRef, err
-	}
-
-	return pageTreeRef, nil
+	return pageTreeRef, err
 }

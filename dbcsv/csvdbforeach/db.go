@@ -1,4 +1,4 @@
-// Copyright 2011-2015, Tamás Gulácsi.
+// Copyright 2011-2017, Tamás Gulácsi.
 // All rights reserved.
 // For details, see the LICENSE file.
 
@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/csv"
 	"fmt"
 	"log"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dbcsv"
-	"gopkg.in/rana/ora.v4"
 )
 
 const (
@@ -24,15 +24,15 @@ const (
 	dateTimeFormat = dbcsv.DateTimeFormat
 )
 
-func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <-chan dbcsv.Row, oneTx bool) (int, error) {
-	st, err := getQuery(ses, fun, fixParams)
+func dbExec(db *sql.DB, fun string, fixParams [][2]string, retOk int64, rows <-chan dbcsv.Row, oneTx bool) (int, error) {
+	st, err := getQuery(db, fun, fixParams)
 	if err != nil {
 		return 0, err
 	}
 	log.Printf("st=%#v", st)
 	var (
-		stmt     *ora.Stmt
-		tx       *ora.Tx
+		stmt     *sql.Stmt
+		tx       *sql.Tx
 		values   []interface{}
 		startIdx int
 		ret      int64
@@ -46,13 +46,13 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 
 	for row := range rows {
 		if tx == nil {
-			if tx, err = ses.StartTx(); err != nil {
+			if tx, err = db.Begin(); err != nil {
 				return n, err
 			}
 			if stmt != nil {
 				stmt.Close()
 			}
-			if stmt, err = ses.Prep(st.Qry); err != nil {
+			if stmt, err = tx.Prepare(st.Qry); err != nil {
 				tx.Rollback()
 				return n, err
 			}
@@ -75,11 +75,9 @@ func dbExec(ses *ora.Ses, fun string, fixParams [][2]string, retOk int64, rows <
 		for i := len(values) + 1; i < st.ParamCount-len(st.FixParams); i++ {
 			values = append(values, "")
 		}
-		for _, s := range st.FixParams {
-			values = append(values, s)
-		}
+		values = append(values, st.FixParams...)
 		//log.Printf("%q %#v", st.Qry, values)
-		if _, err = stmt.Exe(values...); err != nil {
+		if _, err = stmt.Exec(values...); err != nil {
 			log.Printf("values=%d ParamCount=%d", len(values), st.ParamCount)
 			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
 			return n, errors.Wrapf(err, "qry=%q params=%#v", st.Qry, values)
@@ -132,7 +130,11 @@ type Statement struct {
 	FixParams  []interface{}
 }
 
-func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error) {
+type querier interface {
+	Query(string, ...interface{}) (*sql.Rows, error)
+}
+
+func getQuery(db querier, fun string, fixParams [][2]string) (Statement, error) {
 	var st Statement
 	args := make([]Arg, 0, 32)
 	fun = strings.TrimSpace(fun)
@@ -145,7 +147,7 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		var nm []byte
 		var state uint8
 		names := make([]string, 0, strings.Count(fun, ":"))
-		strings.Map(func(r rune) rune {
+		_ = strings.Map(func(r rune) rune {
 			switch state {
 			case 0:
 				if r == ':' {
@@ -191,30 +193,31 @@ func getQuery(ses *ora.Ses, fun string, fixParams [][2]string) (Statement, error
 		return st, errors.New("bad function name: " + fun)
 	}
 	qry += " ORDER BY sequence"
-	rset, err := ses.PrepAndQry(qry, params...)
+	rows, err := db.Query(qry, params...)
 	if err != nil {
 		return st, errors.Wrapf(err, qry)
 	}
+	defer rows.Close()
 
 	log.Println(qry, params)
-	for rset.Next() {
-		arg := Arg{
-			Name:  rset.Row[0].(string),
-			Type:  rset.Row[1].(string),
-			InOut: rset.Row[2].(string),
+	for rows.Next() {
+		var arg Arg
+		var length, precision, scale sql.NullInt64
+		if err = rows.Scan(&arg.Name, &arg.Type, &arg.InOut, &length, &precision, &scale); err != nil {
+			return st, err
 		}
-		if rset.Row[3] != nil {
-			arg.Length = int(rset.Row[3].(float64))
-			if rset.Row[4] != nil {
-				arg.Precision = int(rset.Row[4].(float64))
-				if rset.Row[5] != nil {
-					arg.Scale = int(rset.Row[5].(float64))
+		if length.Valid {
+			arg.Length = int(length.Int64)
+			if precision.Valid {
+				arg.Precision = int(precision.Int64)
+				if scale.Valid {
+					arg.Scale = int(scale.Int64)
 				}
 			}
 		}
 		args = append(args, arg)
 	}
-	if err := rset.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return st, errors.Wrap(err, qry)
 	}
 	if len(args) == 0 {

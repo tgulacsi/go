@@ -1,4 +1,4 @@
-// Copyright 2015 Tamás Gulácsi. All rights reserved.
+// Copyright 2017 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -82,12 +82,11 @@ type Key struct {
 }
 
 func (key Key) String() string {
-	type K struct {
+	k := struct {
 		Bytes, Salt []byte
 		L2N         uint
 		R, P        int
-	}
-	k := K{Bytes: key.Bytes, Salt: key.Salt, L2N: key.L2N, R: key.R, P: key.P}
+	}(key)
 	b, err := json.Marshal(k)
 	if err != nil {
 		return err.Error()

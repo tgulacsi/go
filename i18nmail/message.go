@@ -215,49 +215,6 @@ var WordDecoder = &mime.WordDecoder{
 // AddressParser is a mail address parser.
 var AddressParser = &mail.AddressParser{WordDecoder: WordDecoder}
 
-type splitter struct {
-	state uint8
-}
-
-// =?iso-8859-2?Q?MEN-261_K=D6BE_k=E1r.pdf?=
-// 012222222222233444444444444444444444444560
-func (s *splitter) fieldsFunc(r rune) bool {
-	oldstate := s.state
-	switch s.state {
-	case 0:
-		if r == '=' {
-			s.state++
-		}
-	case 1:
-		if r == '?' {
-			s.state++
-		} else {
-			s.state = 0
-		}
-	case 2:
-		if r == '?' {
-			s.state++
-		}
-	case 3:
-		if r == '?' {
-			s.state++
-		}
-	case 4:
-		if r == '?' {
-			s.state++
-		}
-	case 5:
-		if r == '=' {
-			s.state = 0
-		}
-	}
-	debugf("splitter(%s): %d=>%d", string([]rune{r}), oldstate, s.state)
-	if s.state == 0 && (r == ' ' || r == '\n' || r == '\r' || r == '\t' || r == '\v') {
-		return true
-	}
-	return false
-}
-
 // HeadDecode decodes mail header encoding (quopri or base64) such as
 // =?iso-8859-2?Q?MEN-261_K=D6BE_k=E1r.pdf?=
 func HeadDecode(head string) string {

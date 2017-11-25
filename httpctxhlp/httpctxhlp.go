@@ -18,15 +18,14 @@
 package httpctxhlp
 
 import (
+	"context"
 	"crypto/rand"
 	"net/http"
 	"time"
 
-	"golang.org/x/net/context"
-
+	"github.com/go-kit/kit/log"
 	"github.com/oklog/ulid"
 	"github.com/spkg/httpctx"
-	"github.com/tgulacsi/go/loghlp/kitloghlp"
 )
 
 func AddLogger(Log func(...interface{}) error, h httpctx.Handler) httpctx.Handler {
@@ -43,7 +42,7 @@ func AddLogger(Log func(...interface{}) error, h httpctx.Handler) httpctx.Handle
 			}
 			Log := Log
 			if lg, _ := ctx.Value("Log").(func(...interface{}) error); lg != nil {
-				Log = kitloghlp.With(Log, "reqid", id)
+				Log = log.With(log.LoggerFunc(Log), "reqid", id).Log
 				ctx = context.WithValue(ctx, "Log", Log)
 			}
 			w.Header().Set("X-Req-Id", id)
@@ -68,7 +67,7 @@ func GetLog(Log func(...interface{}) error, ctx context.Context) (func(...interf
 	if id == "" {
 		id = NewULID().String()
 		ctx = context.WithValue(ctx, "reqid", id)
-		Log = kitloghlp.With(Log, "reqid", id)
+		Log = log.With(log.LoggerFunc(Log), "reqid", id).Log
 	}
 	return Log, context.WithValue(ctx, "Log", Log)
 }

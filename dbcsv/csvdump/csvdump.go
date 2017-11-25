@@ -188,6 +188,9 @@ func dump(w io.Writer, db queryer, qry string, header bool, sep string, Log func
 	//log.Printf("%q: columns: %#v", qry, columns)
 
 	columns, err := getColumns(rows)
+	if err != nil {
+		return err
+	}
 
 	sepB := []byte(sep)
 	dest := make([]interface{}, len(columns))

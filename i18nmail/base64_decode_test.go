@@ -12,8 +12,9 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
-	"sync"
 	"testing"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func TestB64FilterReaderPeek(t *testing.T) {
@@ -27,20 +28,19 @@ func testB64FilterReaderPeek(t *testing.T, newReader func(io.Reader, []byte) io.
 	if err != nil {
 		t.Fatal(err)
 	}
-	var wg sync.WaitGroup
+	var grp errgroup.Group
 	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		grp.Go(func() error {
 			rc := newReader(fh, []byte(b64chars))
 			r := bufio.NewReader(rc)
 			r.Peek(512)
-			if _, err := io.Copy(ioutil.Discard, r); err != nil {
-				t.Fatal(err)
-			}
-		}()
+			_, err := io.Copy(ioutil.Discard, r)
+			return err
+		})
 	}
-	wg.Wait()
+	if err := grp.Wait(); err != nil {
+		t.Fatal(err)
+	}
 	fh.Close()
 }
 

@@ -194,13 +194,10 @@ func handleMediaRangeNoAcceptParams(mediaRange string) weightedValue {
 		//star the assume that the subtype is too
 		case typeSubtype[0] == "*": //&& typeSubtype[1] == "*":
 			wv.Weight = starStarMediaRangeWeight
-			break
 		case typeSubtype[1] == "*":
 			wv.Weight = typeStarMediaRangeWeight
-			break
 		case typeSubtype[1] != "*":
 			wv.Weight = typeSubtypeMediaRangeWeight
-			break
 		}
 	} //else invalid media range the weight remains 0.0
 

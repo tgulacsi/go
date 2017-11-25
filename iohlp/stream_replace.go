@@ -41,7 +41,7 @@ func NewStreamReplacer(r io.Reader, patternReplacementPairs ...[]byte) io.Reader
 			}
 			if readErr != nil {
 				if len(scratch) > 0 {
-					_, writeErr = pw.Write(scratch)
+					_, _ = pw.Write(scratch)
 				}
 				pw.CloseWithError(readErr)
 				break

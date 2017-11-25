@@ -25,8 +25,8 @@ import (
 
 const (
 	//http://source.winehq.org/source/include/winnt.h#L4605
-	file_read_data  = 1
-	file_write_data = 2
+	//file_read_data  = 1
+	//file_write_data = 2
 
 	// METHOD_BUFFERED	0
 	method_buffered = 0
@@ -36,8 +36,8 @@ const (
 	file_device_file_system = 0x00000009
 	// FILE_SPECIAL_ACCESS   (FILE_ANY_ACCESS)
 	file_special_access = file_any_access
-	file_read_access    = file_read_data
-	file_write_access   = file_write_data
+	//file_read_access    = file_read_data
+	//file_write_access = file_write_data
 
 	// http://source.winehq.org/source/include/winioctl.h
 	// #define CTL_CODE 	(  	DeviceType,
@@ -47,7 +47,7 @@ const (
 	//    ((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method)
 
 	// FSCTL_SET_COMPRESSION   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 16, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
-	fsctl_set_compression = (file_device_file_system << 16) | ((file_read_access | file_write_access) << 14) | (16 << 2) | method_buffered
+	//fsctl_set_compression = (file_device_file_system << 17) | ((file_read_access | file_write_access) << 14) | (16 << 2) | method_buffered
 	// FSCTL_SET_SPARSE   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 49, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 	fsctl_set_sparse = (file_device_file_system << 16) | (file_special_access << 14) | (49 << 2) | method_buffered
 	// FSCTL_SET_ZERO_DATA   CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 50, METHOD_BUFFERED, FILE_WRITE_DATA)

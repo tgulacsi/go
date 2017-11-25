@@ -18,7 +18,6 @@ package punchhole
 
 import (
 	"errors"
-	"io"
 	"os"
 )
 
@@ -26,52 +25,3 @@ var errNoPunch = errors.New("punchHole not supported")
 
 // PunchHole punches a hole in f from offset to offset+size, if non-nil.
 var PunchHole func(file *os.File, offset, size int64) error
-
-type zeroReader struct {
-	n int64
-}
-
-func (r *zeroReader) Read(p []byte) (int, error) {
-	if r.n == 0 {
-		return 0, io.EOF
-	}
-	n := len(p)
-	if int64(n) <= r.n {
-		for i := range p {
-			p[i] = 0
-		}
-		r.n -= int64(n)
-		return n, nil
-	}
-	n = int(r.n) // possible as n > r.n and n is an int (len(p))
-	for i := 0; i < n; i++ {
-		p[i] = 0
-	}
-	r.n = 0
-	return n, nil
-}
-
-const blockSize = 1 << 20
-
-func (r *zeroReader) WriteTo(w io.Writer) (int64, error) {
-	var written int64
-	var buf []byte
-	if r.n > blockSize {
-		buf = make([]byte, blockSize)
-		for r.n > blockSize {
-			n, err := w.Write(buf)
-			r.n -= int64(n)
-			written += int64(n)
-			if err != nil {
-				return written, err
-			}
-		}
-		buf = buf[:r.n]
-	} else {
-		buf = make([]byte, r.n)
-	}
-	r.n = 0
-	n, err := w.Write(buf)
-	written += int64(n)
-	return written, err
-}

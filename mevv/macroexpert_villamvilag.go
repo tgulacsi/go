@@ -74,9 +74,6 @@ func init() {
 	client.Transport = tr
 }
 
-type mevv struct {
-	version Version
-}
 type Version string
 
 const (
@@ -294,8 +291,6 @@ func fmtBool(b bool) string {
 	}
 	return "0"
 }
-
-var macroExpertUserPassw string
 
 // ReadUserPassw reads the user/passw from the given file.
 func ReadUserPassw(filename string) (string, string, error) {

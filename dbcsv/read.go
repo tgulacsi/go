@@ -138,7 +138,6 @@ func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName strin
 	}
 
 	if fileName == "-" || fileName == "" {
-		panic(fileName)
 		if cfg.fileName != "" {
 			fileName = cfg.fileName
 		}
@@ -149,7 +148,7 @@ func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName strin
 		cfg.fileName = fh.Name()
 		fileName = cfg.fileName
 		defer fh.Close()
-		//defer os.Remove(fileName)
+		defer os.Remove(fileName)
 		if _, err := io.Copy(fh, os.Stdin); err != nil {
 			return err
 		}
@@ -184,24 +183,6 @@ func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName strin
 const (
 	DateFormat     = "20060102"
 	DateTimeFormat = "20060102150405"
-)
-
-var timeReplacer = strings.NewReplacer(
-	"yyyy", "2006",
-	"yy", "06",
-	"dd", "02",
-	"d", "2",
-	"mmm", "Jan",
-	"mmss", "0405",
-	"ss", "05",
-	"hh", "15",
-	"h", "3",
-	"mm:", "04:",
-	":mm", ":04",
-	"mm", "01",
-	"am/pm", "pm",
-	"m/", "1/",
-	".0", ".9999",
 )
 
 func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIndex int, columns []int, skip int) error {

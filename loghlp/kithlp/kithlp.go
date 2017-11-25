@@ -18,7 +18,6 @@ package kithlp
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/go-kit/kit/log/term"
 )
@@ -75,20 +74,4 @@ func asString(v interface{}) string {
 		return fmt.Sprintf("%s", x)
 	}
 	return ""
-}
-func asTimeString(v interface{}, timeFormat string) string {
-	if v == nil {
-		return ""
-	}
-	switch x := v.(type) {
-	case time.Time:
-		return x.Format(timeFormat)
-	default:
-		return asString(x)
-	}
-	return ""
-}
-
-type fder interface {
-	Fd() uintptr
 }

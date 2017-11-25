@@ -56,7 +56,6 @@ limitations under the License.
 // It doesn't check whether the text was already present.
 func RegisterLicense(text string) {
 	licenses = append(licenses, text)
-	return
 }
 
 // Licenses returns a slice of the licenses.

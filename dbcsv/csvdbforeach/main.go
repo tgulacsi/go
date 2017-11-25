@@ -1,4 +1,4 @@
-// Copyright 2011-2015, Tamás Gulácsi.
+// Copyright 2011-2017, Tamás Gulácsi.
 // All rights reserved.
 // For details, see the LICENSE file.
 
@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"io"
@@ -18,11 +19,12 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dbcsv"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 
-	"gopkg.in/rana/ora.v4"
+	_ "gopkg.in/goracle.v2"
 )
 
 var (
@@ -169,20 +171,15 @@ Usage:
 	}
 
 	dsn := os.ExpandEnv(*flagConnect)
-	sesPool, err := ora.NewPool(dsn, 1)
+	db, err := sql.Open("goracle", dsn)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.Wrap(err, dsn))
 	}
-	defer sesPool.Close()
-	ses, err := sesPool.Get()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer sesPool.Put(ses)
+	defer db.Close()
 
 	var n int
 	start := time.Now()
-	n, err = dbExec(ses, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagOneTx)
+	n, err = dbExec(db, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagOneTx)
 	bw.Flush()
 	if err != nil {
 		log.Fatalf("exec %q: %v", *flagFunc, err)

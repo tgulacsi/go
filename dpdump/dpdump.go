@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 Tamás Gulácsi
+   Copyright 2017 Tamás Gulácsi
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 
 	"camlistore.org/pkg/blobserver"
 	"camlistore.org/pkg/blobserver/diskpacked"
-	"golang.org/x/net/context"
 )
 
 func main() {
@@ -43,7 +43,7 @@ func main() {
 				fmt.Printf("blob=%s", bt.Blob)
 			}
 		}(blobs)
-		if err := stream.StreamBlobs(context.New(), blobs, contToken); err != nil {
+		if err := stream.StreamBlobs(context.Background(), blobs, contToken); err != nil {
 			log.Printf("ERROR: %v", err)
 		}
 	}

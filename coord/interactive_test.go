@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,6 +35,9 @@ func TestInteractive(t *testing.T) {
 	}
 
 	req, err = http.NewRequest("GET", "http://example.com/_koord/set?id=a&lat=%2B49.12&lng=-45.67", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp = httptest.NewRecorder()
 	in.ServeHTTP(resp, req)
 	t.Logf("resp: %s", resp.Body.String())

@@ -154,7 +154,7 @@ func Main() error {
 		Start int64
 	}
 	rowsCh := make(chan rowsType, *flagConcurrency)
-	chunkPool := sync.Pool{New: func() interface{} { return make([][]string, 0, chunkSize) }}
+	chunkPool := sync.Pool{New: func() interface{} { z := make([][]string, 0, chunkSize); return &z }}
 
 	var inserted int64
 	for i := 0; i < *flagConcurrency; i++ {
@@ -217,7 +217,10 @@ func Main() error {
 				}
 
 				_, err := stmt.Exec(rowsI...)
-				chunkPool.Put(chunk[:0])
+				{
+					z := chunk[:0]
+					chunkPool.Put(&z)
+				}
 				if err == nil {
 					atomic.AddInt64(&inserted, int64(len(chunk)))
 					continue
@@ -261,7 +264,7 @@ func Main() error {
 	})
 	var n int64
 	var headerSeen bool
-	chunk := chunkPool.Get().([][]string)[:0]
+	chunk := (*(chunkPool.Get().(*[][]string)))[:0]
 	for row := range rows {
 		if err := ctx.Err(); err != nil {
 			chunk = chunk[:0]
@@ -289,7 +292,7 @@ func Main() error {
 			return ctx.Err()
 		}
 
-		chunk = chunkPool.Get().([][]string)[:0]
+		chunk = (*chunkPool.Get().(*[][]string))[:0]
 	}
 	if len(chunk) != 0 {
 		rowsCh <- rowsType{Rows: chunk, Start: n}
@@ -315,7 +318,7 @@ func typeOf(s string) Type {
 	var hasNonDigit bool
 	var dotCount int
 	var length int
-	strings.Map(func(r rune) rune {
+	_ = strings.Map(func(r rune) rune {
 		length++
 		if r == '.' {
 			dotCount++
