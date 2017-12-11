@@ -53,20 +53,25 @@ func main() {
 	}
 	d := enc.NewDecoder()
 	for _, f := range zr.File {
-		s, err := d.String(f.Name)
-		if err != nil {
-			log.Printf("Decode %q: %v", f.Name, err)
+		name := f.Name
+		if f.NonUTF8 {
+			s, err := d.String(name)
+			if err != nil {
+				log.Printf("Decode %q: %v", f.Name, err)
+			} else {
+				name = s
+			}
 		}
-		fmt.Printf("%q\n", s)
+		fmt.Printf("%q\n", name)
 		rc, err := f.Open()
 		if err != nil {
 			log.Fatal(err)
 		}
-		os.MkdirAll(filepath.Dir(s), 0755)
-		dest, err := os.Create(s)
+		os.MkdirAll(filepath.Dir(name), 0755)
+		dest, err := os.Create(name)
 		if err != nil {
 			rc.Close()
-			log.Printf("create %q: %v", s, err)
+			log.Printf("create %q: %v", name, err)
 			continue
 		}
 		_, err = io.Copy(dest, rc)
