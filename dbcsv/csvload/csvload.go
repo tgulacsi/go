@@ -159,14 +159,14 @@ func Main() error {
 	var inserted int64
 	for i := 0; i < *flagConcurrency; i++ {
 		grp.Go(func() error {
-			tx, err := db.BeginTx(ctx, nil)
-			if err != nil {
-				return err
+			tx, txErr := db.BeginTx(ctx, nil)
+			if txErr != nil {
+				return txErr
 			}
 			defer tx.Rollback()
-			stmt, err := tx.Prepare(qry)
-			if err != nil {
-				return errors.Wrap(err, qry)
+			stmt, prepErr := tx.Prepare(qry)
+			if prepErr != nil {
+				return errors.Wrap(prepErr, qry)
 			}
 			nCols := len(columns)
 			cols := make([][]string, nCols)
@@ -174,7 +174,7 @@ func Main() error {
 
 			for rs := range rowsCh {
 				chunk := rs.Rows
-				if err := ctx.Err(); err != nil {
+				if err = ctx.Err(); err != nil {
 					return err
 				}
 				if len(chunk) == 0 {
@@ -202,7 +202,6 @@ func Main() error {
 				}
 
 				for i, col := range cols {
-					var err error
 					if rowsI[i], err = columns[i].FromString(col); err != nil {
 						log.Printf("%d. col: %+v", i, err)
 						for k, row := range chunk {
@@ -216,7 +215,7 @@ func Main() error {
 					}
 				}
 
-				_, err := stmt.Exec(rowsI...)
+				_, err = stmt.Exec(rowsI...)
 				{
 					z := chunk[:0]
 					chunkPool.Put(&z)
@@ -244,7 +243,7 @@ func Main() error {
 						}
 						R2.Index(i).Set(r.Index(j))
 					}
-					if _, err := stmt.Exec(rowsI2...); err != nil {
+					if _, err = stmt.Exec(rowsI2...); err != nil {
 						err = errors.Wrapf(err, "%s, %q", qry, rowsI2)
 						log.Println(err)
 						return err
@@ -266,7 +265,7 @@ func Main() error {
 	var headerSeen bool
 	chunk := (*(chunkPool.Get().(*[][]string)))[:0]
 	for row := range rows {
-		if err := ctx.Err(); err != nil {
+		if err = ctx.Err(); err != nil {
 			chunk = chunk[:0]
 			break
 		}

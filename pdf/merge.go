@@ -1,3 +1,19 @@
+/*
+  Copyright 2017 Tamás Gulácsi
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
 package pdf
 
 import (
@@ -30,13 +46,14 @@ func MergeFiles(dest string, sources ...string) error {
 	// collects the roots of each pdf
 	roots := make([]pdf.ObjectReference, 0, len(sources))
 	for _, fn := range sources {
-		file, err := pdf.Open(fn)
-		if err != nil {
-			return fmt.Errorf("open %q: %v", fn, err)
+		file, openErr := pdf.Open(fn)
+		if openErr != nil {
+			return fmt.Errorf("open %q: %v", fn, openErr)
 		}
 		closers = append(closers, file)
 
-		_, root, err := copyReferencedObjects(map[pdf.ObjectReference]pdf.ObjectReference{}, merged, file, file.Root)
+		var root pdf.Object
+		_, root, err = copyReferencedObjects(map[pdf.ObjectReference]pdf.ObjectReference{}, merged, file, file.Root)
 		if err != nil {
 			return err
 		}
@@ -84,15 +101,15 @@ func copyReferencedObjects(refs map[pdf.ObjectReference]pdf.ObjectReference, dst
 
 		// get an object reference for the copied obj
 		// needed to break reference cycles
-		ref, err := dst.Add(pdf.Null{})
-		if err != nil {
-			return nil, nil, err
+		ref, addErr := dst.Add(pdf.Null{})
+		if addErr != nil {
+			return nil, nil, addErr
 		}
 		refs[t] = ref
 
-		newRefs, newObj, err := copyReferencedObjects(refs, dst, src, src.Get(t))
-		if err != nil {
-			return nil, nil, err
+		newRefs, newObj, copyErr := copyReferencedObjects(refs, dst, src, src.Get(t))
+		if copyErr != nil {
+			return nil, nil, copyErr
 		}
 		merge(newRefs)
 

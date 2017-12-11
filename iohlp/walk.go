@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors. All rights reserved.
+// Copyright 2017 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -41,7 +41,7 @@ func walk(path string, info os.FileInfo, walkFn filepath.WalkFunc, followSymlink
 			filename := filepath.Join(path, name)
 			fileInfo, err := stat(filename)
 			if err != nil {
-				if err := walkFn(filename, fileInfo, err); err != nil && err != filepath.SkipDir {
+				if err = walkFn(filename, fileInfo, err); err != nil && err != filepath.SkipDir {
 					return err
 				}
 			} else {

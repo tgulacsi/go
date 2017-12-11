@@ -1,5 +1,5 @@
 /*
-  Copyright 2014 Tamás Gulácsi
+  Copyright 2017 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -27,13 +27,13 @@ import (
 // CreatFormFile is like multipart.Writer.CreateFormFile, but allows the setting of Content-Type.
 func CreateFormFile(w *multipart.Writer, fieldname, filename, contentType string) (io.Writer, error) {
 	h := make(textproto.MIMEHeader)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
 	h.Set("Content-Type", contentType)
 	h.Set("Content-Disposition",
 		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
 			escapeQuotes(fieldname), escapeQuotes(filename)))
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
 	return w.CreatePart(h)
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2013 Tamás Gulácsi
+Copyright 2017 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -90,11 +90,9 @@ func parseMediaRange(mRange string) (mr mediaRange, err error) {
 	mr.q = 1
 	q := mr.params["q"]
 	if q != "" {
-		f, err := strconv.ParseFloat(q, 32)
-		if err == nil && f >= 0.0 && f <= 1.0 {
+		f, parseErr := strconv.ParseFloat(q, 32)
+		if parseErr == nil && f >= 0.0 && f <= 1.0 {
 			mr.q = float32(f)
-		} else {
-			err = nil
 		}
 	}
 	return
@@ -109,7 +107,7 @@ type mediaRange struct {
 // fit returns the best fitting mediaRange from to the parsed mediaRanges
 func fit(target mediaRange, mediaRanges []mediaRange) (bestFit mediaRange) {
 	bestFitness := -1
-	fitness := 0
+	var fitness int
 	for _, mr := range mediaRanges {
 		fitness = 0
 		if (mr.typ == target.typ || mr.typ == "*") &&

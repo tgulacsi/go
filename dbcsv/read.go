@@ -129,7 +129,7 @@ func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName strin
 			log.Printf("ReadRows(%q): %v", fileName, err)
 		}
 	}()
-	if err := ctx.Err(); err != nil {
+	if err = ctx.Err(); err != nil {
 		return err
 	}
 	columns, err := cfg.Columns()
@@ -141,18 +141,18 @@ func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName strin
 		if cfg.fileName != "" {
 			fileName = cfg.fileName
 		}
-		fh, err := ioutil.TempFile("", "ReadRows-")
-		if err != nil {
-			return err
+		fh, tmpErr := ioutil.TempFile("", "ReadRows-")
+		if tmpErr != nil {
+			return tmpErr
 		}
 		cfg.fileName = fh.Name()
 		fileName = cfg.fileName
 		defer fh.Close()
 		defer os.Remove(fileName)
-		if _, err := io.Copy(fh, os.Stdin); err != nil {
+		if _, err = io.Copy(fh, os.Stdin); err != nil {
 			return err
 		}
-		if err := fh.Close(); err != nil {
+		if err = fh.Close(); err != nil {
 			return err
 		}
 	}
