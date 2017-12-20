@@ -1,5 +1,5 @@
 /*
-  Copyright 2013 Tamás Gulácsi
+  Copyright 2017 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -50,9 +50,9 @@ func Convert(srcFn, dstFn, format string) error {
 	defer os.RemoveAll(tempDir)
 	if srcFn == "-" || srcFn == "" {
 		srcFn = filepath.Join(tempDir, "source")
-		fh, err := os.Create(srcFn)
-		if err != nil {
-			return fmt.Errorf("error creating temp file %q: %s", srcFn, err)
+		fh, cErr := os.Create(srcFn)
+		if cErr != nil {
+			return fmt.Errorf("error creating temp file %q: %s", srcFn, cErr)
 		}
 		if _, err = io.Copy(fh, os.Stdin); err != nil {
 			fh.Close()

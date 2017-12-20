@@ -1,4 +1,4 @@
-// Copyright 2011-2017, Tamás Gulácsi.
+// Copyright 2017, Tamás Gulácsi.
 // All rights reserved.
 // For details, see the LICENSE file.
 
@@ -65,10 +65,10 @@ func dbExec(db *sql.DB, fun string, fixParams [][2]string, retOk int64, rows <-c
 				values = append(values, s)
 				continue
 			}
-			v, err := conv(s)
-			if err != nil {
-				log.Printf("row=%#v error=%v", row, err)
-				return n, errors.Wrapf(err, "convert %q (row %d, col %d)", s, row.Line, i+1)
+			v, convErr := conv(s)
+			if convErr != nil {
+				log.Printf("row=%#v error=%v", row, convErr)
+				return n, errors.Wrapf(convErr, "convert %q (row %d, col %d)", s, row.Line, i+1)
 			}
 			values = append(values, v)
 		}
@@ -217,7 +217,7 @@ func getQuery(db querier, fun string, fixParams [][2]string) (Statement, error) 
 		}
 		args = append(args, arg)
 	}
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return st, errors.Wrap(err, qry)
 	}
 	if len(args) == 0 {

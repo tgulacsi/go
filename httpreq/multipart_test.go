@@ -1,5 +1,5 @@
 /*
-  Copyright 2014 Tamás Gulácsi
+  Copyright 2017 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ func ExampleCreateFormFile(url, name, contentType string, r io.Reader) error {
 	if _, err = io.Copy(w, r); err != nil {
 		return err
 	}
-	if err := mw.Close(); err != nil {
+	if err = mw.Close(); err != nil {
 		return err
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(buf.Bytes()))

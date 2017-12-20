@@ -1,3 +1,19 @@
+/*
+  Copyright 2017 Tamás Gulácsi
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
 package soaphlp
 
 import (
@@ -16,8 +32,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Log is the logging function in use.
-var Log = func(...interface{}) error { return nil }
+// DefaultLog is the logging function in use.
+var DefaultLog = func(...interface{}) error { return nil }
 
 var ErrBodyNotFound = errors.New("body not found")
 
@@ -82,7 +98,7 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 			if x.Name.Local == "Body" &&
 				(x.Name.Space == "" || x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") {
 				start := d.InputOffset()
-				if err := d.Skip(); err != nil {
+				if err = d.Skip(); err != nil {
 					return nil, errors.Wrap(err, buf.String())
 				}
 				end := d.InputOffset()
@@ -169,5 +185,5 @@ func GetLog(ctx context.Context) func(keyvalue ...interface{}) error {
 	if Log, _ := ctx.Value(logKey).(func(...interface{}) error); Log != nil {
 		return Log
 	}
-	return Log
+	return DefaultLog
 }

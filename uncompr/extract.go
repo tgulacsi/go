@@ -1,4 +1,4 @@
-// Copyright 2014 Tamás Gulácsi. All rights reserved.
+// Copyright 2017 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -112,7 +112,7 @@ func NewRarLister(r io.Reader) (Lister, error) {
 
 	cmd := exec.Command("unrar", "e", "-ep", rarName)
 	cmd.Dir = tempdir
-	if err := cmd.Run(); err != nil {
+	if err = cmd.Run(); err != nil {
 		os.RemoveAll(tempdir)
 		return nil, errors.Wrapf(err, "%q @%q", cmd.Args, cmd.Dir)
 	}
