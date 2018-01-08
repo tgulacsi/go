@@ -112,14 +112,9 @@ func Main() error {
 	rows := make(chan dbcsv.Row)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	grp, ctx := errgroup.WithContext(ctx)
-	grp.Go(func() error {
-		return cfg.ReadRows(ctx, rows, fileName)
-	})
-
+	go cfg.ReadRows(ctx, rows, fileName)
 	columns, err := CreateTable(ctx, db, tbl, rows, *flagTruncate, *flagTablespace)
 	cancel()
-	grp.Wait()
 	if err != nil {
 		return err
 	}
@@ -146,7 +141,7 @@ func Main() error {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	grp, ctx = errgroup.WithContext(ctx)
+	grp, ctx := errgroup.WithContext(ctx)
 	//grp = &errgroup.Group{}
 
 	type rowsType struct {
@@ -247,7 +242,6 @@ func Main() error {
 						err = errors.Wrapf(err, "%s, %q", qry, rowsI2)
 						log.Println(err)
 						return err
-						break
 					}
 				}
 
