@@ -25,10 +25,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 
 	"github.com/kylewolfe/soaptrip"
 	"github.com/pkg/errors"
+	"github.com/tgulacsi/go/bufpool"
 )
 
 // DefaultLog is the logging function in use.
@@ -72,12 +72,11 @@ type soapClient struct {
 	SOAPActionBase string
 }
 
-var bufPool = &sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
+var bufPool = bufpool.New(1024)
 
 func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
-	buf := bufPool.Get().(*bytes.Buffer)
+	buf := bufPool.Get()
 	defer bufPool.Put(buf)
-	buf.Reset()
 	d := xml.NewDecoder(io.TeeReader(r, buf))
 	var n int
 	for {
@@ -133,9 +132,8 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 	return FindBody(w, rc)
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
-	buf := bufPool.Get().(*bytes.Buffer)
+	buf := bufPool.Get()
 	defer bufPool.Put(buf)
-	buf.Reset()
 	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>
 <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
