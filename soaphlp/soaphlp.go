@@ -72,7 +72,7 @@ type soapClient struct {
 	SOAPActionBase string
 }
 
-var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
+var bufPool = &sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
 func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -133,12 +133,14 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 	return FindBody(w, rc)
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
-	var buf bytes.Buffer
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
 	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>
 <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
 `)
-	_, err := io.Copy(&buf, body)
+	_, err := io.Copy(buf, body)
 	buf.WriteString("\n</Body></Envelope>")
 	if err != nil {
 		return nil, err
