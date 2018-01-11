@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/kylewolfe/soaptrip"
@@ -134,16 +133,13 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 	return FindBody(w, rc)
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	buf.Reset()
-	_, err := io.Copy(buf, io.MultiReader(
-		strings.NewReader(`<?xml version="1.0" encoding="utf-8"?>
+	var buf bytes.Buffer
+	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>
 <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
-`),
-		body,
-		strings.NewReader("\n</Body></Envelope>")))
+`)
+	_, err := io.Copy(&buf, body)
+	buf.WriteString("\n</Body></Envelope>")
 	if err != nil {
 		return nil, err
 	}
