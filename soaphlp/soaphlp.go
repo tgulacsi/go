@@ -28,7 +28,7 @@ import (
 
 	"github.com/kylewolfe/soaptrip"
 	"github.com/pkg/errors"
-	"github.com/tgulacsi/go/bufpool"
+	bp "github.com/tgulacsi/go/bufpool"
 )
 
 // DefaultLog is the logging function in use.
@@ -72,11 +72,11 @@ type soapClient struct {
 	SOAPActionBase string
 }
 
-var bufPool = bufpool.New(1024)
+var bufpool = bp.New(1024)
 
 func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
-	buf := bufPool.Get()
-	defer bufPool.Put(buf)
+	buf := bufpool.Get()
+	// cannot return to bufpool: we return TeeReader, which will write when decoding!
 	d := xml.NewDecoder(io.TeeReader(r, buf))
 	var n int
 	for {
@@ -85,10 +85,12 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 		if err != nil {
 			if err == io.EOF {
 				if buf.Len() == 0 {
+					bufpool.Put(buf)
 					return nil, err
 				}
 				break
 			}
+			defer bufpool.Put(buf)
 			return nil, errors.Wrap(err, buf.String())
 		}
 		switch x := tok.(type) {
@@ -97,11 +99,13 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 				(x.Name.Space == "" || x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") {
 				start := d.InputOffset()
 				if err = d.Skip(); err != nil {
+					defer bufpool.Put(buf)
 					return nil, errors.Wrap(err, buf.String())
 				}
 				end := d.InputOffset()
 				//Log("start", start, "end", end, "bytes", start, end, buf.Len())
 				if _, err = w.Write(buf.Bytes()[start:end]); err != nil {
+					defer bufpool.Put(buf)
 					return nil, err
 				}
 				d := xml.NewDecoder(bytes.NewReader(buf.Bytes()))
@@ -112,6 +116,7 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 			}
 		}
 	}
+	defer bufpool.Put(buf)
 	return nil, errors.Wrap(ErrBodyNotFound, buf.String())
 }
 
@@ -132,8 +137,8 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 	return FindBody(w, rc)
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
-	buf := bufPool.Get()
-	defer bufPool.Put(buf)
+	buf := bufpool.Get()
+	defer bufpool.Put(buf)
 	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>
 <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
