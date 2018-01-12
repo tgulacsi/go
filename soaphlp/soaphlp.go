@@ -76,13 +76,9 @@ var bufpool = bp.New(1024)
 
 func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 	buf := bufpool.Get()
-	sw := &swapWriter{W: buf}
-	d := xml.NewDecoder(io.TeeReader(r, sw))
-	defer func() {
-		sw.Swap(ioutil.Discard)
-		bufpool.Put(buf)
-	}()
+	defer bufpool.Put(buf)
 
+	d := xml.NewDecoder(io.TeeReader(r, buf))
 	var n int
 	for {
 		n++
@@ -109,7 +105,11 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 				if _, err = w.Write(buf.Bytes()[start:end]); err != nil {
 					return nil, err
 				}
-				d := xml.NewDecoder(bytes.NewReader(buf.Bytes()))
+				// Must copy the bytes to a new slice to allow buf reuse!
+				d := xml.NewDecoder(bytes.NewReader(append(
+					make([]byte, 0, buf.Len()),
+					buf.Bytes()...)))
+				// Restart from the beginning, and consume n-1 tokens.
 				for i := 0; i < n; i++ {
 					d.Token()
 				}
@@ -187,18 +187,4 @@ func GetLog(ctx context.Context) func(keyvalue ...interface{}) error {
 		return Log
 	}
 	return DefaultLog
-}
-
-type swapWriter struct {
-	W io.Writer
-}
-
-func (s *swapWriter) Swap(w io.Writer) {
-	s.W = w
-}
-func (s *swapWriter) Write(p []byte) (int, error) {
-	if s.W == nil {
-		return len(p), nil
-	}
-	return s.W.Write(p)
 }
