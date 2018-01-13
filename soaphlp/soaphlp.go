@@ -81,7 +81,6 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 	d := xml.NewDecoder(io.TeeReader(r, buf))
 	var n int
 	for {
-		n++
 		tok, err := d.Token()
 		if err != nil {
 			if err == io.EOF {
@@ -92,6 +91,7 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 			}
 			return nil, errors.Wrap(err, buf.String())
 		}
+		n++
 		switch x := tok.(type) {
 		case xml.StartElement:
 			if x.Name.Local == "Body" &&
@@ -109,7 +109,7 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 				d := xml.NewDecoder(bytes.NewReader(append(
 					make([]byte, 0, buf.Len()),
 					buf.Bytes()...)))
-				// Restart from the beginning, and consume n-1 tokens.
+				// Restart from the beginning, and consume n tokens (till the Skipped).
 				for i := 0; i < n; i++ {
 					d.Token()
 				}
