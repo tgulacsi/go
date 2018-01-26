@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"io"
 
-	"github.com/bthomson/wrap"
+	"github.com/tgulacsi/go/wrap" //"github.com/bthomson/wrap"
 )
 
 // WrappingReader returns an io.Reader which will wrap lines longer than the given width.
