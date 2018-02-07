@@ -56,7 +56,11 @@ func GetRawTTYEncoding() encoding.Encoding {
 func GetTTYEncodingName() string {
 	lang := os.Getenv("LANG")
 	if i := strings.IndexByte(lang, '.'); i >= 0 {
-		return lang[i+1:]
+		lang = lang[i+1:]
+		if strings.HasPrefix(lang, "iso8859") && len(lang) > 7 && '0' <= lang[7] && lang[7] <= '9' {
+			return lang[:7] + "-" + lang[7:]
+		}
+		return lang
 	}
 	return ""
 }
