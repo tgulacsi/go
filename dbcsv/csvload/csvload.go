@@ -115,7 +115,7 @@ func Main() error {
 	go func() {
 		defer close(rows)
 		cfg.ReadRows(ctx,
-			func(row dbcsv.Row) error {
+			func(_ string, row dbcsv.Row) error {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -268,7 +268,7 @@ func Main() error {
 	var headerSeen bool
 	chunk := (*(chunkPool.Get().(*[][]string)))[:0]
 	if err = cfg.ReadRows(ctx,
-		func(row dbcsv.Row) error {
+		func(_ string, row dbcsv.Row) error {
 			if err = ctx.Err(); err != nil {
 				chunk = chunk[:0]
 				return err

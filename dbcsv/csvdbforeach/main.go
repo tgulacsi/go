@@ -127,7 +127,7 @@ Usage:
 	go func(rows chan<- dbcsv.Row) {
 		defer close(rows)
 		errch <- cfg.ReadRows(ctx,
-			func(row dbcsv.Row) error {
+			func(_ string, row dbcsv.Row) error {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()

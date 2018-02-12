@@ -124,7 +124,7 @@ func (cfg *Config) Type(fileName string) (FileType, error) {
 	return cfg.typ, err
 }
 
-func (cfg *Config) ReadRows(ctx context.Context, fn func(Row) error, fileName string) (err error) {
+func (cfg *Config) ReadRows(ctx context.Context, fn func(string, Row) error, fileName string) (err error) {
 	if err = ctx.Err(); err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (cfg *Config) ReadRows(ctx context.Context, fn func(Row) error, fileName st
 	}
 	defer fh.Close()
 	r := transform.NewReader(fh, enc.NewDecoder())
-	return ReadCSV(ctx, fn, r, cfg.Delim, columns, cfg.Skip)
+	return ReadCSV(ctx, func(row Row) error { return fn(fileName, row) }, r, cfg.Delim, columns, cfg.Skip)
 }
 
 const (
@@ -178,7 +178,7 @@ const (
 	DateTimeFormat = "20060102150405"
 )
 
-func ReadXLSXFile(ctx context.Context, fn func(Row) error, filename string, sheetIndex int, columns []int, skip int) error {
+func ReadXLSXFile(ctx context.Context, fn func(string, Row) error, filename string, sheetIndex int, columns []int, skip int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func ReadXLSXFile(ctx context.Context, fn func(Row) error, filename string, shee
 	}
 	n := 0
 	var need map[int]bool
-	if columns != nil {
+	if len(columns) != 0 {
 		need = make(map[int]bool, len(columns))
 		for _, i := range columns {
 			need[i] = true
@@ -210,7 +210,7 @@ func ReadXLSXFile(ctx context.Context, fn func(Row) error, filename string, shee
 			return ctx.Err()
 		default:
 		}
-		if err := fn(Row{Line: n, Values: row}); err != nil {
+		if err := fn(sheetName, Row{Line: n, Values: row}); err != nil {
 			return err
 		}
 		n++
@@ -218,7 +218,7 @@ func ReadXLSXFile(ctx context.Context, fn func(Row) error, filename string, shee
 	return nil
 }
 
-func ReadXLSFile(ctx context.Context, fn func(Row) error, filename string, charset string, sheetIndex int, columns []int, skip int) error {
+func ReadXLSFile(ctx context.Context, fn func(string, Row) error, filename string, charset string, sheetIndex int, columns []int, skip int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -231,7 +231,7 @@ func ReadXLSFile(ctx context.Context, fn func(Row) error, filename string, chars
 		return errors.New(fmt.Sprintf("This XLS file does not contain sheet no %d!", sheetIndex))
 	}
 	var need map[int]bool
-	if columns != nil {
+	if len(columns) != 0 {
 		need = make(map[int]bool, len(columns))
 		for _, i := range columns {
 			need[i] = true
@@ -267,7 +267,7 @@ func ReadXLSFile(ctx context.Context, fn func(Row) error, filename string, chars
 			return ctx.Err()
 		default:
 		}
-		if err := fn(Row{Line: int(n), Values: vals}); err != nil {
+		if err := fn(sheet.Name, Row{Line: int(n), Values: vals}); err != nil {
 			return err
 		}
 	}
