@@ -27,6 +27,7 @@ import (
 )
 
 var DefaultEncoding = encoding.Replacement
+var UnknownSheet = errors.New("unknown sheet")
 
 func init() {
 	encName := os.Getenv("LANG")
@@ -124,11 +125,6 @@ func (cfg *Config) Type(fileName string) (FileType, error) {
 }
 
 func (cfg *Config) ReadRows(ctx context.Context, fn func(Row) error, fileName string) (err error) {
-	defer func() {
-		if err != nil {
-			log.Printf("ReadRows(%q): %v", fileName, err)
-		}
-	}()
 	if err = ctx.Err(); err != nil {
 		return err
 	}
@@ -138,9 +134,6 @@ func (cfg *Config) ReadRows(ctx context.Context, fn func(Row) error, fileName st
 	}
 
 	if fileName == "-" || fileName == "" {
-		if cfg.fileName != "" {
-			fileName = cfg.fileName
-		}
 		fh, tmpErr := ioutil.TempFile("", "ReadRows-")
 		if tmpErr != nil {
 			return tmpErr
@@ -195,7 +188,7 @@ func ReadXLSXFile(ctx context.Context, fn func(Row) error, filename string, shee
 	}
 	sheetName := xlFile.GetSheetName(sheetIndex)
 	if sheetName == "" {
-		return errors.Errorf("No sheet %d available", sheetIndex)
+		return errors.Wrap(UnknownSheet, strconv.Itoa(sheetIndex))
 	}
 	n := 0
 	var need map[int]bool
