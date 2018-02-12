@@ -123,7 +123,7 @@ func (cfg *Config) Type(fileName string) (FileType, error) {
 	return cfg.typ, err
 }
 
-func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName string) (err error) {
+func (cfg *Config) ReadRows(ctx context.Context, fn func(Row) error, fileName string) (err error) {
 	defer func() {
 		if err != nil {
 			log.Printf("ReadRows(%q): %v", fileName, err)
@@ -163,9 +163,9 @@ func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName strin
 	}
 	switch typ {
 	case Xls:
-		return ReadXLSFile(ctx, rows, fileName, cfg.Charset, cfg.Sheet, columns, cfg.Skip)
+		return ReadXLSFile(ctx, fn, fileName, cfg.Charset, cfg.Sheet, columns, cfg.Skip)
 	case XlsX:
-		return ReadXLSXFile(ctx, rows, fileName, cfg.Sheet, columns, cfg.Skip)
+		return ReadXLSXFile(ctx, fn, fileName, cfg.Sheet, columns, cfg.Skip)
 	}
 	enc, err := cfg.Encoding()
 	if err != nil {
@@ -177,7 +177,7 @@ func (cfg *Config) ReadRows(ctx context.Context, rows chan<- Row, fileName strin
 	}
 	defer fh.Close()
 	r := transform.NewReader(fh, enc.NewDecoder())
-	return ReadCSV(ctx, rows, r, cfg.Delim, columns, cfg.Skip)
+	return ReadCSV(ctx, fn, r, cfg.Delim, columns, cfg.Skip)
 }
 
 const (
@@ -185,8 +185,7 @@ const (
 	DateTimeFormat = "20060102150405"
 )
 
-func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIndex int, columns []int, skip int) error {
-	defer close(rows)
+func ReadXLSXFile(ctx context.Context, fn func(Row) error, filename string, sheetIndex int, columns []int, skip int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -214,17 +213,19 @@ func ReadXLSXFile(ctx context.Context, rows chan<- Row, filename string, sheetIn
 			continue
 		}
 		select {
-		case rows <- Row{Line: n, Values: row}:
 		case <-ctx.Done():
 			return ctx.Err()
+		default:
+		}
+		if err := fn(Row{Line: n, Values: row}); err != nil {
+			return err
 		}
 		n++
 	}
 	return nil
 }
 
-func ReadXLSFile(ctx context.Context, rows chan<- Row, filename string, charset string, sheetIndex int, columns []int, skip int) error {
-	defer close(rows)
+func ReadXLSFile(ctx context.Context, fn func(Row) error, filename string, charset string, sheetIndex int, columns []int, skip int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -269,16 +270,18 @@ func ReadXLSFile(ctx context.Context, rows chan<- Row, filename string, charset 
 			vals[j] = row.Col(j)
 		}
 		select {
-		case rows <- Row{Line: int(n), Values: vals}:
 		case <-ctx.Done():
 			return ctx.Err()
+		default:
+		}
+		if err := fn(Row{Line: int(n), Values: vals}); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func ReadCSV(ctx context.Context, rows chan<- Row, r io.Reader, delim string, columns []int, skip int) error {
-	defer close(rows)
+func ReadCSV(ctx context.Context, fn func(Row) error, r io.Reader, delim string, columns []int, skip int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -331,9 +334,12 @@ func ReadCSV(ctx context.Context, rows chan<- Row, r io.Reader, delim string, co
 			row = r2
 		}
 		select {
-		case rows <- Row{Line: n - 1, Values: row}:
+		default:
 		case <-ctx.Done():
 			return ctx.Err()
+		}
+		if err := fn(Row{Line: n - 1, Values: row}); err != nil {
+			return err
 		}
 	}
 	return nil

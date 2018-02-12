@@ -126,7 +126,17 @@ Usage:
 	defer cancel()
 	go func(rows chan<- dbcsv.Row) {
 		defer close(rows)
-		errch <- cfg.ReadRows(ctx, rows, inp.Name())
+		errch <- cfg.ReadRows(ctx,
+			func(row dbcsv.Row) error {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case rows <- row:
+				}
+				return nil
+			},
+			inp.Name(),
+		)
 	}(rows)
 
 	// filter out empty rows

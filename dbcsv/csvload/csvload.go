@@ -112,7 +112,20 @@ func Main() error {
 	rows := make(chan dbcsv.Row)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go cfg.ReadRows(ctx, rows, fileName)
+	go func() {
+		defer close(rows)
+		cfg.ReadRows(ctx,
+			func(row dbcsv.Row) error {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case rows <- row:
+				}
+				return nil
+			},
+			fileName,
+		)
+	}()
 	columns, err := CreateTable(ctx, db, tbl, rows, *flagTruncate, *flagTablespace)
 	cancel()
 	if err != nil {
@@ -251,42 +264,45 @@ func Main() error {
 		})
 	}
 
-	rows = make(chan dbcsv.Row)
-	grp.Go(func() error {
-		return cfg.ReadRows(ctx, rows, fileName)
-	})
 	var n int64
 	var headerSeen bool
 	chunk := (*(chunkPool.Get().(*[][]string)))[:0]
-	for row := range rows {
-		if err = ctx.Err(); err != nil {
-			chunk = chunk[:0]
-			break
-		}
+	if err := cfg.ReadRows(ctx,
+		func(row dbcsv.Row) error {
+			if err = ctx.Err(); err != nil {
+				chunk = chunk[:0]
+				return err
+			}
 
-		if !headerSeen {
-			headerSeen = true
-			continue
-		} else if n%10000 == 0 {
-			writeHeapProf()
-		}
-		for i, s := range row.Values {
-			row.Values[i] = strings.TrimSpace(s)
-		}
-		chunk = append(chunk, row.Values)
-		if len(chunk) < chunkSize {
-			continue
-		}
+			if !headerSeen {
+				headerSeen = true
+				return nil
+			} else if n%10000 == 0 {
+				writeHeapProf()
+			}
+			for i, s := range row.Values {
+				row.Values[i] = strings.TrimSpace(s)
+			}
+			chunk = append(chunk, row.Values)
+			if len(chunk) < chunkSize {
+				return nil
+			}
 
-		select {
-		case rowsCh <- rowsType{Rows: chunk, Start: n}:
-			n += int64(len(chunk))
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+			select {
+			case rowsCh <- rowsType{Rows: chunk, Start: n}:
+				n += int64(len(chunk))
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 
-		chunk = (*chunkPool.Get().(*[][]string))[:0]
+			chunk = (*chunkPool.Get().(*[][]string))[:0]
+			return nil
+		},
+		fileName,
+	); err != nil {
+		return err
 	}
+
 	if len(chunk) != 0 {
 		rowsCh <- rowsType{Rows: chunk, Start: n}
 		n += int64(len(chunk))
