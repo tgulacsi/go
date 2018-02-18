@@ -29,7 +29,14 @@ import (
 )
 
 func main() {
+
+	flagList := flag.Bool("l", false, "just list the files")
 	flagEnc := flag.String("encoding", "cp850", "encoding")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "\n%s [flags] to-be-extracted.zip [filename...]\n\n", os.Args[1])
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	fh, err := os.Open(flag.Arg(0))
@@ -51,6 +58,13 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+	var wanted map[string]struct{}
+	if n := flag.NArg() - 1; n > 0 {
+		wanted = make(map[string]struct{}, n)
+		for i := 0; i < n; i++ {
+			wanted[flag.Arg(i+1)] = struct{}{}
+		}
+	}
 	d := enc.NewDecoder()
 	for _, f := range zr.File {
 		name := f.Name
@@ -62,7 +76,15 @@ func main() {
 				name = s
 			}
 		}
+		if wanted != nil {
+			if _, ok := wanted[name]; !ok {
+				continue
+			}
+		}
 		fmt.Printf("%q\n", name)
+		if *flagList {
+			continue
+		}
 		rc, err := f.Open()
 		if err != nil {
 			log.Fatal(err)
