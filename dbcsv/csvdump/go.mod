@@ -2,5 +2,6 @@ module "github.com/tgulacsi/go/dbcsv/csvdump"
 
 require (
 	"golang.org/x/text" v0.0.0-20171214130843-f21a4dfb5e38
-	"gopkg.in/goracle.v2/v2" v2.1.15
+	"gopkg.in/goracle.v2" v1.1.16-gopkgin-v2.1.16
+	"gopkg.in/goracle.v2/v2" v2.1.16
 )

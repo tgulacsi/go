@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"log"
 
-	"camlistore.org/pkg/blobserver"
-	"camlistore.org/pkg/blobserver/diskpacked"
+	"perkeep.org/pkg/blobserver"
+	"perkeep.org/pkg/blobserver/diskpacked"
 )
 
 func main() {

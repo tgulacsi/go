@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"io"
 
-	"github.com/tgulacsi/go/wrap" //"github.com/bthomson/wrap"
+	"github.com/dgryski/go-linebreak"
 )
 
 // WrappingReader returns an io.Reader which will wrap lines longer than the given width.
@@ -39,7 +39,7 @@ func WrappingReader(r io.Reader, width uint) io.Reader {
 				}
 				continue
 			}
-			io.WriteString(ew, wrap.String(scanner.Text(), width))
+			io.WriteString(ew, linebreak.Wrap(scanner.Text(), int(width)-5, int(width)))
 			if _, err := ew.Write([]byte{'\n'}); err != nil {
 				break
 			}

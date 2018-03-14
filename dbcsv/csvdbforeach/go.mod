@@ -6,5 +6,5 @@ require (
 	"github.com/extrame/xls" v0.0.1
 	"github.com/tgulacsi/go" v0.1.0
 	"golang.org/x/text" v0.0.0-20171214130843-f21a4dfb5e38
-	"gopkg.in/goracle.v2/v2" v2.1.15
+	"gopkg.in/goracle.v2/v2" v2.1.16
 )
