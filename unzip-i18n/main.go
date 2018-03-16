@@ -23,15 +23,24 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/tgulacsi/go/text"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/encoding/htmlindex"
 )
 
 func main() {
+	if err := Main(); err != nil {
+		log.Fatal(err)
+	}
+}
 
+func Main() error {
 	flagList := flag.Bool("l", false, "just list the files")
 	flagEnc := flag.String("encoding", "cp850", "encoding")
+	flagConcurrency := flag.Int("P", 8, "concurrency")
+	flagDestDir := flag.String("C", ".", "destination directory")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
 		fmt.Fprintf(flag.CommandLine.Output(), "\n%s [flags] to-be-extracted.zip [filename...]\n\n", os.Args[1])
@@ -41,21 +50,21 @@ func main() {
 
 	fh, err := os.Open(flag.Arg(0))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer fh.Close()
 	fi, err := fh.Stat()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	zr, err := zip.NewReader(fh, fi.Size())
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	enc := text.GetEncoding(*flagEnc)
 	if enc == nil {
 		if enc, err = htmlindex.Get(*flagEnc); err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 	var wanted map[string]struct{}
@@ -66,6 +75,10 @@ func main() {
 		}
 	}
 	d := enc.NewDecoder()
+	seenDir := make(map[string]struct{})
+	var grp errgroup.Group
+	limit := make(chan struct{}, *flagConcurrency)
+	var token struct{}
 	for _, f := range zr.File {
 		name := f.Name
 		if f.NonUTF8 {
@@ -81,25 +94,38 @@ func main() {
 				continue
 			}
 		}
-		fmt.Printf("%q\n", name)
 		if *flagList {
+			fmt.Printf("%d\t%s\t%q\n", f.UncompressedSize64, f.Modified.Format(time.RFC3339), name)
 			continue
 		}
+		fmt.Printf("%q\n", name)
 		rc, err := f.Open()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
-		os.MkdirAll(filepath.Dir(name), 0755)
-		dest, err := os.Create(name)
-		if err != nil {
+		name = filepath.Join(*flagDestDir, name)
+		dn := filepath.Dir(name)
+		if _, ok := seenDir[dn]; !ok {
+			seenDir[dn] = struct{}{}
+			os.MkdirAll(dn, 0755)
+		}
+		grp.Go(func() error {
+			limit <- token
+			defer func() { <-limit }()
+			dest, err := os.Create(name)
+			if err != nil {
+				rc.Close()
+				log.Printf("create %q: %v", name, err)
+				return err
+			}
+			_, err = io.Copy(dest, rc)
 			rc.Close()
-			log.Printf("create %q: %v", name, err)
-			continue
-		}
-		_, err = io.Copy(dest, rc)
-		rc.Close()
-		if closeErr := dest.Close(); closeErr != nil && err == nil {
-			log.Printf("Close %q: %v", dest.Name(), err)
-		}
+			if closeErr := dest.Close(); closeErr != nil && err == nil {
+				log.Printf("Close %q: %v", dest.Name(), err)
+				err = closeErr
+			}
+			return err
+		})
 	}
+	return grp.Wait()
 }
