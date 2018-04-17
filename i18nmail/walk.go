@@ -109,53 +109,34 @@ func (mp *MailPart) Spawn() MailPart {
 // DecoderFunc is a type of a decoder (io.Reader wrapper)
 type DecoderFunc func(io.Reader) io.Reader
 
-// Walk over the parts of the email, calling todo on every part.
+// WalkMessage walks over the parts of the email, calling todo on every part.
 // The part.Body given to todo is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
-	var (
-		msg *mail.Message
-		hsh string
-	)
-	br, e := temp.NewReadSeeker(part.Body)
-	if e != nil {
-		return e
-	}
-	defer func() { _ = br.Close() }()
-	if msg, hsh, e = ReadAndHashMessage(br); e != nil {
-		if p, _ := br.Seek(0, 2); p == 0 {
-			infof("empty body!")
-			return nil
-		}
-		br.Seek(0, 0)
-		b := make([]byte, 4096)
-		n, _ := io.ReadAtLeast(br, b, 2048)
-		infof("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
-		return errors.WithMessage(e, "WalkMail")
-	}
+func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
 	if decoder != nil {
 		msg.Body = decoder(msg.Body)
 	}
-	debugf("Walk message hsh=%s headers=%q level=%d", hsh, msg.Header, part.Level)
+	debugf("Walk message headers=%q", msg.Header)
 	if e != nil {
 		return errors.Wrapf(e, "WalkMail")
 	}
 	if ct == "" {
 		ct = "message/rfc822"
 	}
+	var level int
+	if parent != nil {
+		level = parent.Level
+	}
 	child := MailPart{ContentType: ct, MediaType: params,
 		Header: textproto.MIMEHeader(msg.Header),
 		Body:   msg.Body,
-		Parent: &part,
-		Level:  part.Level + 1,
+		Parent: parent,
+		Level:  level + 1,
 		Seq:    nextSeqInt()}
-	if hsh != "" {
-		child.Header.Add("X-Hash", hsh)
-	}
-	if child.Header.Get(HashKeyName) == "" {
+	if hsh := msg.Header.Get("X-Hash"); hsh != "" && child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
 	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
@@ -169,6 +150,36 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		return e
 	}
 	return nil
+}
+
+// Walk over the parts of the email, calling todo on every part.
+// The part.Body given to todo is reused, so read if you want to use it!
+//
+// By default this is recursive, except dontDescend is true.
+func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
+	br, e := temp.NewReadSeeker(part.Body)
+	if e != nil {
+		return e
+	}
+	defer func() { _ = br.Close() }()
+
+	msg, hsh, e := ReadAndHashMessage(br)
+	if e != nil {
+		if p, _ := br.Seek(0, 2); p == 0 {
+			infof("empty body!")
+			return nil
+		}
+		br.Seek(0, 0)
+		b := make([]byte, 4096)
+		n, _ := io.ReadAtLeast(br, b, 2048)
+		infof("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
+		return errors.WithMessage(e, "WalkMail")
+	}
+	if hsh != "" {
+		msg.Header["X-Hash"] = []string{hsh}
+	}
+	part.Spawn()
+	return WalkMessage(msg, todo, dontDescend, &part)
 }
 
 // WalkMultipart walks a multipart/ MIME parts, calls todo on every part
