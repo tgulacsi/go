@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"flag"
@@ -38,7 +39,7 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 
-	_ "gopkg.in/goracle.v2"
+	"gopkg.in/goracle.v2"
 
 	"github.com/pkg/errors"
 )
@@ -142,7 +143,9 @@ func Main() error {
 		Log("msg", "writing", "file", fh.Name(), "encoding", enc)
 	}
 	w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
-	err = dump(w, db, qry, *flagHeader, *flagSep, Log)
+	ctx, cancel := context.WithCancel(context.Background())
+	err = dump(ctx, w, db, qry, *flagHeader, *flagSep, Log)
+	cancel()
 	_ = db.Close()
 	if err != nil {
 		return errors.Wrap(err, "dump")
@@ -176,11 +179,11 @@ func getQuery(table, where string, columns []string, enc encoding.Encoding) stri
 }
 
 type queryer interface {
-	Query(string, ...interface{}) (*sql.Rows, error)
+	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
 }
 
-func dump(w io.Writer, db queryer, qry string, header bool, sep string, Log func(...interface{}) error) error {
-	rows, err := db.Query(qry)
+func dump(ctx context.Context, w io.Writer, db queryer, qry string, header bool, sep string, Log func(...interface{}) error) error {
+	rows, err := db.QueryContext(ctx, qry, goracle.FetchRowCount(1024))
 	if err != nil {
 		return errors.Wrapf(err, "executing %q", qry)
 	}
