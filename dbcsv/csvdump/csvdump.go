@@ -127,10 +127,11 @@ and dump all the columns of the cursor returned by the function.
 	).Replace(dateFormat) + `"`
 
 	var qry string
+	var params []interface{}
 	if *flagCall {
 		var buf strings.Builder
 		fmt.Fprintf(&buf, `BEGIN :1 := %s(`, flag.Arg(0))
-		params := make([]interface{}, flag.NArg()-1)
+		params = make([]interface{}, flag.NArg()-1)
 		for i, x := range flag.Args()[1:] {
 			arg := strings.SplitN(x, "=", 2)
 			params[i] = arg[1]
@@ -141,7 +142,9 @@ and dump all the columns of the cursor returned by the function.
 		}
 		buf.WriteString("); END;")
 		qry = buf.String()
-		Log("call", qry, "params", params)
+		if Log != nil {
+			Log("call", qry, "params", params)
+		}
 	} else {
 		var (
 			where   string
@@ -178,7 +181,11 @@ and dump all the columns of the cursor returned by the function.
 	}
 	w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
 	ctx, cancel := context.WithCancel(context.Background())
-	err = dump(ctx, w, db, qry, *flagHeader, *flagSep, Log)
+	if *flagCall {
+		err = dumpCall(ctx, w, db, qry, params, *flagHeader, *flagSep, Log)
+	} else {
+		err = dumpQry(ctx, w, db, qry, *flagHeader, *flagSep, Log)
+	}
 	cancel()
 	_ = db.Close()
 	if err != nil {
@@ -216,7 +223,78 @@ type queryer interface {
 	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
 }
 
-func dump(ctx context.Context, w io.Writer, db queryer, qry string, header bool, sep string, Log func(...interface{}) error) error {
+type execer interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}
+
+func dumpCall(ctx context.Context, w io.Writer, db execer, qry string, params []interface{}, header bool, sep string, Log func(...interface{}) error) error {
+	var rows driver.Rows
+	params = append(append(make([]interface{}, 0, 1+len(params)),
+		sql.Out{Dest: &rows}), params...)
+	if _, err := db.ExecContext(ctx, qry, params...); err != nil {
+		return errors.Wrapf(err, "executing %q", qry)
+	}
+	defer rows.Close()
+
+	columns, err := getColumns(rows)
+	if err != nil {
+		return err
+	}
+
+	sepB := []byte(sep)
+	dest := make([]driver.Value, len(columns))
+	bw := bufio.NewWriterSize(w, 65536)
+	defer bw.Flush()
+	values := make([]stringer, len(columns))
+	for i, col := range columns {
+		c := col.Converter(sep)
+		values[i] = c
+	}
+	if header {
+		for i, col := range columns {
+			if i > 0 {
+				bw.Write(sepB)
+			}
+			csvQuote(bw, sep, col.Name)
+		}
+		bw.Write([]byte{'\n'})
+	}
+
+	start := time.Now()
+	n := 0
+	for {
+		if nextErr := rows.Next(dest); nextErr != nil {
+			if nextErr == io.EOF {
+				break
+			}
+			return errors.Wrap(nextErr, "Next")
+		}
+		for i, data := range dest {
+			if i > 0 {
+				bw.Write(sepB)
+			}
+			if data == nil {
+				continue
+			}
+			if err = values[i].Scan(data); err != nil {
+				return errors.Wrapf(err, "scan %q into col %d", data, i)
+			}
+			bw.WriteString(values[i].String())
+		}
+		bw.Write([]byte{'\n'})
+		n++
+	}
+	dur := time.Since(start)
+	if Log != nil {
+		Log("msg", "dump finished", "rows", n, "dur", dur, "speed", float64(n)/float64(dur)*float64(time.Second))
+	}
+	if err != nil {
+		return errors.Wrapf(err, "fetching rows")
+	}
+	return nil
+}
+
+func dumpQry(ctx context.Context, w io.Writer, db queryer, qry string, header bool, sep string, Log func(...interface{}) error) error {
 	rows, err := db.QueryContext(ctx, qry, goracle.FetchRowCount(1024))
 	if err != nil {
 		return errors.Wrapf(err, "executing %q", qry)
@@ -290,6 +368,7 @@ func (col Column) Converter(sep string) stringer {
 type stringer interface {
 	String() string
 	Pointer() interface{}
+	Scan(interface{})error
 }
 
 type ValString struct {
@@ -299,6 +378,7 @@ type ValString struct {
 
 func (v ValString) String() string        { return csvQuoteString(v.Sep, v.Value.String) }
 func (v *ValString) Pointer() interface{} { return &v.Value }
+func (v *ValString) Scan(x interface{}) error { return v.Value.Scan(x) }
 
 type ValInt struct {
 	Value sql.NullInt64
@@ -311,6 +391,7 @@ func (v ValInt) String() string {
 	return ""
 }
 func (v *ValInt) Pointer() interface{} { return &v.Value }
+func (v *ValInt) Scan(x interface{}) error { return v.Value.Scan(x) }
 
 type ValFloat struct {
 	Value sql.NullFloat64
@@ -323,6 +404,7 @@ func (v ValFloat) String() string {
 	return ""
 }
 func (v *ValFloat) Pointer() interface{} { return &v.Value }
+func (v *ValFloat) Scan(x interface{}) error { return v.Value.Scan(x) }
 
 type ValTime struct {
 	Value time.Time
@@ -423,14 +505,27 @@ func encFromName(e string) (namedEncoding, error) {
 	}
 }
 
-func getColumns(rows *sql.Rows) ([]Column, error) {
-	types, err := rows.ColumnTypes()
-	if err != nil {
-		return nil, err
+func getColumns(rows interface{}) ([]Column, error) {
+	if r, ok := rows.(*sql.Rows); ok {
+		types, err := r.ColumnTypes()
+		if err != nil {
+			return nil, err
+		}
+		cols := make([]Column, len(types))
+		for i, t := range types {
+			cols[i] = Column{Name: t.Name(), Type: t.ScanType()}
+		}
+		return cols, nil
 	}
-	cols := make([]Column, len(types))
-	for i, t := range types {
-		cols[i] = Column{Name: t.Name(), Type: t.ScanType()}
+
+	colNames := rows.(driver.Rows).Columns()
+	cols := make([]Column, len(colNames))
+	r := rows.(driver.RowsColumnTypeScanType)
+	for i, name := range colNames {
+		cols[i] = Column{
+			Name: name,
+			Type: r.ColumnTypeScanType(i),
+		}
 	}
 	return cols, nil
 }
