@@ -75,6 +75,22 @@ func Main() error {
 	flagEnc := flag.String("encoding", envEnc.Name, "encoding to use for output")
 	flagOut := flag.String("o", "-", "output (defaults to stdout)")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
+	flagCall := flag.Bool("call", false, "the first argument is not the WHERE, but the PL/SQL block to be called, the followings are not the columns but the arguments")
+
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), strings.Replace(`Usage of {{.prog}}:
+	{{.prog}} [options] 'T_able' 'F_ield=1'
+
+will execute a "SELECT * FROM T_able WHERE F_ield=1" and dump all the columns;
+
+	{{.prog}} -call [options] 'DB_lista.csv' 'p_a=1' 'p_b=c'
+
+will execute "BEGIN :1 := DB_lista.csv(p_a=>:2, p_b=>3); END" with p_a=1, p_b=c
+and dump all the columns of the cursor returned by the function.
+
+`, "{{.prog}}", os.Args[0], -1))
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	var Log func(...interface{}) error
@@ -110,15 +126,34 @@ func Main() error {
 		"05", "59",
 	).Replace(dateFormat) + `"`
 
-	var (
-		where   string
-		columns []string
-	)
-	if flag.NArg() > 1 {
-		where = flag.Arg(1)
-		if flag.NArg() > 2 {
-			columns = flag.Args()[2:]
+	var qry string
+	if *flagCall {
+		var buf strings.Builder
+		fmt.Fprintf(&buf, `BEGIN :1 := %s(`, flag.Arg(0))
+		params := make([]interface{}, flag.NArg()-1)
+		for i, x := range flag.Args()[1:] {
+			arg := strings.SplitN(x, "=", 2)
+			params[i] = arg[1]
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			fmt.Fprintf(&buf, "%s=>:%d", arg[0], i+2)
 		}
+		buf.WriteString("); END;")
+		qry = buf.String()
+		Log("call", qry, "params", params)
+	} else {
+		var (
+			where   string
+			columns []string
+		)
+		if flag.NArg() > 1 {
+			where = flag.Arg(1)
+			if flag.NArg() > 2 {
+				columns = flag.Args()[2:]
+			}
+		}
+		qry = getQuery(flag.Arg(0), where, columns, envEnc)
 	}
 	db, err := sql.Open("goracle", *flagConnect)
 	if err != nil {
@@ -128,7 +163,6 @@ func Main() error {
 	if Log != nil {
 		Log("env_encoding", envEnc.Name)
 	}
-	qry := getQuery(flag.Arg(0), where, columns, envEnc)
 
 	fh := os.Stdout
 	if !(*flagOut == "" || *flagOut == "-") {
