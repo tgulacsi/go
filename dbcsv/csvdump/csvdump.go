@@ -134,7 +134,10 @@ and dump all the columns of the cursor returned by the function.
 		params = make([]interface{}, flag.NArg()-1)
 		for i, x := range flag.Args()[1:] {
 			arg := strings.SplitN(x, "=", 2)
-			params[i] = arg[1]
+			params[i] = ""
+			if len(arg) > 1 {
+				params[i] = arg[1]
+			}
 			if i != 0 {
 				buf.WriteString(", ")
 			}
