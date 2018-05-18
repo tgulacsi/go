@@ -170,7 +170,10 @@ and dump all the columns of the cursor returned by the function.
 	defer cancel()
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return errors.Wrap(err, "read-only transaction")
+		log.Printf("[WARN] Read-Only transaction: %v", err)
+		if tx, err = db.BeginTx(ctx, nil); err != nil {
+			return errors.Wrap(err, "beginTx")
+		}
 	}
 	defer tx.Rollback()
 	if Log != nil {
