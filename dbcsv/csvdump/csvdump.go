@@ -166,6 +166,13 @@ and dump all the columns of the cursor returned by the function.
 		return errors.Wrap(err, *flagConnect)
 	}
 	defer db.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return errors.Wrap(err, "read-only transaction")
+	}
+	defer tx.Rollback()
 	if Log != nil {
 		Log("env_encoding", envEnc.Name)
 	}
@@ -183,14 +190,12 @@ and dump all the columns of the cursor returned by the function.
 		Log("msg", "writing", "file", fh.Name(), "encoding", enc)
 	}
 	w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
-	ctx, cancel := context.WithCancel(context.Background())
 	if *flagCall {
-		err = dumpCall(ctx, w, db, qry, params, *flagHeader, *flagSep, Log)
+		err = dumpCall(ctx, w, tx, qry, params, *flagHeader, *flagSep, Log)
 	} else {
-		err = dumpQry(ctx, w, db, qry, *flagHeader, *flagSep, Log)
+		err = dumpQry(ctx, w, tx, qry, *flagHeader, *flagSep, Log)
 	}
 	cancel()
-	_ = db.Close()
 	if err != nil {
 		return errors.Wrap(err, "dump")
 	}
@@ -371,7 +376,7 @@ func (col Column) Converter(sep string) stringer {
 type stringer interface {
 	String() string
 	Pointer() interface{}
-	Scan(interface{})error
+	Scan(interface{}) error
 }
 
 type ValString struct {
@@ -379,8 +384,8 @@ type ValString struct {
 	Value sql.NullString
 }
 
-func (v ValString) String() string        { return csvQuoteString(v.Sep, v.Value.String) }
-func (v *ValString) Pointer() interface{} { return &v.Value }
+func (v ValString) String() string            { return csvQuoteString(v.Sep, v.Value.String) }
+func (v *ValString) Pointer() interface{}     { return &v.Value }
 func (v *ValString) Scan(x interface{}) error { return v.Value.Scan(x) }
 
 type ValInt struct {
@@ -393,7 +398,7 @@ func (v ValInt) String() string {
 	}
 	return ""
 }
-func (v *ValInt) Pointer() interface{} { return &v.Value }
+func (v *ValInt) Pointer() interface{}     { return &v.Value }
 func (v *ValInt) Scan(x interface{}) error { return v.Value.Scan(x) }
 
 type ValFloat struct {
@@ -406,7 +411,7 @@ func (v ValFloat) String() string {
 	}
 	return ""
 }
-func (v *ValFloat) Pointer() interface{} { return &v.Value }
+func (v *ValFloat) Pointer() interface{}     { return &v.Value }
 func (v *ValFloat) Scan(x interface{}) error { return v.Value.Scan(x) }
 
 type ValTime struct {
