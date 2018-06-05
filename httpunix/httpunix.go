@@ -36,7 +36,10 @@ package httpunix
 
 import (
 	"bufio"
+	"crypto/sha1"
+	"encoding/base64"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -55,7 +58,8 @@ type Transport struct {
 
 	mu sync.RWMutex
 	// map a URL "hostname" to a UNIX domain socket path
-	loc map[string]string
+	loc  map[string]string
+	path map[string]string // reverse of loc
 }
 
 // RegisterLocation registers an URL location and maps it to the given
@@ -68,11 +72,31 @@ func (t *Transport) RegisterLocation(loc string, path string) {
 	defer t.mu.Unlock()
 	if t.loc == nil {
 		t.loc = make(map[string]string)
+		t.path = make(map[string]string)
 	}
 	if _, exists := t.loc[loc]; exists {
 		panic("location " + loc + " already registered")
 	}
-	t.loc[loc] = path
+	t.loc[loc], t.path[path] = path, loc
+}
+
+// GetLocation returns the registered location name for the path,
+// and register if not already registered.
+//
+// The auto-registered location will be a base64 hash of the path.
+func (t *Transport) GetLocation(path string) string {
+	t.mu.RLock()
+	loc := t.path[path]
+	t.mu.RUnlock()
+	if loc != "" {
+		return loc
+	}
+
+	hsh := sha1.New()
+	_, _ = io.WriteString(hsh, path)
+	loc = base64.URLEncoding.EncodeToString(hsh.Sum(nil))
+	t.RegisterLocation(loc, path)
+	return loc
 }
 
 var _ http.RoundTripper = (*Transport)(nil)
