@@ -110,11 +110,11 @@ func (pdf *Report) NewTable(names []string, sizes []int, headingSize, bodySize f
 		size = pdf.FontSize
 	}
 	pdf.SetFont(pdf.Sans, "", size)
-	return Table{Report: pdf, widths: widths, bodySize: size, origSize: origSize}
+	return Table{report: pdf, widths: widths, bodySize: size, origSize: origSize}
 }
 
 type Table struct {
-	*Report
+	report             *Report
 	Ht                 float64
 	widths             []float64
 	bodySize, origSize float64
@@ -124,16 +124,16 @@ func (t Table) Row(values []string) {
 	if n := len(t.widths) - len(values); n > 0 {
 		values = append(values, make([]string, n)...)
 	}
-	y := t.Report.GetY()
-	t.Report.SetFontSize(t.bodySize)
+	y := t.report.GetY()
+	t.report.SetFontSize(t.bodySize)
 	for i, v := range values {
-		x := t.Report.GetX()
-		t.Report.MultiCell(t.widths[i], 2*t.Report.Ht, t.Report.Encode(v), "1", "", false)
+		x := t.report.GetX()
+		t.report.MultiCell(t.widths[i], 2*t.report.Ht, t.report.Encode(v), "1", "", false)
 		if i != len(values)-1 {
-			t.Report.SetXY(x+t.widths[i], y)
+			t.report.SetXY(x+t.widths[i], y)
 		}
 	}
-	t.Report.SetFontSize(t.origSize)
+	t.report.SetFontSize(t.origSize)
 }
 
 func (pdf *Report) Heading(level int, title string) error {
