@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"log"
 	"net/http"
@@ -40,17 +39,9 @@ func Main() error {
 	flagHTTP := flag.String("http", ":8383", "HTTP host:port to listen on")
 	flag.Parse()
 
-	tr := *(http.DefaultTransport.(*http.Transport))
-	if tr.TLSClientConfig == nil {
-		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	} else {
-		tr.TLSClientConfig = tr.TLSClientConfig.Clone()
-		tr.TLSClientConfig.InsecureSkipVerify = true
-	}
-
 	hndl := &httputil.ReverseProxy{
 		Director:  director(mevv.V2.URL()),
-		Transport: &tr,
+		Transport: mevv.InsecureTransport,
 	}
 	log.Println("Start listening on", *flagHTTP)
 	return http.ListenAndServe(*flagHTTP, hndl)

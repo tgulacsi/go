@@ -225,9 +225,9 @@ func getQuery(table, where string, columns []string, enc encoding.Encoding) stri
 		cols = strings.Join(columns, ", ")
 	}
 	if where == "" {
-		return "SELECT " + cols + " FROM " + table
+		return "SELECT " + cols + " FROM " + table //nolint:gas
 	}
-	return "SELECT " + cols + " FROM " + table + " WHERE " + where
+	return "SELECT " + cols + " FROM " + table + " WHERE " + where //nolint:gas
 }
 
 type queryer interface {

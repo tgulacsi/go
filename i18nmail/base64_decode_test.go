@@ -59,7 +59,13 @@ func TestB64FilterReader(t *testing.T) {
 			t.Logf("%d. longer with %q (wanted %d, got %d bytes)", i, buf.Bytes(), tc.N, n)
 		}
 		if i == 1 {
-			ioutil.WriteFile("/tmp/y.pdf", buf.Bytes(), 0644)
+			fh, err := ioutil.TempFile("", "base64-decode-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.Remove(fh.Name())
+			defer fh.Close()
+			fh.Write(buf.Bytes())
 		}
 		if n != tc.N {
 			t.Errorf("%d: got %d, awaited %d bytes.", i, n, tc.N)

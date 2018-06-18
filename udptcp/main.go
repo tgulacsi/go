@@ -39,7 +39,6 @@ func main() {
 			ctx := context.Background()
 			go handleConnection(ctx, conn)
 		}
-		return
 	}
 	lAddr, err := net.ResolveUDPAddr(listenType, listenAddr)
 	if err != nil {

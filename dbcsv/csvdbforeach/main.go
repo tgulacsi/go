@@ -102,7 +102,7 @@ Usage:
 	if flag.Arg(0) != "" && flag.Arg(0) != "-" {
 		var err error
 		if inp, err = os.Open(flag.Arg(0)); err != nil {
-			log.Fatal("open %q: %v", flag.Arg(0), err)
+			log.Fatalf("open %q: %v", flag.Arg(0), err)
 		}
 	}
 	defer inp.Close()
@@ -197,7 +197,7 @@ Usage:
 	d := time.Since(start)
 	close(errch)
 	if len(errs) > 0 {
-		log.Fatal("ERRORS:\n\t%s", strings.Join(errs, "\n\t"))
+		log.Fatal("ERRORS:\n\t" + strings.Join(errs, "\n\t"))
 	}
 	log.Printf("Processed %d rows in %s.", n, d)
 }

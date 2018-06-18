@@ -45,8 +45,8 @@ type Interactive struct {
 	BaseURL        string
 	NoDirect       bool
 
-	inProgress   map[string]struct{} // location set in progress
 	inProgressMu sync.Mutex
+	inProgress   map[string]struct{} // location set in progress
 }
 type staticParams struct {
 	Address, Title             string
@@ -56,7 +56,7 @@ type staticParams struct {
 	CallbackPath               string
 }
 
-func (in Interactive) RenderHTML(w io.Writer, address, callbackURL string) error {
+func (in *Interactive) RenderHTML(w io.Writer, address, callbackURL string) error {
 	sp := staticParams{
 		Address:        address,
 		DefaultAddress: in.DefaultAddress,

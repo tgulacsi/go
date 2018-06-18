@@ -140,7 +140,6 @@ func (rl rarLister) Close() error {
 	}
 	rl.dir = ""
 	return os.RemoveAll(rl.dir)
-	return nil
 }
 
 // List lists the rar archive's contents (only files).

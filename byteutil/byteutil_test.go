@@ -40,7 +40,7 @@ func TestByteHasPrefixFold(t *testing.T) {
 	} {
 		got := ByteHasPrefixFold([]byte(tc.haystack), []byte(tc.needle))
 		if got != tc.want {
-			t.Errorf("%d. got %d, wanted %d.", i, got, tc.want)
+			t.Errorf("%d. got %t, wanted %t.", i, got, tc.want)
 		}
 	}
 }

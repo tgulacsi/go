@@ -22,9 +22,12 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 )
 
-func ExampleCreateFormFile(url, name, contentType string, r io.Reader) error {
+func ExampleCreateFormFile() {
+	url, name, contentType := "http://example.com", "filename.pdf", "application/pdf"
+	r := io.Reader(strings.NewReader("%PDF-1.4"))
 	// store entire content of the provided io.Reader in memory
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -34,26 +37,25 @@ func ExampleCreateFormFile(url, name, contentType string, r io.Reader) error {
 	// "upfile" will be the file's ID (field name)
 	w, err := CreateFormFile(mw, "upfile", name, contentType)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	if _, err = io.Copy(w, r); err != nil {
-		return err
+		panic(err)
 	}
 	if err = mw.Close(); err != nil {
-		return err
+		panic(err)
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewReader(buf.Bytes()))
 	if err != nil {
-		return err
+		panic(err)
 	}
 	// this is essential: this dresses up our request properly as multipart/form-data
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	if resp.StatusCode >= 300 {
-		return errors.New("bad response: " + resp.Status)
+		panic(errors.New("bad response: " + resp.Status))
 	}
-	return nil
 }
