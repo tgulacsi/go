@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/net/http2"
 )
 
 var ErrAuth = errors.New("authentication error")
@@ -80,6 +81,10 @@ var InsecureTransport = &http.Transport{
 	IdleConnTimeout:       90 * time.Second,
 	TLSHandshakeTimeout:   10 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,
+}
+
+func init() {
+	http2.ConfigureTransport(InsecureTransport)
 }
 
 type Version string

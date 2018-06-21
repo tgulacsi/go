@@ -38,10 +38,11 @@ import (
 
 type Report struct {
 	*gofpdf.Fpdf
-	html                gofpdf.HTMLBasicType
-	Encode              func(string) string
-	FontSize, Ht, Width float64
-	Sans, Mono          string
+	html          gofpdf.HTMLBasicType
+	Encode        func(string) string
+	FontSize, Ht  float64
+	Bottom, Width float64
+	Sans, Mono    string
 
 	fontLoaders map[fontName]fontLoader
 }
@@ -126,6 +127,9 @@ func (t Table) Row(values []string) {
 	}
 	y := t.report.GetY()
 	t.report.SetFontSize(t.bodySize)
+	if y+2*t.report.Ht > t.report.Bottom {
+		t.report.AddPage()
+	}
 	for i, v := range values {
 		x := t.report.GetX()
 		t.report.MultiCell(t.widths[i], 2*t.report.Ht, t.report.Encode(v), "1", "", false)
@@ -191,6 +195,7 @@ func NewReport(params ReportParams) *Report {
 	mLeft, mTop, mRight, mBottom := pdf.GetMargins()
 	pWidth, pHeight := pdf.GetPageSize()
 	pdf.Width = pWidth - mLeft - mRight
+	pdf.Bottom = pHeight - mBottom
 	pCenterX, pCenterY := (pWidth-mLeft-mRight)/2+mLeft, (pHeight-mTop-mBottom)/2+mTop
 	_ = pCenterY
 	pdf.SetHeaderFunc(func() {
