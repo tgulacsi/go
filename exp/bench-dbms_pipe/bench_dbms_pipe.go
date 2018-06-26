@@ -1,15 +1,17 @@
+// +build: never
+
 //
-// 2018/06/24 14:30:00 messages: 49000 / 10.14862809s: 4900.000 1/s
-// 2018/06/24 14:30:00 bytes: 196000000 / 10.14862809s: 19600000.000 1/s
+// 2018/06/26 13:07:25 messages: 50000 / 10.107933559s: 5000.000 1/s
+// 2018/06/26 13:07:25 bytes: 200000000 / 10.107933559s: 19.073 Mb/s
 //
 package main
 
 import (
-	"strings"
 	"context"
 	"database/sql"
 	"flag"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -43,7 +45,7 @@ END;`
 	defer sendStmt.Close()
 
 	go func() {
-		var n,length int64
+		var n, length int64
 		start := time.Now()
 		deadline := start.Add(10 * time.Second)
 		msg := strings.Repeat("message ", 4096/8)[:4000]
@@ -61,8 +63,15 @@ END;`
 			}
 		}
 		dur := time.Since(start)
-		log.Printf("messages: %d / %s: %.3f 1/s", n, dur, float64(n) / float64(dur/time.Second))
-		log.Printf("bytes: %d / %s: %.3f 1/s", length, dur, float64(length) / float64(dur/time.Second))
+		log.Printf("messages: %d / %s: %.3f 1/s", n, dur, float64(n)/float64(dur/time.Second))
+		units := []string{"b", "kb", "Mb", "Gb"}
+		rate := float64(length) / float64(dur/time.Second)
+		for len(units) > 1 && rate > 1024 {
+			rate /= 1024
+			units = units[1:]
+		}
+		log.Printf("bytes: %d / %s: %.3f %s/s", length, dur, rate, units[0])
+
 		var rc int32
 		_, _ = sendStmt.ExecContext(ctx, "QUIT", sql.Out{Dest: &rc})
 	}()
