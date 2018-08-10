@@ -27,6 +27,9 @@ import (
 	"text/template" // yes, no need for context-aware escapes
 
 	"github.com/pkg/errors"
+
+	_ "github.com/tgulacsi/go/coord/statik"
+	"github.com/tgulacsi/statik/fs"
 )
 
 var (
@@ -127,10 +130,19 @@ func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+//go:generate statik -f -m -src assets
 var tmpl *template.Template
 
 func init() {
-	tmpl = template.Must(template.New("gmapsHTML").Parse(gmapsHTML))
+	statikFS, err := fs.New()
+	if err != nil {
+		panic(err)
+	}
+	b, err := fs.ReadFile(statikFS, "/gmaps.html")
+	if err != nil {
+		panic(err)
+	}
+	tmpl = template.Must(template.New("gmapsHTML").Parse(string(b)))
 }
 
 func parseLatLng(latS, lngS string) (float64, float64, error) {
