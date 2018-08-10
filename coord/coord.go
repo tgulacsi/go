@@ -19,14 +19,15 @@ limitations under the License.
 package coord
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"strings"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/context/ctxhttp"
-
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
+
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?sensors=false&address={{.Address}}`
@@ -34,6 +35,9 @@ const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?sensors=fals
 var (
 	ErrNotFound       = errors.New("not found")
 	ErrTooManyResults = errors.New("too many results")
+
+	httpClient     = retryablehttp.NewClient()
+	gmapsRateLimit = rate.NewLimiter(1, 1)
 )
 
 type Location struct {
@@ -50,25 +54,43 @@ func Get(ctx context.Context, address string) (Location, error) {
 	default:
 	}
 	aURL := strings.Replace(gmapsURL, "{{.Address}}", url.QueryEscape(address), 1)
-	resp, err := ctxhttp.Get(ctx, nil, aURL)
+	req, err := retryablehttp.NewRequest("GET", aURL, nil)
 	if err != nil {
-		return loc, errors.Wrapf(err, aURL)
+		return loc, errors.Wrap(err, aURL)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode > 299 {
-		return loc, errors.Wrapf(err, aURL)
-	}
+	req.Request = req.WithContext(ctx)
 
 	var data mapsResponse
-	if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return loc, errors.Wrapf(err, "decode")
+	for i := 0; i < 10; i++ {
+		if err = gmapsRateLimit.Wait(ctx); err != nil {
+			return loc, err
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return loc, errors.Wrap(err, aURL)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode > 299 {
+			return loc, errors.Wrap(errors.New(resp.Status), aURL)
+		}
+
+		if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			return loc, errors.Wrapf(err, "decode")
+		}
+		httpClient.Logger.Println("status=" + data.Status)
+		if data.Status != "OVER_QUERY_LIMIT" {
+			gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
+			break
+		}
+		gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() / 2)
 	}
+
 	switch data.Status {
 	case "OK":
 	case "ZERO_RESULTS":
 		return loc, ErrNotFound
 	default:
-		return loc, errors.Wrapf(err, "status=%q", data.Status)
+		return loc, errors.New(data.Status)
 	}
 	switch len(data.Results) {
 	case 0:
