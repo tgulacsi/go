@@ -7,6 +7,7 @@
 package dber
 
 import (
+	"context"
 	"database/sql"
 	"io"
 )
@@ -61,12 +62,18 @@ func (db SqlDBer) Begin() (Txer, error) {
 }
 
 func (db SqlDBer) Query(qry string, args ...interface{}) (Rowser, error) {
-	rows, err := db.DB.Query(qry, args...)
+	return db.QueryContext(context.Background(), qry, args...)
+}
+func (db SqlDBer) QueryContext(ctx context.Context, qry string, args ...interface{}) (Rowser, error) {
+	rows, err := db.DB.QueryContext(ctx, qry, args...)
 	return SqlRowser{rows}, err
 }
 
 func (db SqlDBer) QueryRow(qry string, args ...interface{}) Scanner {
-	return SqlScanner{db.DB.QueryRow(qry, args...)}
+	return db.QueryRowContext(context.Background(), qry, args...)
+}
+func (db SqlDBer) QueryRowContext(ctx context.Context, qry string, args ...interface{}) Scanner {
+	return SqlScanner{db.DB.QueryRowContext(ctx, qry, args...)}
 }
 
 // SqlTxer is a wrapper for *sql.Tx to implement Txer
@@ -75,12 +82,18 @@ type SqlTxer struct {
 }
 
 func (tx SqlTxer) Query(qry string, args ...interface{}) (Rowser, error) {
-	rows, err := tx.Tx.Query(qry, args...)
+	return tx.QueryContext(context.Background(), qry, args...)
+}
+func (tx SqlTxer) QueryContext(ctx context.Context, qry string, args ...interface{}) (Rowser, error) {
+	rows, err := tx.Tx.QueryContext(ctx, qry, args...)
 	return SqlRowser{rows}, err
 }
 
 func (tx SqlTxer) QueryRow(qry string, args ...interface{}) Scanner {
-	return SqlScanner{tx.Tx.QueryRow(qry, args...)}
+	return tx.QueryRowContext(context.Background(), qry, args...)
+}
+func (tx SqlTxer) QueryRowContext(ctx context.Context, qry string, args ...interface{}) Scanner {
+	return SqlScanner{tx.Tx.QueryRowContext(ctx, qry, args...)}
 }
 
 // SqlRowser is a wrapper for *sql.Rows to implement Rowser.

@@ -4,6 +4,7 @@ package dber
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -133,7 +134,10 @@ func (exp *expectQuery) WillSetArgs(args map[int]interface{}) Mock {
 
 // Execute checks whether the given query matches with the next expected.
 func (tx *Tx) Exec(qry string, params ...interface{}) (sql.Result, error) {
-	exp, err := tx.check(qry, params...)
+	return tx.ExecContext(context.Background(), qry,params...)
+}
+func (tx *Tx) ExecContext(ctx context.Context, qry string, params ...interface{}) (sql.Result, error) {
+	exp, err := tx.check(ctx, qry, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +156,10 @@ func (tx *Tx) PrepAndExe(qry string, params ...interface{}) (uint64, error) {
 }
 
 func (tx *Tx) Query(qry string, params ...interface{}) (Rowser, error) {
-	exp, err := tx.check(qry, params...)
+	return tx.QueryContext(context.Background(), qry, params...)
+}
+func (tx *Tx) QueryContext(ctx context.Context, qry string, params ...interface{}) (Rowser, error) {
+	exp, err := tx.check(ctx, qry, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +167,10 @@ func (tx *Tx) Query(qry string, params ...interface{}) (Rowser, error) {
 }
 
 func (tx *Tx) QueryRow(qry string, params ...interface{}) Scanner {
-	exp, err := tx.check(qry, params...)
+	return tx.QueryRowContext(context.Background(), qry, params...)
+}
+func (tx *Tx) QueryRowContext(ctx context.Context, qry string, params ...interface{}) Scanner {
+	exp, err := tx.check(ctx, qry, params...)
 	if err != nil {
 		return scannerMock{Err: err}
 	}
@@ -172,7 +182,10 @@ func (tx *Tx) QueryRow(qry string, params ...interface{}) Scanner {
 
 const ExpectAny = "{{ExpectAny}}"
 
-func (cu *Tx) check(qry string, args ...interface{}) (*expectQuery, error) {
+func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expectQuery, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cu.pos++
 	if len(cu.Expects) == 0 {
 		return nil, errors.Wrapf(ErrQueryMismatch, "%d. EXTRA query %q", cu.pos, qry)
@@ -250,6 +263,9 @@ func (res ResultMock) LastInsertId() (int64, error) { return res.ID, nil }
 func (res ResultMock) RowsAffected() (int64, error) { return res.Affected, nil }
 
 func setPtr(d, s interface{}) {
+	if so, ok := d.(sql.Out); ok {
+		d = so.Dest
+	}
 	dst := reflect.ValueOf(d)
 	src := reflect.ValueOf(s)
 	if !src.IsValid() {

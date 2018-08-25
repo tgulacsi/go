@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"reflect"
@@ -60,6 +61,7 @@ func Main() error {
 	flag.BoolVar(&ForceString, "force-string", false, "force all columns to be VARCHAR2")
 	flagMemProf := flag.String("memprofile", "", "file to output memory profile to")
 	flagCPUProf := flag.String("cpuprofile", "", "file to output CPU profile to")
+	flagJustPrint := flag.Bool("just-print", false, "just print the INSERTs")
 	flag.Parse()
 
 	if flag.NArg() != 2 {
@@ -126,6 +128,57 @@ func Main() error {
 			fileName,
 		)
 	}()
+
+	if *flagJustPrint {
+		cols, err := getColumns(ctx, db, tbl)
+		if err != nil {
+			return err
+		}
+		var buf strings.Builder
+		for i, col := range cols {
+			if i != 0 {
+				buf.Write([]byte{',', ' '})
+			}
+			buf.WriteString(col.Name)
+		}
+		fmt.Println("INSERT ALL")
+		prefix := "  INTO " + tbl + " (" + buf.String() + ")"
+		colMap := make(map[string]Column, len(cols))
+		for _, col := range cols {
+			colMap[col.Name] = col
+		}
+		cols = cols[:0]
+		for _, nm := range (<-rows).Values {
+			cols = append(cols, colMap[strings.ToUpper(nm)])
+		}
+		dRepl := strings.NewReplacer(".", "", "-", "")
+		for row := range rows {
+			buf.Reset()
+			for j, s := range row.Values {
+				if j != 0 {
+					buf.Write([]byte{',', ' '})
+				}
+				col := cols[j]
+				if col.Type != Date {
+					if err = quote(&buf, s); err != nil {
+						return err
+					}
+				} else {
+					buf.WriteString("TO_DATE('")
+					d := dRepl.Replace(s)
+					if len(d) == 6 {
+						d = "20" + d
+					}
+					buf.WriteString(d)
+					buf.WriteString("','YYYYMMDD')")
+				}
+			}
+			fmt.Printf("%s VALUES (%s)\n", prefix, buf.String())
+		}
+		fmt.Println("SELECT 1 FROM DUAL;")
+		return nil
+	}
+
 	columns, err := CreateTable(ctx, db, tbl, rows, *flagTruncate, *flagTablespace)
 	cancel()
 	if err != nil {
@@ -551,6 +604,60 @@ func (c Column) FromString(ss []string) (interface{}, error) {
 		return ss, nil
 	}
 	return ss, nil
+}
+
+func getColumns(ctx context.Context, db *sql.DB, tbl string) ([]Column, error) {
+	// TODO(tgulacsi): this is Oracle-specific!
+	const qry = "SELECT column_name, data_type, data_length, data_precision, data_scale, nullable FROM user_tab_cols WHERE table_name = UPPER(:1) ORDER BY column_id"
+	rows, err := db.QueryContext(ctx, qry, tbl)
+	if err != nil {
+		return nil, errors.Wrap(err, qry)
+	}
+	defer rows.Close()
+	var cols []Column
+	for rows.Next() {
+		var c Column
+		var prec, scale sql.NullInt64
+		var nullable string
+		if err = rows.Scan(&c.Name, &c.DataType, &c.Length, &prec, &scale, &nullable); err != nil {
+			return nil, err
+		}
+		c.Nullable = nullable == "Y"
+		switch c.DataType {
+		case "DATE":
+			c.Type = Date
+			c.Length = 8
+		case "NUMBER":
+			c.Precision, c.Scale = int(prec.Int64), int(scale.Int64)
+			if c.Scale > 0 {
+				c.Type = Float
+				c.Length = c.Precision + 1
+			} else {
+				c.Type = Int
+				c.Length = c.Precision
+			}
+		default:
+			c.Type = String
+		}
+		cols = append(cols, c)
+	}
+	return cols, rows.Close()
+}
+
+var qRepl = strings.NewReplacer(
+	"'", "''",
+	"&", "'||CHR(38)||'",
+)
+
+func quote(w io.Writer, s string) error {
+	if _, err := w.Write([]byte{'\''}); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, qRepl.Replace(s)); err != nil {
+		return err
+	}
+	_, err := w.Write([]byte{'\''})
+	return err
 }
 
 // vim: set fileencoding=utf-8 noet:
