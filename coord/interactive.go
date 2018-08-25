@@ -28,8 +28,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/rakyll/statik/fs"
 	_ "github.com/tgulacsi/go/coord/statik"
-	"github.com/tgulacsi/statik/fs"
 )
 
 var (

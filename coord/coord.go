@@ -27,7 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 
-	"github.com/hashicorp/go-retryablehttp"
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
 const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?sensors=false&address={{.Address}}`
@@ -58,7 +58,7 @@ func Get(ctx context.Context, address string) (Location, error) {
 	if err != nil {
 		return loc, errors.Wrap(err, aURL)
 	}
-	req.Request = req.WithContext(ctx)
+	req.Request = req.Request.WithContext(ctx)
 
 	var data mapsResponse
 	for i := 0; i < 10; i++ {
