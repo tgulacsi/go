@@ -12,3 +12,5 @@ golang.org/x/text v0.0.0-20171214130843-f21a4dfb5e38 h1:yr7ItWHARpqySNZjEh5mPMHr
 golang.org/x/text v0.0.0-20171214130843-f21a4dfb5e38/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 gopkg.in/goracle.v2 v2.5.9 h1:I7zp2qFpyJSmjHI8PWrvkWh+Fyn57a8i0NAnqGN84g8=
 gopkg.in/goracle.v2 v2.5.9/go.mod h1:udeW0rjkAv4b6rhUjbHqC68lkWuyUPCm+53p+NZXk08=
+gopkg.in/goracle.v2 v2.6.0 h1:xfbIeIrn1akiK6C+hHjYW3WKLL+TbQxvnkd/Poz45LI=
+gopkg.in/goracle.v2 v2.6.0/go.mod h1:2m+7LIs0XwWqR0ogs3y0oBXcEpL1bGLiIskcg1163CI=

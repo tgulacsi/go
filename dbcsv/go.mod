@@ -9,5 +9,5 @@ require (
 	golang.org/x/net v0.0.0-20180824152047-4bcd98cce591 // indirect
 	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
 	golang.org/x/text v0.3.0
-	gopkg.in/goracle.v2 v2.5.9
+	gopkg.in/goracle.v2 v2.6.0
 )
