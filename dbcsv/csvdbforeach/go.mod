@@ -7,5 +7,5 @@ require (
 	github.com/pkg/errors v0.8.0
 	github.com/tgulacsi/go/dbcsv v0.0.0-20180827071834-60096634dffd
 	golang.org/x/text v0.3.0
-	gopkg.in/goracle.v2 v2.6.0
+	gopkg.in/goracle.v2 v2.7.0
 )
