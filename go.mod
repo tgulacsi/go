@@ -30,11 +30,11 @@ require (
 	github.com/syndtr/goleveldb v0.0.0-20180815032940-ae2bd5eed72d
 	github.com/tgulacsi/statik v0.1.3
 	golang.org/x/crypto v0.0.0-20180820150726-614d502a4dac
-	golang.org/x/net v0.0.0-20180824152047-4bcd98cce591
+	golang.org/x/net v0.0.0-20180911220305-26e67e76b6c3
 	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
 	golang.org/x/text v0.3.0
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
-	gopkg.in/goracle.v2 v2.6.0
+	gopkg.in/goracle.v2 v2.7.0
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.2.1 // indirect
 	perkeep.org v0.0.0-20180824152313-dd2d82c2500c
