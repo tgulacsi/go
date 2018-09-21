@@ -34,7 +34,7 @@ require (
 	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
 	golang.org/x/text v0.3.0
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
-	gopkg.in/goracle.v2 v2.7.0
+	gopkg.in/goracle.v2 v2.8.0
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.2.1 // indirect
 	perkeep.org v0.0.0-20180824152313-dd2d82c2500c
