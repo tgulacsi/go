@@ -17,6 +17,10 @@
 package pdf
 
 import (
+	"context"
+
+	"github.com/pkg/errors"
+
 	"github.com/hhrutter/pdfcpu/pkg/api"
 	"github.com/hhrutter/pdfcpu/pkg/pdfcpu"
 )
@@ -27,4 +31,22 @@ var Log = func(...interface{}) error { return nil }
 // MergeFiles merges the given sources into dest.
 func MergeFiles(dest string, sources ...string) error {
 	return api.Merge(sources, dest, pdfcpu.NewDefaultConfiguration())
+}
+
+// Split the pdf - each page into different file
+func Split(ctx context.Context, destDir, fn string) error {
+	return api.Split(fn, destDir, pdfcpu.NewDefaultConfiguration())
+}
+
+// PageNum returns the number of pages in the document.
+func PageNum(ctx context.Context, fn string) (int, error) {
+	pdf, err := api.Read(fn, pdfcpu.NewDefaultConfiguration())
+	if err != nil {
+		return 0, errors.Wrap(err, "read")
+	}
+	if pdf.PageCount != 0 {
+		return pdf.PageCount, nil
+	}
+	err = pdfcpu.OptimizeXRefTable(pdf)
+	return pdf.PageCount, errors.Wrap(err, "optimize")
 }
