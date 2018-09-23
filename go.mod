@@ -7,6 +7,7 @@ require (
 	github.com/go-kit/kit v0.7.0
 	github.com/gogo/protobuf v1.1.1 // indirect
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
+	github.com/hhrutter/pdfcpu v0.1.14
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/jtolds/gls v4.2.1+incompatible // indirect
 	github.com/jung-kurt/gofpdf v1.0.0

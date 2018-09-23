@@ -17,6 +17,7 @@ github.com/tgulacsi/go/dbcsv v0.0.0-20180821203226-ec5f2db53cb9/go.mod h1:pPYOvQ
 golang.org/x/net v0.0.0-20180522190444-9ef9f5bb98a1/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
 golang.org/x/net v0.0.0-20180824152047-4bcd98cce591 h1:4S2XUgvg3hUNTvxI307qkFPb9zKHG3Nf9TXFzX/DZZI=
 golang.org/x/net v0.0.0-20180824152047-4bcd98cce591/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+golang.org/x/net v0.0.0-20180911220305-26e67e76b6c3 h1:czFLhve3vsQetD6JOJ8NZZvGQIXlnN3/yXxbT6/awxI=
 golang.org/x/net v0.0.0-20180911220305-26e67e76b6c3/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
 golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f h1:wMNYb4v58l5UBM7MYRLPG6ZhfOqbKu7X5eyFl8ZhKvA=
 golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
