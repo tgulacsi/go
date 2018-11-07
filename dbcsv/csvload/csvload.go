@@ -494,6 +494,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 			buf.WriteString(tablespace)
 		}
 		qry = buf.String()
+		log.Println(qry)
 		if _, err := db.Exec(qry); err != nil {
 			return cols, errors.Wrap(err, qry)
 		}
