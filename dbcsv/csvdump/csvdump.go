@@ -484,14 +484,12 @@ func csvQuoteString(sep, s string) string {
 }
 
 func csvQuote(w io.Writer, sep, s string) (int, error) {
-	hasSep := strings.Contains(s, sep)
-	hasQ := strings.Contains(s, `"`)
-	var n int
-	if !(hasSep || hasQ) {
+	needQuote := strings.Contains(s, sep) || strings.IndexAny(s, "\"\n") >= 0
+	if !needQuote {
 		return io.WriteString(w, s)
 	}
-	var err error
-	if n, err = w.Write([]byte{'"'}); err != nil {
+	n, err := w.Write([]byte{'"'})
+	if err != nil {
 		return n, err
 	}
 	m, err := io.WriteString(w, strings.Replace(s, `"`, `""`, -1))
