@@ -40,7 +40,7 @@ func main() {
 		go func(dest <-chan blobserver.BlobAndToken) {
 			for bt := range dest {
 				contToken = bt.Token
-				fmt.Printf("blob=%s", bt.Blob)
+				fmt.Printf("blob=%v", bt.Blob)
 			}
 		}(blobs)
 		if err := stream.StreamBlobs(context.Background(), blobs, contToken); err != nil {
