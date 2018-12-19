@@ -1,5 +1,5 @@
 /*
-  Copyright 2017 Tamás Gulácsi
+  Copyright 2018 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package bufpool
 
 import (
 	"bytes"
+	"strings"
 	"sync"
 )
 
@@ -32,11 +33,12 @@ func New(size int) *bufferPool {
 	return &bufferPool{Pool: &sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, size)) }}}
 }
 
-func Get() *bytes.Buffer {
-	return Default.Get()
-}
-func Put(buf *bytes.Buffer) {
-	Default.Put(buf)
+func Get() *bytes.Buffer    { return Default.Get() }
+func Put(buf *bytes.Buffer) { Default.Put(buf) }
+
+type Pool interface {
+	Get() *bytes.Buffer
+	Put(*bytes.Buffer)
 }
 
 type bufferPool struct {
@@ -49,6 +51,37 @@ func (p *bufferPool) Get() *bytes.Buffer {
 	return buf
 }
 func (p *bufferPool) Put(buf *bytes.Buffer) {
+	if buf == nil {
+		return
+	}
+	buf.Reset()
+	p.Pool.Put(buf)
+}
+
+func NewStrings() *stringsPool {
+	return &stringsPool{Pool: &sync.Pool{New: func() interface{} { return &strings.Builder{} }}}
+}
+
+var DefaultStrings = NewStrings()
+
+type BuilderPool interface {
+	GetBuilder() *strings.Builder
+	PutBuilder(*strings.Builder)
+}
+
+func GetBuilder() *strings.Builder        { return DefaultStrings.GetBuilder() }
+func PutBuilder(builder *strings.Builder) { DefaultStrings.Put(builder) }
+
+type stringsPool struct {
+	*sync.Pool
+}
+
+func (p *stringsPool) GetBuilder() *strings.Builder {
+	buf := p.Pool.Get().(*strings.Builder)
+	buf.Reset()
+	return buf
+}
+func (p *stringsPool) PutBuilder(buf *strings.Builder) {
 	if buf == nil {
 		return
 	}

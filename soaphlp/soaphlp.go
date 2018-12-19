@@ -63,6 +63,7 @@ func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
 		Client:         cl,
 		URL:            endpointURL,
 		SOAPActionBase: soapActionBase,
+		bufpool:        bp.New(1024),
 	}
 }
 
@@ -70,6 +71,7 @@ type soapClient struct {
 	*http.Client
 	URL            string
 	SOAPActionBase string
+	bufpool        bp.Pool
 }
 
 var bufpool = bp.New(1024)
@@ -95,7 +97,9 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 		switch x := tok.(type) {
 		case xml.StartElement:
 			if x.Name.Local == "Body" &&
-				(x.Name.Space == "" || x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/") {
+				(x.Name.Space == "" ||
+					x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/" ||
+					x.Name.Space == "http://www.w3.org/2003/05/soap-envelope") {
 				start := d.InputOffset()
 				if err = d.Skip(); err != nil {
 					return nil, errors.Wrap(err, buf.String())
@@ -137,8 +141,8 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 	return FindBody(w, rc)
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
-	buf := bufpool.Get()
-	defer bufpool.Put(buf)
+	buf := s.bufpool.Get()
+	defer s.bufpool.Put(buf)
 	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>
 <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
