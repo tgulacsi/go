@@ -42,7 +42,7 @@ type Pool interface {
 }
 
 type bufferPool struct {
-	*sync.Pool
+	Pool *sync.Pool
 }
 
 func (p *bufferPool) Get() *bytes.Buffer {
@@ -65,23 +65,23 @@ func NewStrings() *stringsPool {
 var DefaultStrings = NewStrings()
 
 type BuilderPool interface {
-	GetBuilder() *strings.Builder
-	PutBuilder(*strings.Builder)
+	Get() *strings.Builder
+	Put(*strings.Builder)
 }
 
-func GetBuilder() *strings.Builder        { return DefaultStrings.GetBuilder() }
+func GetBuilder() *strings.Builder        { return DefaultStrings.Get() }
 func PutBuilder(builder *strings.Builder) { DefaultStrings.Put(builder) }
 
 type stringsPool struct {
-	*sync.Pool
+	Pool *sync.Pool
 }
 
-func (p *stringsPool) GetBuilder() *strings.Builder {
+func (p *stringsPool) Get() *strings.Builder {
 	buf := p.Pool.Get().(*strings.Builder)
 	buf.Reset()
 	return buf
 }
-func (p *stringsPool) PutBuilder(buf *strings.Builder) {
+func (p *stringsPool) Put(buf *strings.Builder) {
 	if buf == nil {
 		return
 	}
