@@ -29,16 +29,27 @@ import (
 )
 
 const (
-	DefaultTimeout  = 10 * time.Second
-	DefaultInterval = 10 * time.Minute
+	DefaultTimeout      = 10 * time.Second
+	DefaultInterval     = 10 * time.Minute
+	DefaultFailureRatio = 0.6
 )
 
-func New(name string, timeout, interval time.Duration) *retryablehttp.Client {
+// New returns a *retryablehttp.Client, with the default http.Client, DefaultTimeout, DefaultInterval and DefaultFailureRatio.
+func New(name string) *retryablehttp.Client {
+	return NewWithClient(name, nil, DefaultTimeout, DefaultInterval, DefaultFailureRatio)
+}
+
+// NewWithClient returns a *retryablehttp.Client based on the given *http.Client.
+// The accompanying circuit breaker is set with the given timeout and interval.
+func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration, failureRatio float64) *retryablehttp.Client {
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
 	if interval == 0 {
 		interval = DefaultInterval
+	}
+	if failureRatio <= 0 {
+		failureRatio = DefaultFailureRatio
 	}
 	cb := gobreaker.NewCircuitBreaker(gobreaker.Settings{
 		Name:     name,
@@ -48,10 +59,13 @@ func New(name string, timeout, interval time.Duration) *retryablehttp.Client {
 			if counts.Requests < 3 {
 				return true
 			}
-			return (counts.TotalFailures<<3)/counts.Requests < 5 // ~ 0.6
+			return float64(counts.TotalFailures)/float64(counts.Requests) <= failureRatio
 		},
 	})
 	rc := retryablehttp.NewClient()
+	if cl != nil {
+		rc.HTTPClient = cl
+	}
 	rc.RetryWaitMin = timeout / 2
 	rc.RetryWaitMax = interval
 	rc.RetryMax = 10
@@ -67,9 +81,9 @@ func New(name string, timeout, interval time.Duration) *retryablehttp.Client {
 		}
 		return false, err
 	}
-	cl := *rc.HTTPClient
+	cl = rc.HTTPClient
 	cl.Transport = TransportWithBreaker{Tripper: cl.Transport, Breaker: GoBreaker{CircuitBreaker: cb}}
-	rc.HTTPClient = &cl
+	rc.HTTPClient = cl
 	return rc
 }
 
