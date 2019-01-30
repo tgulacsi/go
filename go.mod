@@ -32,6 +32,7 @@ require (
 	github.com/gorilla/websocket v1.4.0 // indirect
 	github.com/gregjones/httpcache v0.0.0-20181110185634-c63ab54fda8f // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.7.0 // indirect
+	github.com/hashicorp/go-retryablehttp v0.5.2
 	github.com/hhrutter/pdfcpu v0.1.21
 	github.com/jtolds/gls v4.2.1+incompatible // indirect
 	github.com/jung-kurt/gofpdf v1.0.0
@@ -79,6 +80,7 @@ require (
 	github.com/sloonz/go-qprintable v0.0.0-20160203160305-775b3a4592d5
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20181108003508-044398e4856c // indirect
+	github.com/sony/gobreaker v0.0.0-20181109014844-d928aaea92e1
 	github.com/spf13/cobra v0.0.3 // indirect
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.3.0 // indirect
