@@ -37,6 +37,7 @@ require (
 	github.com/sony/gobreaker v0.0.0-20181109014844-d928aaea92e1
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
+	github.com/tgulacsi/go/dbcsv/csvload v0.0.0-20190201131341-e440493e22f6 // indirect
 	github.com/tgulacsi/statik v0.1.3
 	go4.org v0.0.0-20181109185143-00e24f1b2599 // indirect
 	golang.org/x/crypto v0.0.0-20190128193316-c7b33c32a30b
