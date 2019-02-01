@@ -1,7 +1,7 @@
 // +build posix linux !windows
 
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2019 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,12 +37,15 @@ func Mmap(f *os.File) ([]byte, io.Closer, error) {
 	if fi.Size() > MaxInt {
 		return nil, closer, errors.New("file too big to Mmap")
 	}
+	if fi.Size() == 0 {
+		return []byte{}, ioutil.NopCloser(nil), nil
+	}
 	p, err := syscall.Mmap(int(f.Fd()), 0, int(fi.Size()),
 		syscall.PROT_READ,
 		syscall.MAP_PRIVATE|syscall.MAP_DENYWRITE|syscall.MAP_POPULATE)
 	if err != nil {
 		Log("msg", "Mmap", "f", f, "size", fi.Size(), "error", err)
-		p, err = ioutil.ReadAll(f)
+		p, _ = ioutil.ReadAll(f)
 		return p, closer, err
 	}
 	//Log("msg","Mmap", "f", f, "len(p)", len(p))

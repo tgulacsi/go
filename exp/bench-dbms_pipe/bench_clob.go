@@ -56,7 +56,7 @@ END;`
 		}
 		for i := 0; i < 1000; i++ {
 			var part string
-			lob := goracle.Lob{Reader: strings.NewReader(msg),IsClob:true}
+			lob := goracle.Lob{Reader: strings.NewReader(msg), IsClob: true}
 			if _, err = stmt.ExecContext(ctx, lob, sql.Out{Dest: &part}); err != nil {
 				log.Fatalf("send: %v", err)
 			}
@@ -70,8 +70,8 @@ END;`
 	dur := time.Since(start)
 	log.Printf("messages: %d / %s: %.3f 1/s", n, dur, float64(n)/float64(dur/time.Second))
 	units := []string{"b", "kb", "Mb", "Gb"}
-	rate := float64(length)/float64(dur/time.Second)
-	for  len(units) > 1 && rate > 1024 {
+	rate := float64(length) / float64(dur/time.Second)
+	for len(units) > 1 && rate > 1024 {
 		rate /= 1024
 		units = units[1:]
 	}

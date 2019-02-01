@@ -134,7 +134,7 @@ func (exp *expectQuery) WillSetArgs(args map[int]interface{}) Mock {
 
 // Execute checks whether the given query matches with the next expected.
 func (tx *Tx) Exec(qry string, params ...interface{}) (sql.Result, error) {
-	return tx.ExecContext(context.Background(), qry,params...)
+	return tx.ExecContext(context.Background(), qry, params...)
 }
 func (tx *Tx) ExecContext(ctx context.Context, qry string, params ...interface{}) (sql.Result, error) {
 	exp, err := tx.check(ctx, qry, params...)
