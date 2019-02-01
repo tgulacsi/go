@@ -109,7 +109,15 @@ func Main() error {
 	tbl := strings.ToUpper(flag.Arg(0))
 	src := flag.Arg(1)
 
-	fileName := flag.Arg(1)
+	if ForceString {
+		err = cfg.OpenVolatile(flag.Arg(1))
+	} else {
+		err = cfg.Open(flag.Arg(1))
+	}
+	if err != nil {
+		return err
+	}
+	defer cfg.Close()
 
 	rows := make(chan dbcsv.Row)
 
@@ -125,7 +133,6 @@ func Main() error {
 				}
 				return nil
 			},
-			fileName,
 		)
 	}()
 
@@ -350,7 +357,6 @@ func Main() error {
 			chunk = (*chunkPool.Get().(*[][]string))[:0]
 			return nil
 		},
-		fileName,
 	); err != nil {
 		return err
 	}
@@ -415,7 +421,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 		return cols, errors.Wrap(err, qry)
 	}
 	if n > 0 && truncate {
-		qry = `TRUNCATE TABLE "` + tbl + `"`
+		qry = `TRUNCATE TABLE ` + tbl
 		if _, err := db.ExecContext(ctx, qry); err != nil {
 			return cols, errors.Wrap(err, qry)
 		}
