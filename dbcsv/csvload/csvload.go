@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi. All rights reserved.
+// Copyright 2019 Tamás Gulácsi. All rights reserved.
 
 package main
 
@@ -184,7 +184,7 @@ func Main() error {
 	if err != nil {
 		return err
 	}
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, `INSERT INTO "%s" (`, tbl)
 	for i, c := range columns {
 		if i != 0 {
@@ -208,7 +208,6 @@ func Main() error {
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	grp, ctx := errgroup.WithContext(ctx)
-	//grp = &errgroup.Group{}
 
 	type rowsType struct {
 		Rows  [][]string
@@ -455,20 +454,25 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 			}
 			cols[i].Name = v
 		}
-
-		for row := range rows {
-			for i, v := range row.Values {
-				if len(v) > cols[i].Length {
-					cols[i].Length = len(v)
-				}
-				if cols[i].Type == String {
-					continue
-				}
-				typ := typeOf(v)
-				if cols[i].Type == Unknown {
-					cols[i].Type = typ
-				} else if typ != cols[i].Type {
-					cols[i].Type = String
+		if ForceString {
+			for i := range cols {
+				cols[i].Type = String
+			}
+		} else {
+			for row := range rows {
+				for i, v := range row.Values {
+					if len(v) > cols[i].Length {
+						cols[i].Length = len(v)
+					}
+					if cols[i].Type == String {
+						continue
+					}
+					typ := typeOf(v)
+					if cols[i].Type == Unknown {
+						cols[i].Type = typ
+					} else if typ != cols[i].Type {
+						cols[i].Type = String
+					}
 				}
 			}
 		}
