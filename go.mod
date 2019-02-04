@@ -46,7 +46,7 @@ require (
 	golang.org/x/sys v0.0.0-20190129075346-302c3dd5f1cc // indirect
 	golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
-	gopkg.in/goracle.v2 v2.12.0
+	gopkg.in/goracle.v2 v2.12.1
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 	perkeep.org v0.0.0-20181231182150-eb547718cb28
 )
