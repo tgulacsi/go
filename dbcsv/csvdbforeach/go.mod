@@ -6,6 +6,7 @@ require (
 	github.com/extrame/xls v0.0.1
 	github.com/pkg/errors v0.8.0
 	github.com/tgulacsi/go/dbcsv v0.0.0-20180827071834-60096634dffd
+	golang.org/x/net v0.0.0-20180911220305-26e67e76b6c3 // indirect
 	golang.org/x/text v0.3.0
-	gopkg.in/goracle.v2 v2.9.0
+	gopkg.in/goracle.v2 v2.12.1
 )
