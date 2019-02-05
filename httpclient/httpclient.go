@@ -19,7 +19,6 @@ package httpclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -81,9 +80,13 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 		}
 		return false, err
 	}
-	cl = rc.HTTPClient
-	cl.Transport = TransportWithBreaker{Tripper: cl.Transport, Breaker: GoBreaker{CircuitBreaker: cb}}
-	rc.HTTPClient = cl
+	if true {
+		{
+			cl := *rc.HTTPClient
+			cl.Transport = TransportWithBreaker{Tripper: cl.Transport, Breaker: GoBreaker{CircuitBreaker: cb}}
+			rc.HTTPClient = &cl
+		}
+	}
 	return rc
 }
 
@@ -127,23 +130,14 @@ func (t TransportWithBreaker) RoundTrip(r *http.Request) (*http.Response, error)
 	}
 
 	res, err := t.Breaker.Execute(func() (interface{}, error) {
-		res, err := t.Tripper.RoundTrip(r)
-		if err != nil {
-			return nil, err
-		}
-
-		if res != nil && res.StatusCode >= http.StatusInternalServerError {
-			return res, fmt.Errorf("http response error: %s", res.Status)
-		}
-
-		return res, err
+		return t.Tripper.RoundTrip(r)
 	})
 
-	if err != nil {
-		return nil, err
+	if resp, ok := res.(*http.Response); ok {
+		return resp, err
 	}
 
-	return res.(*http.Response), err
+	return nil, err
 }
 
 var _ = Breaker(GoBreaker{})
