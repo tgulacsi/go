@@ -90,6 +90,11 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 	return rc
 }
 
+// NewRequest calls github.com/hashicorp/go-retryablehttp's NewRequest.
+func NewRequest(method, URL string, body interface{}) (*retryablehttp.Request, error) {
+	return retryablehttp.NewRequest(method, URL, body)
+}
+
 // Breaker is the interface for a circuit breaker.
 type Breaker interface {
 	// Execute runs the given request if the circuit breaker is closed or half-open states.
