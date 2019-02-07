@@ -414,7 +414,7 @@ func typeOf(s string) Type {
 
 func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.Row, truncate bool, tablespace string) ([]Column, error) {
 	tbl = strings.ToUpper(tbl)
-	qry := "SELECT COUNT(0) FROM cat WHERE UPPER(table_name) = :1"
+	qry := "SELECT COUNT(0) FROM user_tables WHERE UPPER(table_name) = :1"
 	var n int64
 	var cols []Column
 	if err := db.QueryRowContext(ctx, qry, tbl).Scan(&n); err != nil {
@@ -464,7 +464,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 			for i := range cols {
 				cols[i].Type = String
 			}
-		} else {
+		}
 			for row := range rows {
 				for i, v := range row.Values {
 					if len(v) > cols[i].Length {
@@ -479,7 +479,6 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 					} else if typ != cols[i].Type {
 						cols[i].Type = String
 					}
-				}
 			}
 		}
 		var buf bytes.Buffer
