@@ -17,6 +17,8 @@ limitations under the License.
 package iohlp
 
 import (
+	"io"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -30,4 +32,52 @@ func TestReadAll(t *testing.T) {
 	if string(b) != s {
 		t.Errorf("got %q, wanted %q", string(b), s)
 	}
+}
+
+func TestReadALot(t *testing.T) {
+	const N = 128
+
+	var m1, m2 runtime.MemStats
+	runtime.ReadMemStats(&m1)
+	{
+		b, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Read %d bytes", len(b))
+		runtime.ReadMemStats(&m2)
+		t.Logf("One big read consumed\t%d bytes", m2.Sys-m1.Sys)
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&m2)
+	t.Logf("One big read after GC:\t%d bytes", m2.Sys-m1.Sys)
+}
+
+type dummyReader struct {
+	N       int64
+	i       uint8
+	scratch []byte
+}
+
+func (r *dummyReader) Read(p []byte) (int, error) {
+	if r.N <= 0 {
+		return 0, io.EOF
+	}
+	n := len(p)
+	if int64(n) > r.N {
+		n = int(r.N)
+	}
+	if cap(r.scratch) < n {
+		r.scratch = make([]byte, n)
+		for i := 0; i < n; i++ {
+			r.scratch[i] = r.i
+			r.i++
+		}
+	}
+	r.N -= int64(n)
+	copy(p[:n], r.scratch)
+	if r.N <= 0 {
+		return n, io.EOF
+	}
+	return n, nil
 }
