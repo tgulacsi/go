@@ -107,6 +107,9 @@ const waitCount = 10
 
 // RoundTrip sends the request and returns the response, waiting the circuit breaker to be in a closed state.
 func (t TransportWithBreaker) RoundTrip(r *http.Request) (*http.Response, error) {
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
 	dl, ok := r.Context().Deadline()
 	if ok && !dl.IsZero() {
 		dl = dl.Add(-(time.Until(dl) >> 3)) // 12.5% margin
