@@ -41,13 +41,15 @@ func TestReadALot(t *testing.T) {
 	var m1, m2 runtime.MemStats
 	runtime.ReadMemStats(&m1)
 	{
-		b, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
+		b, closer, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer closer.Close()
 		t.Logf("Read %d bytes", len(b))
 		runtime.ReadMemStats(&m2)
 		t.Logf("One big read consumed\t%d bytes", m2.Sys-m1.Sys)
+		closer.Close()
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&m2)
