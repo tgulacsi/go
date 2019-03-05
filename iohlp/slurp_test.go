@@ -23,10 +23,11 @@ import (
 
 func TestReadAll(t *testing.T) {
 	const s = "abraca dabra"
-	b, err := ReadAll(strings.NewReader(s), 3)
+	b, closer, err := ReadAll(strings.NewReader(s), 3)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer closer.Close()
 	if string(b) != s {
 		t.Errorf("got %q, wanted %q", string(b), s)
 	}

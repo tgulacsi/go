@@ -20,39 +20,46 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"runtime"
 )
 
 // ReadAll reads the reader and returns the byte slice.
 //
 // If the read length is below the threshold, then the bytes are read into memory;
 // otherwise, a temp file is created, and mmap-ed.
-func ReadAll(r io.Reader, threshold int) ([]byte, error) {
+func ReadAll(r io.Reader, threshold int) ([]byte, io.Closer, error) {
 	lr := io.LimitedReader{R: r, N: int64(threshold) + 1}
 	b, err := ioutil.ReadAll(&lr)
 	if err != nil {
-		return b, err
+		return b, nilClose, err
 	}
 	if lr.N > 0 {
-		return b, nil
+		return b, nilClose, nil
 	}
 	fh, err := ioutil.TempFile("", "iohlp-readall-")
 	if err != nil {
-		return b, err
+		return b, nilClose, err
 	}
 	os.Remove(fh.Name())
 	if _, err = fh.Write(b); err != nil {
-		return b, err
+		return b, nilClose, err
 	}
-	b = nil
 	if _, err = io.Copy(fh, r); err != nil {
-		return nil, err
+		fh.Close()
+		return nil, nilClose, err
 	}
 	b, closer, err := Mmap(fh)
 	fh.Close()
 	if err != nil {
-		return b, err
+		if closer != nil {
+			closer.Close()
+		}
+		return b, nil, err
 	}
-	runtime.SetFinalizer(&b, func(_ *[]byte) { closer.Close() })
-	return b, nil
+	return b, closer, nil
 }
+
+type nilCloser struct{}
+
+var nilClose nilCloser
+
+func (_ nilCloser) Close() error { return nil }
