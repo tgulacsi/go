@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi. All rights reserved.
+// Copyright 2019 Tamás Gulácsi. All rights reserved.
 
 package main
 
@@ -109,7 +109,15 @@ func Main() error {
 	tbl := strings.ToUpper(flag.Arg(0))
 	src := flag.Arg(1)
 
-	fileName := flag.Arg(1)
+	if ForceString {
+		err = cfg.OpenVolatile(flag.Arg(1))
+	} else {
+		err = cfg.Open(flag.Arg(1))
+	}
+	if err != nil {
+		return err
+	}
+	defer cfg.Close()
 
 	rows := make(chan dbcsv.Row)
 
@@ -125,7 +133,6 @@ func Main() error {
 				}
 				return nil
 			},
-			fileName,
 		)
 	}()
 
@@ -184,7 +191,7 @@ func Main() error {
 	if err != nil {
 		return err
 	}
-	var buf bytes.Buffer
+	var buf strings.Builder
 	fmt.Fprintf(&buf, `INSERT INTO "%s" (`, tbl)
 	for i, c := range columns {
 		if i != 0 {
@@ -208,7 +215,6 @@ func Main() error {
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	grp, ctx := errgroup.WithContext(ctx)
-	//grp = &errgroup.Group{}
 
 	type rowsType struct {
 		Rows  [][]string
@@ -351,7 +357,6 @@ func Main() error {
 			chunk = (*chunkPool.Get().(*[][]string))[:0]
 			return nil
 		},
-		fileName,
 	); err != nil {
 		return err
 	}
@@ -409,14 +414,14 @@ func typeOf(s string) Type {
 
 func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.Row, truncate bool, tablespace string) ([]Column, error) {
 	tbl = strings.ToUpper(tbl)
-	qry := "SELECT COUNT(0) FROM cat WHERE UPPER(table_name) = :1"
+	qry := "SELECT COUNT(0) FROM user_tables WHERE UPPER(table_name) = :1"
 	var n int64
 	var cols []Column
 	if err := db.QueryRowContext(ctx, qry, tbl).Scan(&n); err != nil {
 		return cols, errors.Wrap(err, qry)
 	}
 	if n > 0 && truncate {
-		qry = `TRUNCATE TABLE "` + tbl + `"`
+		qry = `TRUNCATE TABLE ` + tbl
 		if _, err := db.ExecContext(ctx, qry); err != nil {
 			return cols, errors.Wrap(err, qry)
 		}
@@ -455,21 +460,25 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 			}
 			cols[i].Name = v
 		}
-
-		for row := range rows {
-			for i, v := range row.Values {
-				if len(v) > cols[i].Length {
-					cols[i].Length = len(v)
-				}
-				if cols[i].Type == String {
-					continue
-				}
-				typ := typeOf(v)
-				if cols[i].Type == Unknown {
-					cols[i].Type = typ
-				} else if typ != cols[i].Type {
-					cols[i].Type = String
-				}
+		if ForceString {
+			for i := range cols {
+				cols[i].Type = String
+			}
+		}
+			for row := range rows {
+				for i, v := range row.Values {
+					if len(v) > cols[i].Length {
+						cols[i].Length = len(v)
+					}
+					if cols[i].Type == String {
+						continue
+					}
+					typ := typeOf(v)
+					if cols[i].Type == Unknown {
+						cols[i].Type = typ
+					} else if typ != cols[i].Type {
+						cols[i].Type = String
+					}
 			}
 		}
 		var buf bytes.Buffer

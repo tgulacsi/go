@@ -79,6 +79,8 @@ type Config struct {
 	encoding      encoding.Encoding
 	columns       []int
 	fileName      string
+	file          *os.File
+	permanent     bool
 }
 
 func (cfg *Config) Encoding() (encoding.Encoding, error) {
@@ -111,20 +113,83 @@ func (cfg *Config) Columns() ([]int, error) {
 	return cfg.columns, nil
 }
 
-func (cfg *Config) Type(fileName string) (FileType, error) {
+func (cfg *Config) Type() (FileType, error) {
 	if cfg.typ != Unknown {
 		return cfg.typ, nil
 	}
-	fh, err := os.Open(fileName)
-	if err != nil {
-		return Unknown, err
+	var err error
+	cfg.typ, err = DetectReaderType(cfg.file, cfg.fileName)
+	if err == nil {
+		_, err = cfg.file.Seek(0, 0)
 	}
-	defer fh.Close()
-	cfg.typ, err = DetectReaderType(fh, fileName)
 	return cfg.typ, err
 }
 
-func (cfg *Config) ReadRows(ctx context.Context, fn func(string, Row) error, fileName string) (err error) {
+func (cfg *Config) OpenVolatile(fileName string) error {
+	cfg.fileName = fileName
+	if fileName == "-" || fileName == "" {
+		cfg.file, cfg.permanent = os.Stdin, false
+		return nil
+	}
+	var err error
+	cfg.file, err = os.Open(fileName)
+	if fi, statErr := cfg.file.Stat(); statErr != nil || !fi.Mode().IsRegular() {
+		cfg.permanent = false
+	}
+	return err
+}
+func (cfg *Config) Open(fileName string) error {
+	slurp := fileName == "-" || fileName == ""
+	cfg.permanent = true
+	if slurp {
+		cfg.file, fileName = os.Stdin, "-"
+	} else {
+		var err error
+		if cfg.file, err = os.Open(fileName); err != nil {
+			return errors.Wrap(err, "open "+fileName)
+		}
+		fi, err := cfg.file.Stat()
+		if err != nil {
+			cfg.file.Close()
+			return errors.Wrap(err, "stat "+fileName)
+		}
+		slurp = !fi.Mode().IsRegular()
+	}
+	var err error
+	if slurp {
+		fh, tmpErr := ioutil.TempFile("", "ReadRows-")
+		if tmpErr != nil {
+			return tmpErr
+		}
+		defer fh.Close()
+		fileName = fh.Name()
+		defer os.Remove(fileName)
+		log.Printf("Copying into temporary file %q...", fileName)
+		if _, err = io.Copy(fh, cfg.file); err != nil {
+			return errors.Wrap(err, "copy into "+fh.Name())
+		}
+		if err = fh.Close(); err != nil {
+			return errors.Wrap(err, "close "+fh.Name())
+		}
+		if cfg.file, err = os.Open(fileName); err != nil {
+			return errors.Wrap(err, "open "+fileName)
+		}
+	}
+	cfg.fileName = fileName
+	_, err = cfg.Type()
+	return errors.Wrap(err, "type "+cfg.fileName)
+}
+
+func (cfg *Config) Close() error {
+	fh := cfg.file
+	cfg.file, cfg.fileName, cfg.typ = nil, "", Unknown
+	if fh != nil {
+		return fh.Close()
+	}
+	return nil
+}
+
+func (cfg *Config) ReadRows(ctx context.Context, fn func(string, Row) error) (err error) {
 	if err = ctx.Err(); err != nil {
 		return err
 	}
@@ -133,44 +198,23 @@ func (cfg *Config) ReadRows(ctx context.Context, fn func(string, Row) error, fil
 		return err
 	}
 
-	if fileName == "-" || fileName == "" {
-		fh, tmpErr := ioutil.TempFile("", "ReadRows-")
-		if tmpErr != nil {
-			return tmpErr
-		}
-		cfg.fileName = fh.Name()
-		fileName = cfg.fileName
-		defer fh.Close()
-		defer os.Remove(fileName)
-		if _, err = io.Copy(fh, os.Stdin); err != nil {
-			return err
-		}
-		if err = fh.Close(); err != nil {
+	if cfg.permanent {
+		if _, err = cfg.file.Seek(0, 0); err != nil {
 			return err
 		}
 	}
-
-	typ, err := cfg.Type(fileName)
-	if err != nil {
-		return err
-	}
-	switch typ {
+	switch cfg.typ {
 	case Xls:
-		return ReadXLSFile(ctx, fn, fileName, cfg.Charset, cfg.Sheet, columns, cfg.Skip)
+		return ReadXLSFile(ctx, fn, cfg.fileName, cfg.Charset, cfg.Sheet, columns, cfg.Skip)
 	case XlsX:
-		return ReadXLSXFile(ctx, fn, fileName, cfg.Sheet, columns, cfg.Skip)
+		return ReadXLSXFile(ctx, fn, cfg.fileName, cfg.Sheet, columns, cfg.Skip)
 	}
 	enc, err := cfg.Encoding()
 	if err != nil {
 		return err
 	}
-	fh, err := os.Open(fileName)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-	r := transform.NewReader(fh, enc.NewDecoder())
-	return ReadCSV(ctx, func(row Row) error { return fn(fileName, row) }, r, cfg.Delim, columns, cfg.Skip)
+	r := transform.NewReader(cfg.file, enc.NewDecoder())
+	return ReadCSV(ctx, func(row Row) error { return fn(cfg.fileName, row) }, r, cfg.Delim, columns, cfg.Skip)
 }
 
 const (
