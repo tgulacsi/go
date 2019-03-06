@@ -22,7 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sloonz/go-qprintable"
-	"github.com/tgulacsi/go/temp"
+	"github.com/tgulacsi/go/iohlp"
 )
 
 // MaxWalkDepth is the maximum depth Walk will descend.
@@ -157,7 +157,12 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 //
 // By default this is recursive, except dontDescend is true.
 func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
-	br, e := temp.NewReadSeeker(part.Body)
+	b, closer, e := iohlp.ReadAll(part.Body, 1<<20)
+	br := struct {
+		io.ReadSeeker
+		io.Closer
+	}{bytes.NewReader(b), closer}
+	//Infof("part.Body: %[1]T %+[1]v", part.Body)
 	if e != nil {
 		return e
 	}
