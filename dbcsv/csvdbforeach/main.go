@@ -135,7 +135,6 @@ Usage:
 				}
 				return nil
 			},
-			inp.Name(),
 		)
 	}(rows)
 

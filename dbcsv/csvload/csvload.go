@@ -200,7 +200,7 @@ func Main() error {
 		buf.WriteString(c.Name)
 	}
 	buf.WriteString(") VALUES (")
-	for i, _ := range columns {
+	for i := range columns {
 		if i != 0 {
 			buf.WriteString(", ")
 		}
