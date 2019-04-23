@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2019 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ package osgroup
 
 import (
 	"bufio"
-	"bytes"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/user"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,49 +37,64 @@ var (
 
 const groupFile = "/etc/group"
 
+func getOrLookup(gid int) (string, error) {
+	groupsMu.RLock()
+	name := groups[gid]
+	groupsMu.RUnlock()
+	if name != "" {
+		return name, nil
+	}
+	g, err := user.LookupGroupId(strconv.Itoa(gid))
+	if err != nil {
+		return "", err
+	}
+	name = g.Name
+	groupsMu.Lock()
+	groups[gid] = name
+	groupsMu.Unlock()
+	return name, nil
+}
+
 // GroupName returns the name for the gid.
 func GroupName(gid int) (string, error) {
 	groupsMu.RLock()
-	if groups == nil {
-		groupsMu.RUnlock()
+	isNil := groups == nil
+	name := groups[gid]
+	groupsMu.RUnlock()
+	if isNil {
 		groupsMu.Lock()
-		defer groupsMu.Unlock()
-		if groups != nil { // sy was faster
-			name := groups[gid]
-			return name, nil
+		if groups == nil {
+			groups = make(map[int]string)
 		}
-	} else {
-		now := time.Now()
-		if lastcheck.Add(1 * time.Second).After(now) { // fresh
-			name := groups[gid]
-			groupsMu.RUnlock()
-			return name, nil
-		}
-		actcheck := lastcheck
-		groupsMu.RUnlock()
+		groupsMu.Unlock()
+	}
+	if name != "" {
+		return name, nil
+	}
+	now := time.Now()
+	if lastcheck.Add(1 * time.Second).After(now) { // fresh
+		return getOrLookup(gid)
+	}
+	actcheck := lastcheck
+	groupsMu.RUnlock()
 
-		groupsMu.Lock()
-		defer groupsMu.Unlock()
-		if lastcheck != actcheck { // sy was faster
-			return groups[gid], nil
-		}
-		fi, err := os.Stat(groupFile)
-		if err != nil {
-			return "", err
-		}
-		lastcheck = now
-		if lastmod == fi.ModTime() { // no change
-			return groups[gid], nil
-		}
+	groupsMu.Lock()
+	defer groupsMu.Unlock()
+	if lastcheck != actcheck { // sy was faster
+		return getOrLookup(gid)
+	}
+	fi, err := os.Stat(groupFile)
+	if err != nil {
+		return "", err
+	}
+	lastcheck = now
+	if lastmod == fi.ModTime() { // no change
+		return getOrLookup(gid)
 	}
 
 	// need to reread
-	if groups == nil {
-		groups = make(map[int]string, 64)
-	} else {
-		for k := range groups {
-			delete(groups, k)
-		}
+	for k := range groups {
+		delete(groups, k)
 	}
 
 	fh, err := os.Open(groupFile)
@@ -87,8 +102,7 @@ func GroupName(gid int) (string, error) {
 		return "", err
 	}
 	defer fh.Close()
-	fi, err := fh.Stat()
-	if err != nil {
+	if fi, err = fh.Stat(); err != nil {
 		return "", err
 	}
 	lastcheck = time.Now()
@@ -108,14 +122,14 @@ func GroupName(gid int) (string, error) {
 		groups[id] = parts[0]
 	}
 
-	return groups[gid], nil
+	return getOrLookup(gid)
 }
 
 // IsInsideDocker returns true iff we are inside a docker cgroup.
 func IsInsideDocker() bool {
-	b, err := ioutil.ReadFile("/proc/self/cgroup")
-	if err != nil {
-		return false
+	_, err := ioutil.ReadFile("/proc/self/cgroup")
+	if err == nil {
+		return true
 	}
-	return bytes.Contains(b, []byte(":/docker/")) || bytes.Contains(b, []byte(":/lxc/"))
+	return false
 }
