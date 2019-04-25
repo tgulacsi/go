@@ -139,7 +139,7 @@ func getConnection(t *testing.T) dber.DBer {
 	if err != nil {
 		t.Fatalf("cannot connect to %q: %v", *flagConnect, err)
 	}
-	return dber.SqlDBer{db}
+	return dber.SqlDBer{DB: db}
 }
 
 // vim: se noet fileencoding=utf-8:

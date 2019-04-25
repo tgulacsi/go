@@ -76,7 +76,7 @@ func (tx *Tx) Commit() error {
 	if tx.done == TxUndecided {
 		tx.done = TxCommited
 		if len(tx.Expects) > 0 {
-			return errors.New(fmt.Sprintf("COMMIT left %d expectations: %q", len(tx.Expects), tx.Expects))
+			return errors.Errorf("COMMIT left %d expectations: %v", len(tx.Expects), tx.Expects)
 		}
 	}
 	if tx.done == TxCommited {

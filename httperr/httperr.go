@@ -6,7 +6,6 @@
 package httperr
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -52,7 +51,7 @@ func New(err error, code int) *httpError {
 // Newf returns a new httpError with the given code,
 // and the message is created from msg and the args.
 func Newf(code int, msg string, args ...interface{}) *httpError {
-	return New(errors.New(fmt.Sprintf(msg, args)), code)
+	return New(errors.Errorf(msg, args...), code)
 }
 
 // vim: fileencoding=utf-8:

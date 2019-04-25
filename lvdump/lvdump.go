@@ -33,9 +33,6 @@ func Dump(src string) error {
 	defer db.Close()
 
 	it := db.NewIterator(nil, nil)
-	if err != nil {
-		return err
-	}
 	defer it.Release()
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()

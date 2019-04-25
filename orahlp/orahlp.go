@@ -107,7 +107,7 @@ BEGIN
 		var col Column
 		for i, d := range []*int{&col.Type, &col.Length, &col.Precision, &col.Scale, &nullable, &col.CharsetID, &col.CharsetForm} {
 			if *d, err = strconv.Atoi(record[i]); err != nil {
-				return cols, errors.Wrapf(err, "parsing %q (%d.)", d, i)
+				return cols, errors.Wrapf(err, "parsing %q (%d.)", record[i], i)
 			}
 		}
 		col.Nullable = nullable == 1

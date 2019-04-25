@@ -242,9 +242,19 @@ func ReadXLSXFile(ctx context.Context, fn func(string, Row) error, filename stri
 			need[i] = true
 		}
 	}
-	for i, row := range xlFile.GetRows(sheetName) {
-		if i < skip {
+	rows, err := xlFile.Rows(sheetName)
+	if err != nil {
+		return err
+	}
+	i := 0
+	for rows.Next() {
+		i++
+		if i <= skip {
 			continue
+		}
+		row, err := rows.Columns()
+		if err != nil {
+			return err
 		}
 		if row == nil {
 			continue
