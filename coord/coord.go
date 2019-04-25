@@ -77,7 +77,7 @@ func Get(ctx context.Context, address string) (Location, error) {
 		if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
 			return loc, errors.Wrapf(err, "decode")
 		}
-		httpClient.Logger.Println("status=" + data.Status)
+		httpClient.Logger.Printf("status=%q", data.Status)
 		if data.Status != "OVER_QUERY_LIMIT" {
 			gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
 			break

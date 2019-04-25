@@ -1,5 +1,5 @@
 /*
-  Copyright 2017 Tamás Gulácsi
+  Copyright 2019 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -30,17 +30,19 @@ var Log = func(...interface{}) error { return nil }
 
 // MergeFiles merges the given sources into dest.
 func MergeFiles(dest string, sources ...string) error {
-	return api.Merge(sources, dest, pdfcpu.NewDefaultConfiguration())
+	_, err := api.Merge(api.MergeCommand(sources, dest, pdfcpu.NewDefaultConfiguration()))
+	return err
 }
 
 // Split the pdf - each page into different file
 func Split(ctx context.Context, destDir, fn string) error {
-	return api.Split(fn, destDir, pdfcpu.NewDefaultConfiguration())
+	_, err := api.Split(api.SplitCommand(fn, destDir, 1, pdfcpu.NewDefaultConfiguration()))
+	return err
 }
 
 // PageNum returns the number of pages in the document.
 func PageNum(ctx context.Context, fn string) (int, error) {
-	pdf, err := api.Read(fn, pdfcpu.NewDefaultConfiguration())
+	pdf, err := api.ReadContextFromFile(fn, pdfcpu.NewDefaultConfiguration())
 	if err != nil {
 		return 0, errors.Wrap(err, "read")
 	}

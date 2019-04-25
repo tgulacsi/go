@@ -78,7 +78,7 @@ func Main() error {
 	flagCall := flag.Bool("call", false, "the first argument is not the WHERE, but the PL/SQL block to be called, the followings are not the columns but the arguments")
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), strings.Replace(`Usage of {{.prog}}:
+		fmt.Fprintln(flag.CommandLine.Output(), strings.Replace(`Usage of {{.prog}}:
 	{{.prog}} [options] 'T_able' 'F_ield=1'
 
 will execute a "SELECT * FROM T_able WHERE F_ield=1" and dump all the columns;
@@ -484,7 +484,7 @@ func csvQuoteString(sep, s string) string {
 }
 
 func csvQuote(w io.Writer, sep, s string) (int, error) {
-	needQuote := strings.Contains(s, sep) || strings.IndexAny(s, "\"\n") >= 0
+	needQuote := strings.Contains(s, sep) || strings.ContainsAny(s, `"`+"\n")
 	if !needQuote {
 		return io.WriteString(w, s)
 	}
