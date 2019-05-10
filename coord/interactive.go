@@ -57,6 +57,7 @@ type staticParams struct {
 	LocLat, LocLng             string
 	DefaultAddress             string
 	CallbackPath               string
+	APIKey                     string
 }
 
 func (in *Interactive) RenderHTML(w io.Writer, address, callbackURL string) error {
@@ -69,6 +70,7 @@ func (in *Interactive) RenderHTML(w io.Writer, address, callbackURL string) erro
 		LocLat:         fmt.Sprintf("%+f", in.Location.Lat),
 		LocLng:         fmt.Sprintf("%+f", in.Location.Lng),
 		CallbackPath:   callbackURL,
+		APIKey:         APIKey,
 	}
 	if err := tmpl.Execute(w, sp); err != nil {
 		return errors.Wrapf(err, "with %#v", sp)
