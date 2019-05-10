@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2019 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -30,7 +31,7 @@ import (
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
-const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?sensors=false&address={{.Address}}`
+const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?key={{.APIKey}}&sensors=false&address={{.Address}}`
 
 var (
 	ErrNotFound       = errors.New("not found")
@@ -38,6 +39,10 @@ var (
 
 	httpClient     = retryablehttp.NewClient()
 	gmapsRateLimit = rate.NewLimiter(1, 1)
+
+	// APIKey is the API_KEY served too Google Maps services.
+	// It is set by default to the contents of the GOOGLE_MAPS_API_KEY env var.
+	APIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
 )
 
 type Location struct {
@@ -53,7 +58,9 @@ func Get(ctx context.Context, address string) (Location, error) {
 		return loc, ctx.Err()
 	default:
 	}
-	aURL := strings.Replace(gmapsURL, "{{.Address}}", url.QueryEscape(address), 1)
+	aURL := gmapsURL
+	aURL = strings.Replace(aURL, "{{.Address}}", url.QueryEscape(address), 1)
+	aURL = strings.Replace(aURL, "{{.APIKey}}", url.QueryEscape(APIKey), 1)
 	req, err := retryablehttp.NewRequest("GET", aURL, nil)
 	if err != nil {
 		return loc, errors.Wrap(err, aURL)
