@@ -38,17 +38,18 @@ require (
 	github.com/sony/gobreaker v0.0.0-20181109014844-d928aaea92e1
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
+	github.com/tgulacsi/go/dbcsv v0.0.0-20190510155420-94be4d588fb9 // indirect
 	github.com/tgulacsi/go/dbcsv/csvload v0.0.0-20190201131341-e440493e22f6 // indirect
 	github.com/tgulacsi/statik v0.1.3
 	go4.org v0.0.0-20181109185143-00e24f1b2599 // indirect
 	golang.org/x/crypto v0.0.0-20190128193316-c7b33c32a30b
 	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
-	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20190129075346-302c3dd5f1cc // indirect
-	golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2
+	golang.org/x/text v0.3.1
 	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
-	gopkg.in/goracle.v2 v2.12.7
+	gopkg.in/goracle.v2 v2.15.2
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 	perkeep.org v0.0.0-20181231182150-eb547718cb28
 )
