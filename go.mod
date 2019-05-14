@@ -42,6 +42,7 @@ require (
 	github.com/tgulacsi/go/dbcsv/csvload v0.0.0-20190201131341-e440493e22f6 // indirect
 	github.com/tgulacsi/statik v0.1.3
 	go4.org v0.0.0-20181109185143-00e24f1b2599 // indirect
+	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/goracle.v2 v2.15.2
 	gopkg.in/yaml.v2 v2.2.2 // indirect

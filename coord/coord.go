@@ -62,17 +62,22 @@ func Get(ctx context.Context, address string) (Location, error) {
 	aURL = strings.Replace(aURL, "{{.Address}}", url.QueryEscape(address), 1)
 	aURL = strings.Replace(aURL, "{{.APIKey}}", url.QueryEscape(APIKey), 1)
 	req, err := retryablehttp.NewRequest("GET", aURL, nil)
+
 	if err != nil {
 		return loc, errors.Wrap(err, aURL)
 	}
 	req.Request = req.Request.WithContext(ctx)
-
 	var data mapsResponse
 	for i := 0; i < 10; i++ {
 		if err = gmapsRateLimit.Wait(ctx); err != nil {
 			return loc, err
 		}
 		resp, err := httpClient.Do(req)
+		var sc string
+		if resp != nil {
+			sc = resp.Status
+		}
+		httpClient.Logger.Printf("GET %s: %s/%v", aURL, sc, err)
 		if err != nil {
 			return loc, errors.Wrap(err, aURL)
 		}
