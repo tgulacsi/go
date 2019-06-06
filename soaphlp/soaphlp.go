@@ -168,7 +168,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		}
 		if urlErr, ok := err.(*url.Error); ok {
 			if fault, ok := urlErr.Err.(*soaptrip.SoapFault); ok {
-				return nil, fault
+				return nil, &Fault{SoapFault: *fault}
 			}
 		}
 		return nil, err
@@ -191,3 +191,12 @@ func GetLog(ctx context.Context) func(keyvalue ...interface{}) error {
 	}
 	return DefaultLog
 }
+
+type Fault struct {
+	soaptrip.SoapFault
+}
+
+func (f *Fault) Error() string            { return f.SoapFault.Error() }
+func (f *Fault) FaultCode() string        { return f.SoapFault.FaultCode }
+func (f *Fault) FaultString() string      { return f.SoapFault.FaultString }
+func (f *Fault) Response() *http.Response { return f.SoapFault.Response }
