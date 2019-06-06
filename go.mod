@@ -19,9 +19,6 @@ require (
 	github.com/hhrutter/pdfcpu v0.1.21
 	github.com/jtolds/gls v4.2.1+incompatible // indirect
 	github.com/jung-kurt/gofpdf v1.0.0
-	github.com/klauspost/compress v1.4.1 // indirect
-	github.com/klauspost/cpuid v1.2.0 // indirect
-	github.com/klauspost/pgzip v1.2.1
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect

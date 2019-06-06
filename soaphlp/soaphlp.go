@@ -1,5 +1,5 @@
 /*
-  Copyright 2017 Tamás Gulácsi
+  Copyright 2019 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -168,8 +168,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		}
 		if urlErr, ok := err.(*url.Error); ok {
 			if fault, ok := urlErr.Err.(*soaptrip.SoapFault); ok {
-				b, _ := ioutil.ReadAll(fault.Response.Body)
-				return nil, errors.Wrapf(err, "%v: %v\n%s", fault.FaultCode, fault.FaultString, b)
+				return nil, fault
 			}
 		}
 		return nil, err
