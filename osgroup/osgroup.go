@@ -76,7 +76,6 @@ func GroupName(gid int) (string, error) {
 		return getOrLookup(gid)
 	}
 	actcheck := lastcheck
-	groupsMu.RUnlock()
 
 	groupsMu.Lock()
 	defer groupsMu.Unlock()
