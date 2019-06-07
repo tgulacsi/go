@@ -38,9 +38,7 @@ var (
 const groupFile = "/etc/group"
 
 func getOrLookup(gid int) (string, error) {
-	groupsMu.RLock()
 	name := groups[gid]
-	groupsMu.RUnlock()
 	if name != "" {
 		return name, nil
 	}
@@ -49,9 +47,7 @@ func getOrLookup(gid int) (string, error) {
 		return "", err
 	}
 	name = g.Name
-	groupsMu.Lock()
 	groups[gid] = name
-	groupsMu.Unlock()
 	return name, nil
 }
 
@@ -77,8 +73,6 @@ func GroupName(gid int) (string, error) {
 	}
 	actcheck := lastcheck
 
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
 	if lastcheck != actcheck { // sy was faster
 		return getOrLookup(gid)
 	}
@@ -92,6 +86,8 @@ func GroupName(gid int) (string, error) {
 	}
 
 	// need to reread
+	groupsMu.Lock()
+	defer groupsMu.Unlock()
 	for k := range groups {
 		delete(groups, k)
 	}
