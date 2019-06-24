@@ -19,6 +19,9 @@ require (
 	github.com/hhrutter/pdfcpu v0.1.21
 	github.com/jtolds/gls v4.2.1+incompatible // indirect
 	github.com/jung-kurt/gofpdf v1.0.0
+	github.com/klauspost/compress v1.7.1 // indirect
+	github.com/klauspost/cpuid v1.2.1 // indirect
+	github.com/klauspost/pgzip v1.2.1
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
@@ -39,6 +42,10 @@ require (
 	github.com/tgulacsi/go/dbcsv/csvload v0.0.0-20190201131341-e440493e22f6 // indirect
 	github.com/tgulacsi/statik v0.1.3
 	go4.org v0.0.0-20181109185143-00e24f1b2599 // indirect
+	golang.org/x/crypto v0.0.0-20181030102418-4d3f4d9ffa16
+	golang.org/x/net v0.0.0-20181106065722-10aee1819953
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	golang.org/x/text v0.3.1
 	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/goracle.v2 v2.15.2
