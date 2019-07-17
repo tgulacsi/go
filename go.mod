@@ -16,7 +16,7 @@ require (
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
 	github.com/hashicorp/go-retryablehttp v0.5.3
-	github.com/hhrutter/pdfcpu v0.1.21
+	github.com/hhrutter/pdfcpu v0.2.1
 	github.com/jtolds/gls v4.2.1+incompatible // indirect
 	github.com/jung-kurt/gofpdf v1.0.0
 	github.com/klauspost/compress v1.7.1 // indirect
@@ -52,3 +52,5 @@ require (
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 	perkeep.org v0.0.0-20181231182150-eb547718cb28
 )
+
+go 1.13

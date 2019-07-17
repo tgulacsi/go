@@ -30,19 +30,19 @@ var Log = func(...interface{}) error { return nil }
 
 // MergeFiles merges the given sources into dest.
 func MergeFiles(dest string, sources ...string) error {
-	_, err := api.Merge(api.MergeCommand(sources, dest, pdfcpu.NewDefaultConfiguration()))
+	err := api.MergeFile(sources, dest, pdfcpu.NewDefaultConfiguration())
 	return err
 }
 
 // Split the pdf - each page into different file
 func Split(ctx context.Context, destDir, fn string) error {
-	_, err := api.Split(api.SplitCommand(fn, destDir, 1, pdfcpu.NewDefaultConfiguration()))
+	err := api.SplitFile(fn, destDir, 1, pdfcpu.NewDefaultConfiguration())
 	return err
 }
 
 // PageNum returns the number of pages in the document.
 func PageNum(ctx context.Context, fn string) (int, error) {
-	pdf, err := api.ReadContextFromFile(fn, pdfcpu.NewDefaultConfiguration())
+	pdf, err := api.ReadContextFile(fn)
 	if err != nil {
 		return 0, errors.Wrap(err, "read")
 	}
