@@ -18,6 +18,7 @@ package pdf
 
 import (
 	"context"
+	"os"
 
 	"github.com/pkg/errors"
 
@@ -28,21 +29,32 @@ import (
 // Log is used for logging.
 var Log = func(...interface{}) error { return nil }
 
+var config = pdfcpu.NewDefaultConfiguration()
+
+func init() {
+	config.ValidationMode = pdfcpu.ValidationNone
+}
+
 // MergeFiles merges the given sources into dest.
 func MergeFiles(dest string, sources ...string) error {
-	err := api.MergeFile(sources, dest, pdfcpu.NewDefaultConfiguration())
+	err := api.MergeFile(sources, dest, config)
 	return err
 }
 
 // Split the pdf - each page into different file
 func Split(ctx context.Context, destDir, fn string) error {
-	err := api.SplitFile(fn, destDir, 1, pdfcpu.NewDefaultConfiguration())
+	err := api.SplitFile(fn, destDir, 1, config)
 	return err
 }
 
 // PageNum returns the number of pages in the document.
 func PageNum(ctx context.Context, fn string) (int, error) {
-	pdf, err := api.ReadContextFile(fn)
+	fh, err := os.Open(fn)
+	if err != nil {
+		return 0, err
+	}
+	pdf, err := api.ReadContext(fh, config)
+	fh.Close()
 	if err != nil {
 		return 0, errors.Wrap(err, "read")
 	}
