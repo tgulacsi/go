@@ -48,7 +48,7 @@ require (
 	golang.org/x/text v0.3.1
 	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
-	gopkg.in/goracle.v2 v2.15.2
+	gopkg.in/goracle.v2 v2.18.0
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 	perkeep.org v0.0.0-20181231182150-eb547718cb28
 )

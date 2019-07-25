@@ -18,6 +18,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
 	"flag"
@@ -29,6 +31,7 @@ import (
 	_ "gopkg.in/goracle.v2"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -38,9 +41,10 @@ func main() {
 }
 
 func Main() error {
-	flagSource := flag.String("source", os.Getenv("BRUNO_ID"), "user/passw@sid to read from")
-	flagDest := flag.String("dest", os.Getenv("BRUNO_ID"), "user/passw@sid to write to")
+	flagSource := flag.String("src", os.Getenv("BRUNO_ID"), "user/passw@sid to read from")
+	flagDest := flag.String("dst", os.Getenv("BRUNO_ID"), "user/passw@sid to write to")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
+	flagConc := flag.Int("concurrency", 8, "concurrency")
 
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), strings.Replace(`Usage of {{.prog}}:
@@ -80,25 +84,75 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		}
 	}
 
-	srcTbl := flag.Arg(0)
-	dstTbl := srcTbl
-	var where string
-	if flag.NArg() > 1 {
-		where = flag.Arg(1)
-		if flag.NArg() > 2 {
-			dstTbl = flag.Args()[2]
+	tables := make([]copyTask, 0, 4)
+	if flag.NArg() == 0 || flag.NArg() == 1 && flag.Arg(0) == "-" {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			parts := bytes.SplitN(scanner.Bytes(), []byte(" "), 2)
+			var tbl copyTask
+			if i := bytes.IndexByte(parts[0], '='); i >= 0 {
+				tbl.Src, tbl.Dst = string(parts[0][:i]), string(parts[0][i+1:])
+			} else {
+				tbl.Src = string(parts[0])
+			}
+			if len(parts) > 1 {
+				tbl.Where = string(parts[1])
+			}
+			tables = append(tables, tbl)
 		}
+	} else {
+		tbl := copyTask{Src: flag.Arg(0)}
+		tbl.Dst = tbl.Src
+		if flag.NArg() > 1 {
+			tbl.Where = flag.Arg(1)
+			if flag.NArg() > 2 {
+				tbl.Dst = flag.Args()[2]
+			}
+		}
+		tables = append(tables, tbl)
 	}
-	if where == "" {
-		where = "1=1"
-	}
+
 	srcDB, err := sql.Open("goracle", *flagSource)
 	if err != nil {
 		return errors.Wrap(err, *flagDest)
 	}
 	defer srcDB.Close()
+	dstDB, err := sql.Open("goracle", *flagDest)
+	if err != nil {
+		return errors.Wrap(err, *flagDest)
+	}
+	defer dstDB.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	grp, subCtx := errgroup.WithContext(ctx)
+	concLimit := make(chan struct{}, *flagConc)
+	for _, task := range tables {
+		if task.Src == "" {
+			continue
+		}
+		task := task
+		grp.Go(func() error {
+			select {
+			case concLimit <- struct{}{}:
+				defer func() { <-concLimit }()
+			case <-subCtx.Done():
+				return subCtx.Err()
+			}
+			return One(subCtx, dstDB, srcDB, task)
+		})
+	}
+	return grp.Wait()
+}
+
+type copyTask struct {
+	Src, Dst, Where string
+}
+
+func One(ctx context.Context, dstDB, srcDB *sql.DB, task copyTask) error {
+	if task.Dst == "" {
+		task.Dst = task.Src
+	}
 	srcTx, err := srcDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		log.Printf("[WARN] Read-Only transaction: %v", err)
@@ -107,36 +161,31 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		}
 	}
 	defer srcTx.Rollback()
-	srcCols, err := getColumns(ctx, srcTx, srcTbl)
+	srcCols, err := getColumns(ctx, srcTx, task.Src)
 	if err != nil {
 		return err
 	}
 
-	dstDB, err := sql.Open("goracle", *flagDest)
-	if err != nil {
-		return errors.Wrap(err, *flagDest)
-	}
-	defer dstDB.Close()
 	dstTx, err := dstDB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer dstTx.Rollback()
 
-	dstCols, err := getColumns(ctx, dstTx, dstTbl)
+	dstCols, err := getColumns(ctx, dstTx, task.Dst)
 	if err != nil {
 		return err
 	}
 
 	var srcQry, dstQry, ph strings.Builder
 	srcQry.WriteString("SELECT ")
-	fmt.Fprintf(&dstQry, "INSERT INTO %s (", dstTbl)
+	fmt.Fprintf(&dstQry, "INSERT INTO %s (", task.Dst)
 	var i int
 	for k := range srcCols {
 		if _, ok := dstCols[k]; !ok {
 			delete(srcCols, k)
 		}
-		if i == 0 {
+		if i != 0 {
 			srcQry.WriteByte(',')
 			dstQry.WriteByte(',')
 			ph.WriteByte(',')
@@ -146,12 +195,43 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		dstQry.WriteString(k)
 		fmt.Fprintf(&ph, ":%d", i)
 	}
-	fmt.Fprintf(&srcQry, " FROM %s WHERE %s", srcTbl, where)
+	fmt.Fprintf(&srcQry, " FROM %s", task.Src)
+	if task.Where != "" {
+		fmt.Fprintf(&srcQry, " WHERE %s", task.Where)
+	}
 	fmt.Fprintf(&dstQry, ") VALUES (%s)", ph.String())
 
-	log.Println(srcQry)
-	log.Println(dstQry)
+	stmt, err := dstTx.PrepareContext(ctx, dstQry.String())
+	if err != nil {
+		return errors.Wrap(err, dstQry.String())
+	}
+	defer stmt.Close()
+	log.Println(dstQry.String())
 
+	log.Println(srcQry.String())
+	rows, err := srcTx.QueryContext(ctx, srcQry.String())
+	if err != nil {
+		return errors.Wrap(err, srcQry.String())
+	}
+	defer rows.Close()
+
+	values := make([]interface{}, i)
+	for i := range values {
+		var x interface{}
+		values[i] = &x
+	}
+	for rows.Next() {
+		if err = rows.Scan(values...); err != nil {
+			return err
+		}
+		if _, err = stmt.ExecContext(ctx, values...); err != nil {
+			return err
+		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return dstTx.Commit()
 }
 
