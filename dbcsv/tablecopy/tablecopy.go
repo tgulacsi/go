@@ -27,6 +27,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	_ "gopkg.in/goracle.v2"
 
@@ -43,8 +44,10 @@ func main() {
 func Main() error {
 	flagSource := flag.String("src", os.Getenv("BRUNO_ID"), "user/passw@sid to read from")
 	flagDest := flag.String("dst", os.Getenv("BRUNO_ID"), "user/passw@sid to write to")
+	flagReplace := flag.String("replace", "", "replace FIELD_NAME=WITH_VALUE,OTHER=NEXT")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
 	flagConc := flag.Int("concurrency", 8, "concurrency")
+	flagTruncate := flag.Bool("truncate", false, "truncate dest tables (must have different name)")
 
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), strings.Replace(`Usage of {{.prog}}:
@@ -65,7 +68,6 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 	flag.Parse()
 
 	var Log func(...interface{}) error
-	_ = Log
 	if *flagVerbose {
 		Log = func(keyvals ...interface{}) error {
 			if len(keyvals)%2 != 0 {
@@ -83,13 +85,25 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 			return nil
 		}
 	}
+	var replace map[string]string
+	if *flagReplace != "" {
+		fields := strings.Split(*flagReplace, ",")
+		replace = make(map[string]string, len(fields))
+		for _, f := range fields {
+			if i := strings.IndexByte(f, '='); i < 0 {
+				continue
+			} else {
+				replace[strings.ToUpper(f[:i])] = f[i+1:]
+			}
+		}
+	}
 
 	tables := make([]copyTask, 0, 4)
 	if flag.NArg() == 0 || flag.NArg() == 1 && flag.Arg(0) == "-" {
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			parts := bytes.SplitN(scanner.Bytes(), []byte(" "), 2)
-			var tbl copyTask
+			tbl := copyTask{Replace: replace, Truncate: *flagTruncate}
 			if i := bytes.IndexByte(parts[0], '='); i >= 0 {
 				tbl.Src, tbl.Dst = string(parts[0][:i]), string(parts[0][i+1:])
 			} else {
@@ -101,8 +115,7 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 			tables = append(tables, tbl)
 		}
 	} else {
-		tbl := copyTask{Src: flag.Arg(0)}
-		tbl.Dst = tbl.Src
+		tbl := copyTask{Src: flag.Arg(0), Replace: replace, Truncate: *flagTruncate}
 		if flag.NArg() > 1 {
 			tbl.Where = flag.Arg(1)
 			if flag.NArg() > 2 {
@@ -127,6 +140,34 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 
 	grp, subCtx := errgroup.WithContext(ctx)
 	concLimit := make(chan struct{}, *flagConc)
+	srcTx, err := srcDB.BeginTx(subCtx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		log.Printf("[WARN] Read-Only transaction: %v", err)
+		if srcTx, err = srcDB.BeginTx(subCtx, nil); err != nil {
+			return errors.Wrap(err, "beginTx")
+		}
+	}
+	defer srcTx.Rollback()
+
+	dstTx, err := dstDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer dstTx.Rollback()
+
+	for _, task := range tables {
+		if task.Src == "" {
+			continue
+		}
+		if task.Dst == "" {
+			task.Dst = task.Src
+		} else if !strings.EqualFold(task.Dst, task.Src) {
+			dstDB.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM %s WHERE 1=0", task.Dst, task.Src))
+			if task.Truncate {
+				dstDB.ExecContext(ctx, "TRUNCATE TABLE "+task.Dst)
+			}
+		}
+	}
 	for _, task := range tables {
 		if task.Src == "" {
 			continue
@@ -139,51 +180,56 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 			case <-subCtx.Done():
 				return subCtx.Err()
 			}
-			return One(subCtx, dstDB, srcDB, task)
+			start := time.Now()
+			n, err := One(subCtx, dstTx, srcTx, task, Log)
+			dur := time.Since(start)
+			log.Println(task.Dst, n, dur)
+			return err
 		})
 	}
-	return grp.Wait()
+	if err := grp.Wait(); err != nil {
+		return err
+	}
+	return dstTx.Commit()
 }
 
 type copyTask struct {
 	Src, Dst, Where string
+	Replace         map[string]string
+	Truncate        bool
 }
 
-func One(ctx context.Context, dstDB, srcDB *sql.DB, task copyTask) error {
+func One(ctx context.Context, dstTx, srcTx *sql.Tx, task copyTask, Log func(...interface{}) error) (int64, error) {
 	if task.Dst == "" {
 		task.Dst = task.Src
 	}
-	srcTx, err := srcDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		log.Printf("[WARN] Read-Only transaction: %v", err)
-		if srcTx, err = srcDB.BeginTx(ctx, nil); err != nil {
-			return errors.Wrap(err, "beginTx")
-		}
-	}
-	defer srcTx.Rollback()
+	var n int64
 	srcCols, err := getColumns(ctx, srcTx, task.Src)
 	if err != nil {
-		return err
+		return n, err
 	}
-
-	dstTx, err := dstDB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer dstTx.Rollback()
 
 	dstCols, err := getColumns(ctx, dstTx, task.Dst)
 	if err != nil {
-		return err
+		return n, err
+	}
+	m := make(map[string]struct{}, len(dstCols))
+	for _, c := range dstCols {
+		m[c] = struct{}{}
 	}
 
 	var srcQry, dstQry, ph strings.Builder
 	srcQry.WriteString("SELECT ")
 	fmt.Fprintf(&dstQry, "INSERT INTO %s (", task.Dst)
 	var i int
-	for k := range srcCols {
-		if _, ok := dstCols[k]; !ok {
-			delete(srcCols, k)
+	tbr := make([]string, 0, len(task.Replace))
+	for _, k := range srcCols {
+		if _, ok := m[k]; !ok {
+			continue
+		}
+		if _, ok := task.Replace[k]; ok {
+			tbr = append(tbr, k)
+			continue
 		}
 		if i != 0 {
 			srcQry.WriteByte(',')
@@ -195,6 +241,13 @@ func One(ctx context.Context, dstDB, srcDB *sql.DB, task copyTask) error {
 		dstQry.WriteString(k)
 		fmt.Fprintf(&ph, ":%d", i)
 	}
+	for _, k := range tbr {
+		dstQry.WriteByte(',')
+		dstQry.WriteString(k)
+		ph.WriteString(",'")
+		ph.WriteString(strings.ReplaceAll(task.Replace[k], "'", "''"))
+		ph.WriteByte('\'')
+	}
 	fmt.Fprintf(&srcQry, " FROM %s", task.Src)
 	if task.Where != "" {
 		fmt.Fprintf(&srcQry, " WHERE %s", task.Where)
@@ -203,15 +256,17 @@ func One(ctx context.Context, dstDB, srcDB *sql.DB, task copyTask) error {
 
 	stmt, err := dstTx.PrepareContext(ctx, dstQry.String())
 	if err != nil {
-		return errors.Wrap(err, dstQry.String())
+		return n, errors.Wrap(err, dstQry.String())
 	}
 	defer stmt.Close()
-	log.Println(dstQry.String())
+	if Log != nil {
+		Log("src", dstQry.String())
+		Log("dst", srcQry.String())
+	}
 
-	log.Println(srcQry.String())
 	rows, err := srcTx.QueryContext(ctx, srcQry.String())
 	if err != nil {
-		return errors.Wrap(err, srcQry.String())
+		return n, errors.Wrap(err, srcQry.String())
 	}
 	defer rows.Close()
 
@@ -222,34 +277,25 @@ func One(ctx context.Context, dstDB, srcDB *sql.DB, task copyTask) error {
 	}
 	for rows.Next() {
 		if err = rows.Scan(values...); err != nil {
-			return err
+			return n, err
 		}
 		if _, err = stmt.ExecContext(ctx, values...); err != nil {
-			return err
+			return n, err
 		}
+		n++
 	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return dstTx.Commit()
+	return n, nil
 }
 
-func getColumns(ctx context.Context, tx *sql.Tx, tbl string) (map[string]struct{}, error) {
+func getColumns(ctx context.Context, tx *sql.Tx, tbl string) ([]string, error) {
 	qry := "SELECT * FROM " + tbl + " WHERE 1=0"
 	rows, err := tx.QueryContext(ctx, qry)
 	if err != nil {
 		return nil, errors.Wrap(err, qry)
 	}
-	colNames, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	m := make(map[string]struct{}, len(colNames))
-	for _, c := range colNames {
-		m[c] = struct{}{}
-	}
-	return m, err
+	cols, err := rows.Columns()
+	rows.Close()
+	return cols, err
 }
 
 // vim: se noet fileencoding=utf-8:
