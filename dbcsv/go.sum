@@ -32,3 +32,7 @@ golang.org/x/text v0.3.2/go.mod h1:bEr9sfX3Q8Zfm5fL9x+3itogRgK3+ptLWKqgva+5dAk=
 golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=
 gopkg.in/goracle.v2 v2.16.3 h1:XNxXVPxdd+lrubuD9dBte5cM0FKb57s6B0+UdvT86m4=
 gopkg.in/goracle.v2 v2.16.3/go.mod h1:QhfGFGWSfZKBnBWnAkjd5GreYK1tan9ikkA7BMirttE=
+gopkg.in/goracle.v2 v2.18.2 h1:/6fpJJdlQ4BNgCo/13T+8KX5ZINGG0AAne764srZQr0=
+gopkg.in/goracle.v2 v2.18.2/go.mod h1:aNUjhHzjcCbpbBO97I3V+czfy5QFKLMfRtR6sQXt6LU=
+gopkg.in/goracle.v2 v2.18.5 h1:gC0AS6Hv3lqoSoCADC3RMOLUgYKbnKlxj9ua/3zcNsA=
+gopkg.in/goracle.v2 v2.18.5/go.mod h1:aNUjhHzjcCbpbBO97I3V+czfy5QFKLMfRtR6sQXt6LU=

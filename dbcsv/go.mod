@@ -7,5 +7,5 @@ require (
 	github.com/pkg/errors v0.8.0
 	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
 	golang.org/x/text v0.3.2
-	gopkg.in/goracle.v2 v2.16.3
+	gopkg.in/goracle.v2 v2.18.5
 )
