@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2019 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"sync"
 	"text/template" // yes, no need for context-aware escapes
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 
 	"github.com/rakyll/statik/fs"
 	_ "github.com/tgulacsi/go/coord/statik"
@@ -73,7 +73,7 @@ func (in *Interactive) RenderHTML(w io.Writer, address, callbackURL string) erro
 		APIKey:         APIKey,
 	}
 	if err := tmpl.Execute(w, sp); err != nil {
-		return errors.Wrapf(err, "with %#v", sp)
+		return errors.Errorf("with %#v: %w", sp, err)
 	}
 	return nil
 }

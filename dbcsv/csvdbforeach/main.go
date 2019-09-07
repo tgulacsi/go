@@ -19,7 +19,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dbcsv"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
@@ -182,7 +181,7 @@ Usage:
 	dsn := os.ExpandEnv(*flagConnect)
 	db, err := sql.Open("goracle", dsn)
 	if err != nil {
-		log.Fatal(errors.Wrap(err, dsn))
+		log.Fatalf("%s: %w", dsn, err)
 	}
 	defer db.Close()
 

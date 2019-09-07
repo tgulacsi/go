@@ -15,7 +15,7 @@ import (
 	"unicode"
 
 	"github.com/kylelemons/godebug/diff"
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 var (
@@ -188,17 +188,17 @@ func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expe
 	}
 	cu.pos++
 	if len(cu.Expects) == 0 {
-		return nil, errors.Wrapf(ErrQueryMismatch, "%d. EXTRA query %q", cu.pos, qry)
+		return nil, errors.Errorf("%d. EXTRA query %q: %w", cu.pos, qry, ErrQueryMismatch)
 	}
 	exp := cu.Expects[0]
 	cu.Expects = cu.Expects[1:]
 	Debug("pop expect qry=%q, remains %d.", exp.Qry, len(cu.Expects))
 	if !exp.Qry.MatchString(qry) {
-		return exp, errors.Wrapf(ErrQueryMismatch, "%d. awaited %q, \ngot\n%q", cu.pos, exp.Qry, qry)
+		return exp, errors.Errorf("%d. awaited %q, \ngot\n%q: %w", cu.pos, exp.Qry, qry, ErrQueryMismatch)
 	}
 	if len(args) != len(exp.Args) {
 		df := diff.Diff(verboseString(exp.Args), verboseString(args))
-		return exp, errors.Wrapf(ErrArgsMismatch, "%d. got %d, want %d:\n%s", cu.pos, len(args), len(exp.Args), df)
+		return exp, errors.Errorf("%d. got %d, want %d:\n%s: %w", cu.pos, len(args), len(exp.Args), df, ErrArgsMismatch)
 	}
 	// filter ExpectAny
 	expArgsF := make([]interface{}, 0, len(exp.Args))
@@ -213,7 +213,7 @@ func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expe
 	if !reflect.DeepEqual(argsF, expArgsF) {
 		df := diff.Diff(verboseString(expArgsF), verboseString(argsF))
 		if df != "" {
-			return exp, errors.Wrapf(ErrArgsMismatch, "%d. %s", cu.pos, df)
+			return exp, errors.Errorf("%d. %s: %w", cu.pos, df, ErrArgsMismatch)
 		}
 	}
 

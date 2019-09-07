@@ -31,8 +31,8 @@ import (
 
 	_ "gopkg.in/goracle.v2"
 
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -127,12 +127,12 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 
 	srcDB, err := sql.Open("goracle", *flagSource)
 	if err != nil {
-		return errors.Wrap(err, *flagDest)
+		return errors.Errorf("%s: %w", *flagDest, err)
 	}
 	defer srcDB.Close()
 	dstDB, err := sql.Open("goracle", *flagDest)
 	if err != nil {
-		return errors.Wrap(err, *flagDest)
+		return errors.Errorf("%s: %w", *flagDest, err)
 	}
 	defer dstDB.Close()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -144,7 +144,7 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 	if err != nil {
 		log.Printf("[WARN] Read-Only transaction: %v", err)
 		if srcTx, err = srcDB.BeginTx(subCtx, nil); err != nil {
-			return errors.Wrap(err, "beginTx")
+			return errors.Errorf("%s: %w", "beginTx", err)
 		}
 	}
 	defer srcTx.Rollback()
@@ -256,7 +256,7 @@ func One(ctx context.Context, dstTx, srcTx *sql.Tx, task copyTask, Log func(...i
 
 	stmt, err := dstTx.PrepareContext(ctx, dstQry.String())
 	if err != nil {
-		return n, errors.Wrap(err, dstQry.String())
+		return n, errors.Errorf("%s: %w", dstQry.String(), err)
 	}
 	defer stmt.Close()
 	if Log != nil {
@@ -266,7 +266,7 @@ func One(ctx context.Context, dstTx, srcTx *sql.Tx, task copyTask, Log func(...i
 
 	rows, err := srcTx.QueryContext(ctx, srcQry.String())
 	if err != nil {
-		return n, errors.Wrap(err, srcQry.String())
+		return n, errors.Errorf("%s: %w", srcQry.String(), err)
 	}
 	defer rows.Close()
 
@@ -291,7 +291,7 @@ func getColumns(ctx context.Context, tx *sql.Tx, tbl string) ([]string, error) {
 	qry := "SELECT * FROM " + tbl + " WHERE 1=0"
 	rows, err := tx.QueryContext(ctx, qry)
 	if err != nil {
-		return nil, errors.Wrap(err, qry)
+		return nil, errors.Errorf("%s: %w", qry, err)
 	}
 	cols, err := rows.Columns()
 	rows.Close()

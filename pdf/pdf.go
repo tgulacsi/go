@@ -20,10 +20,10 @@ import (
 	"context"
 	"os"
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 
-	"github.com/hhrutter/pdfcpu/pkg/api"
-	"github.com/hhrutter/pdfcpu/pkg/pdfcpu"
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
 )
 
 // Log is used for logging.
@@ -56,11 +56,11 @@ func PageNum(ctx context.Context, fn string) (int, error) {
 	pdf, err := api.ReadContext(fh, config)
 	fh.Close()
 	if err != nil {
-		return 0, errors.Wrap(err, "read")
+		return 0, errors.Errorf("read: %w", err)
 	}
 	if pdf.PageCount != 0 {
 		return pdf.PageCount, nil
 	}
 	err = pdfcpu.OptimizeXRefTable(pdf)
-	return pdf.PageCount, errors.Wrap(err, "optimize")
+	return pdf.PageCount, errors.Errorf("optimize: %w", err)
 }

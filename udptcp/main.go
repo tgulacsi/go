@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 		log.Println("Listening on " + *flagListen)
 		ln, err := net.Listen(listenType, listenAddr)
 		if err != nil {
-			log.Fatal(errors.Wrap(err, *flagListen))
+			log.Fatal(errors.Errorf("%s: %w", *flagListen, err))
 		}
 		for {
 			conn, err := ln.Accept()
@@ -42,13 +42,13 @@ func main() {
 	}
 	lAddr, err := net.ResolveUDPAddr(listenType, listenAddr)
 	if err != nil {
-		log.Fatal(errors.Wrap(err, *flagListen))
+		log.Fatal(errors.Errorf("%s: %w", *flagListen, err))
 	}
 	log.Println("Listening on "+listenType+":", lAddr)
 	for {
 		conn, err := net.ListenUDP(listenType, lAddr)
 		if err != nil {
-			log.Println(errors.Wrapf(err, "%s:%v", listenType, lAddr))
+			log.Printf("%s:%v: %w", listenType, lAddr, err)
 		}
 		log.Println(conn, err)
 		if conn != nil {
@@ -78,7 +78,7 @@ func connForwarder(typ, addr string) func(ctx context.Context, conn net.Conn) er
 		if up == nil {
 			var err error
 			if up, err = net.Dial(typ, addr); err != nil {
-				return errors.Wrap(err, typ+":"+addr)
+				return errors.Errorf("%s:%s: %w", typ, addr, err)
 			}
 			conns.Store(key, up)
 		}

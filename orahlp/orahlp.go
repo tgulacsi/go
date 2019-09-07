@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dber"
+	errors "golang.org/x/xerrors"
 )
 
 // SplitDSN splits the DSN (user/passw@sid).
@@ -88,7 +88,7 @@ BEGIN
   :2 := res;
   END;`, qry, sql.Out{Dest: &res},
 	); err != nil {
-		return nil, errors.Wrap(err, qry)
+		return nil, errors.Errorf("%s: %w", qry, err)
 	}
 	cr := csv.NewReader(strings.NewReader(res))
 	cr.FieldsPerRecord = 9
@@ -107,7 +107,7 @@ BEGIN
 		var col Column
 		for i, d := range []*int{&col.Type, &col.Length, &col.Precision, &col.Scale, &nullable, &col.CharsetID, &col.CharsetForm} {
 			if *d, err = strconv.Atoi(record[i]); err != nil {
-				return cols, errors.Wrapf(err, "parsing %q (%d.)", record[i], i)
+				return cols, errors.Errorf("parsing %q (%d.): %w", record[i], i, err)
 			}
 		}
 		col.Nullable = nullable == 1
@@ -134,7 +134,7 @@ func GetVersion(db dber.Queryer) (Version, error) {
 	var v Version
 	if _, err := fmt.Sscanf(s.String, "%d.%d.%d.%d.%d",
 		&v.Major, &v.Maintenance, &v.AppServer, &v.Component, &v.Platform); err != nil {
-		return v, errors.Wrapf(err, "scan version number %q", s.String)
+		return v, errors.Errorf("scan version number %q: %w", s.String, err)
 	}
 	return v, nil
 }

@@ -28,8 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/text"
+	errors "golang.org/x/xerrors"
 	//"golang.org/x/text/encoding/ianaindex"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
@@ -127,11 +127,11 @@ func ParseAddress(address string) (*Address, error) {
 	address = wsRepl.Replace(address)
 	maddr, err := AddressParser.Parse(address)
 	if err != nil {
-		if strings.HasSuffix(errors.Cause(err).Error(), "no angle-addr") &&
+		if strings.HasSuffix(errors.Unwrap(err).Error(), "no angle-addr") &&
 			strings.Contains(address, "<") && strings.Contains(address, ">") {
 			maddr, err = AddressParser.Parse(address[strings.LastIndex(address, "<"):])
 		} else {
-			err = errors.Wrap(err, address)
+			err = errors.Errorf("%s: %w", address, err)
 		}
 	}
 	if maddr == nil {

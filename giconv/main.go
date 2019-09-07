@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pkg/errors"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/htmlindex"
+	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -44,6 +44,6 @@ func get(name string) (encoding.Encoding, error) {
 	case "UTF8", "UTF-8":
 		return encoding.Nop, nil
 	default:
-		return encoding.Nop, errors.Wrap(err, name)
+		return encoding.Nop, errors.Errorf("%s: %w", name, err)
 	}
 }
