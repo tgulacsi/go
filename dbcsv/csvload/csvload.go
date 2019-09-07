@@ -20,9 +20,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dbcsv"
 	"golang.org/x/sync/errgroup"
+	errors "golang.org/x/xerrors"
 
 	_ "gopkg.in/goracle.v2"
 )
@@ -100,7 +100,7 @@ func Main() error {
 	}
 	db, err := sql.Open("goracle", *flagDB)
 	if err != nil {
-		return errors.Wrap(err, *flagDB)
+		return errors.Errorf("%s: %w", *flagDB, err)
 	}
 	defer db.Close()
 
@@ -233,7 +233,7 @@ func Main() error {
 			defer tx.Rollback()
 			stmt, prepErr := tx.Prepare(qry)
 			if prepErr != nil {
-				return errors.Wrap(prepErr, qry)
+				return errors.Errorf("%s: %w", qry, prepErr)
 			}
 			nCols := len(columns)
 			cols := make([][]string, nCols)
@@ -278,7 +278,10 @@ func Main() error {
 							}
 						}
 
-						return errors.Wrapf(err, columns[i].Name)
+						if err != nil {
+							return errors.Errorf("%s: %w", columns[i].Name, err)
+						}
+						return nil
 					}
 				}
 
@@ -291,7 +294,7 @@ func Main() error {
 					atomic.AddInt64(&inserted, int64(len(chunk)))
 					continue
 				}
-				err = errors.Wrapf(err, "%s", qry)
+				err = errors.Errorf("%s: %w", qry, err)
 				log.Println(err)
 
 				rowsR := make([]reflect.Value, len(rowsI))
@@ -311,7 +314,7 @@ func Main() error {
 						R2.Index(i).Set(r.Index(j))
 					}
 					if _, err = stmt.Exec(rowsI2...); err != nil {
-						err = errors.Wrapf(err, "%s, %q", qry, rowsI2)
+						err = errors.Errorf("%s, %q: %w", qry, rowsI2, err)
 						log.Println(err)
 						return err
 					}
@@ -418,12 +421,12 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 	var n int64
 	var cols []Column
 	if err := db.QueryRowContext(ctx, qry, tbl).Scan(&n); err != nil {
-		return cols, errors.Wrap(err, qry)
+		return cols, errors.Errorf("%s: %w", qry, err)
 	}
 	if n > 0 && truncate {
 		qry = `TRUNCATE TABLE ` + tbl
 		if _, err := db.ExecContext(ctx, qry); err != nil {
-			return cols, errors.Wrap(err, qry)
+			return cols, errors.Errorf("%s: %w", qry, err)
 		}
 	}
 
@@ -465,20 +468,20 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 				cols[i].Type = String
 			}
 		}
-			for row := range rows {
-				for i, v := range row.Values {
-					if len(v) > cols[i].Length {
-						cols[i].Length = len(v)
-					}
-					if cols[i].Type == String {
-						continue
-					}
-					typ := typeOf(v)
-					if cols[i].Type == Unknown {
-						cols[i].Type = typ
-					} else if typ != cols[i].Type {
-						cols[i].Type = String
-					}
+		for row := range rows {
+			for i, v := range row.Values {
+				if len(v) > cols[i].Length {
+					cols[i].Length = len(v)
+				}
+				if cols[i].Type == String {
+					continue
+				}
+				typ := typeOf(v)
+				if cols[i].Type == Unknown {
+					cols[i].Type = typ
+				} else if typ != cols[i].Type {
+					cols[i].Type = String
+				}
 			}
 		}
 		var buf bytes.Buffer
@@ -505,7 +508,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 		qry = buf.String()
 		log.Println(qry)
 		if _, err := db.Exec(qry); err != nil {
-			return cols, errors.Wrap(err, qry)
+			return cols, errors.Errorf("%s: %w", qry, err)
 		}
 		cols = cols[:0]
 	}
@@ -515,7 +518,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
   ORDER BY column_id`
 	tRows, err := db.QueryContext(ctx, qry, tbl)
 	if err != nil {
-		return cols, errors.Wrap(err, qry)
+		return cols, errors.Errorf("%s: %w", qry, err)
 	}
 	defer tRows.Close()
 	for tRows.Next() {
@@ -568,7 +571,7 @@ func (c Column) FromString(ss []string) (interface{}, error) {
 			}
 			var err error
 			if res[i], err = time.Parse(dateFormat[:len(s)], s); err != nil {
-				return res, errors.Wrapf(err, "%d. %q", i, s)
+				return res, errors.Errorf("%d. %q: %w", i, s, err)
 			}
 		}
 		return res, nil
@@ -621,7 +624,7 @@ func getColumns(ctx context.Context, db *sql.DB, tbl string) ([]Column, error) {
 	const qry = "SELECT column_name, data_type, data_length, data_precision, data_scale, nullable FROM user_tab_cols WHERE table_name = UPPER(:1) ORDER BY column_id"
 	rows, err := db.QueryContext(ctx, qry, tbl)
 	if err != nil {
-		return nil, errors.Wrap(err, qry)
+		return nil, errors.Errorf("%s: %w", qry, err)
 	}
 	defer rows.Close()
 	var cols []Column

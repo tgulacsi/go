@@ -25,8 +25,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
+	errors "golang.org/x/xerrors"
 
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
@@ -64,7 +64,7 @@ func Get(ctx context.Context, address string) (Location, error) {
 	req, err := retryablehttp.NewRequest("GET", aURL, nil)
 
 	if err != nil {
-		return loc, errors.Wrap(err, aURL)
+		return loc, errors.Errorf("%s: %w", aURL, err)
 	}
 	req.Request = req.Request.WithContext(ctx)
 	var data mapsResponse
@@ -77,19 +77,19 @@ func Get(ctx context.Context, address string) (Location, error) {
 		if resp != nil {
 			sc = resp.Status
 		}
-		httpClient.Logger.Printf("GET %s: %s/%v", aURL, sc, err)
+		httpClient.Logger.(retryablehttp.Logger).Printf("GET %s: %s/%v", aURL, sc, err)
 		if err != nil {
-			return loc, errors.Wrap(err, aURL)
+			return loc, errors.Errorf("%s: %w", aURL, err)
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode > 299 {
-			return loc, errors.Wrap(errors.New(resp.Status), aURL)
+			return loc, errors.Errorf("%s: %w", aURL, errors.New(resp.Status))
 		}
 
 		if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
-			return loc, errors.Wrapf(err, "decode")
+			return loc, errors.Errorf("decode: %w", err)
 		}
-		httpClient.Logger.Printf("status=%q", data.Status)
+		httpClient.Logger.(retryablehttp.Logger).Printf("status=%q", data.Status)
 		if data.Status != "OVER_QUERY_LIMIT" {
 			gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
 			break

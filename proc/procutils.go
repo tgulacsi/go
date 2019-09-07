@@ -30,7 +30,7 @@ import (
 var Log = func(keyvals ...interface{}) error { return nil }
 
 // ErrTimedOut is an error for child timeout
-var ErrTimedOut = errors.New("Child timed out.")
+var ErrTimedOut = errors.New("child timed out")
 
 // IntTimeout is the duration to wait before Kill after Int
 var IntTimeout = 3 * time.Second

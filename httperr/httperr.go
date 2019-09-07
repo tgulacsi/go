@@ -8,7 +8,7 @@ package httperr
 import (
 	"net/http"
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 var _ = error(httpError{})

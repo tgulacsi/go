@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/dbcsv"
+	errors "golang.org/x/xerrors"
 )
 
 const (
@@ -68,7 +68,7 @@ func dbExec(db *sql.DB, fun string, fixParams [][2]string, retOk int64, rows <-c
 			v, convErr := conv(s)
 			if convErr != nil {
 				log.Printf("row=%#v error=%v", row, convErr)
-				return n, errors.Wrapf(convErr, "convert %q (row %d, col %d)", s, row.Line, i+1)
+				return n, errors.Errorf("convert %q (row %d, col %d): %w", s, row.Line, i+1, convErr)
 			}
 			values = append(values, v)
 		}
@@ -80,7 +80,7 @@ func dbExec(db *sql.DB, fun string, fixParams [][2]string, retOk int64, rows <-c
 		if _, err = stmt.Exec(values...); err != nil {
 			log.Printf("values=%d ParamCount=%d", len(values), st.ParamCount)
 			log.Printf("execute %q with row %d (%#v): %v", st.Qry, row.Line, values, err)
-			return n, errors.Wrapf(err, "qry=%q params=%#v", st.Qry, values)
+			return n, errors.Errorf("qry=%q params=%#v: %w", st.Qry, values, err)
 		}
 		n++
 		if st.Returns && values[0] != nil {
@@ -98,8 +98,8 @@ func dbExec(db *sql.DB, fun string, fixParams [][2]string, retOk int64, rows <-c
 				cw.Flush()
 				stdout.Write(buf.Bytes())
 				if oneTx {
-					return n, errors.New(fmt.Sprintf("returned %v (%s) for line %d (%q).",
-						ret, out, row.Line, row.Values))
+					return n, errors.Errorf("returned %v (%s) for line %d (%q)",
+						ret, out, row.Line, row.Values)
 				}
 			}
 		}
@@ -190,12 +190,12 @@ func getQuery(db querier, fun string, fixParams [][2]string) (Statement, error) 
 		qry += "all_arguments WHERE owner = UPPER(:1) AND package_name = UPPER(:2) AND object_name = UPPER(:3)"
 		params = append(params, parts[0], parts[1], parts[2])
 	default:
-		return st, errors.New("bad function name: " + fun)
+		return st, errors.Errorf("bad function name: %s", fun)
 	}
 	qry += " ORDER BY sequence"
 	rows, err := db.Query(qry, params...)
 	if err != nil {
-		return st, errors.Wrapf(err, qry)
+		return st, errors.Errorf("%s: %w", qry, err)
 	}
 	defer rows.Close()
 
@@ -218,10 +218,10 @@ func getQuery(db querier, fun string, fixParams [][2]string) (Statement, error) 
 		args = append(args, arg)
 	}
 	if err = rows.Err(); err != nil {
-		return st, errors.Wrap(err, qry)
+		return st, errors.Errorf("%s: %w", qry, err)
 	}
 	if len(args) == 0 {
-		return st, errors.New(fun + " has no arguments!")
+		return st, errors.Errorf("%s has no arguments!", fun)
 	}
 
 	st.Qry = "BEGIN "
