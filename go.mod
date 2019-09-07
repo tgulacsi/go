@@ -36,7 +36,6 @@ require (
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20181108003508-044398e4856c // indirect
 	github.com/sony/gobreaker v0.0.0-20181109014844-d928aaea92e1
-	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
 	github.com/tgulacsi/go/dbcsv v0.0.0-20190510155420-94be4d588fb9 // indirect
 	github.com/tgulacsi/go/dbcsv/csvload v0.0.0-20190201131341-e440493e22f6 // indirect

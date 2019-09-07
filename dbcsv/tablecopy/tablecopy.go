@@ -183,7 +183,7 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 			start := time.Now()
 			n, err := One(subCtx, dstTx, srcTx, task, Log)
 			dur := time.Since(start)
-			log.Println(task.Dst, n, dur)
+			log.Println(task.Src, n, dur)
 			return err
 		})
 	}
@@ -280,7 +280,7 @@ func One(ctx context.Context, dstTx, srcTx *sql.Tx, task copyTask, Log func(...i
 			return n, err
 		}
 		if _, err = stmt.ExecContext(ctx, values...); err != nil {
-			return n, err
+			return n, errors.Wrapf(err, "%s %v", dstQry.String(), values)
 		}
 		n++
 	}
