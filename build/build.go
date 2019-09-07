@@ -17,6 +17,7 @@ limitations under the License.
 package build
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"time"
@@ -31,13 +32,13 @@ func TagLDFlags(flags []string, dest string) []string {
 	if len(b) == 0 {
 		tag = "dev"
 	} else {
-		tag = string(b)
+		tag = string(bytes.TrimSpace(b))
 	}
 	b, _ = exec.Command("git", "rev-parse", "--short", "HEAD").Output()
 	for k, v := range map[string]string{
 		"gitTag":     tag,
 		"timestamp":  time.Now().Format(time.RFC3339),
-		"commitHash": string(b),
+		"commitHash": string(bytes.TrimSpace(b)),
 	} {
 		flags = append(flags, fmt.Sprintf(`-X "%s.%s=%s"`, dest, k, v))
 	}
