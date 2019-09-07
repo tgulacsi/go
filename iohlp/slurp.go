@@ -62,4 +62,4 @@ type nilCloser struct{}
 
 var nilClose nilCloser
 
-func (_ nilCloser) Close() error { return nil }
+func (nilCloser) Close() error { return nil }
