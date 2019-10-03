@@ -48,7 +48,7 @@ func Main() error {
 	}
 
 	cfg := &dbcsv.Config{}
-	flagDB := flag.String("dsn", "$BRUNO_ID", "database to connect to")
+	flagDB := flag.String("connect", "$BRUNO_ID", "database to connect to")
 	flag.StringVar(&cfg.Charset, "charset", encName, "input charset")
 	flagTruncate := flag.Bool("truncate", false, "truncate table")
 	flagTablespace := flag.String("tablespace", "DATA", "tablespace to create table in")
@@ -62,6 +62,7 @@ func Main() error {
 	flagMemProf := flag.String("memprofile", "", "file to output memory profile to")
 	flagCPUProf := flag.String("cpuprofile", "", "file to output CPU profile to")
 	flagJustPrint := flag.Bool("just-print", false, "just print the INSERTs")
+	flagCopy := flag.String("copy", "", "copy this table's structure")
 	flag.Parse()
 
 	if flag.NArg() != 2 {
@@ -186,7 +187,7 @@ func Main() error {
 		return nil
 	}
 
-	columns, err := CreateTable(ctx, db, tbl, rows, *flagTruncate, *flagTablespace)
+	columns, err := CreateTable(ctx, db, tbl, rows, *flagTruncate, *flagTablespace, *flagCopy)
 	cancel()
 	if err != nil {
 		return err
@@ -415,7 +416,7 @@ func typeOf(s string) Type {
 	return String
 }
 
-func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.Row, truncate bool, tablespace string) ([]Column, error) {
+func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.Row, truncate bool, tablespace, copyTable string) ([]Column, error) {
 	tbl = strings.ToUpper(tbl)
 	qry := "SELECT COUNT(0) FROM user_tables WHERE UPPER(table_name) = :1"
 	var n int64
@@ -430,7 +431,16 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 		}
 	}
 
-	if n == 0 {
+	if n == 0 && copyTable != "" {
+		var tblsp string
+		if tablespace != "" {
+			tblsp = "TABLESPACE "+tablespace
+		}
+		qry := fmt.Sprintf("CREATE TABLE %s %s AS SELECT * FROM %s WHERE 1=0", tbl, tblsp, copyTable)
+		if _, err := db.ExecContext(ctx, qry); err != nil {
+			return cols, errors.Errorf("%s: %w", qry , err)
+		}
+	} else if n == 0 && copyTable == "" {
 		row := <-rows
 		log.Printf("row: %q", row.Values)
 		cols = make([]Column, len(row.Values))

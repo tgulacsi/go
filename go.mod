@@ -52,6 +52,8 @@ require (
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
+	gopkg.in/goracle.v2 v2.12.7
+	perkeep.org v0.0.0-20190926184543-d342b0e26632
 )
 
 go 1.13

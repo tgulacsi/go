@@ -45,4 +45,6 @@ gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8
 gopkg.in/errgo.v2 v2.1.0/go.mod h1:hNsd1EY+bozCKY1Ytp96fpM3vjJbqLJn88ws8XvfDNI=
 gopkg.in/goracle.v2 v2.21.3 h1:1Yq1+tG1RmB/H6A5o/+kxwtOAbJ7WsUgLyN40CLTSmQ=
 gopkg.in/goracle.v2 v2.21.3/go.mod h1:jPshP5OpNiFS/8SwvepFI+PM9KPd1/yo9MILMWESydI=
+gopkg.in/goracle.v2 v2.21.4 h1:vdyrU5Wj0vXMRSmt6HmFUEOIpsEbxzOECprkbyALXu0=
+gopkg.in/goracle.v2 v2.21.4/go.mod h1:jPshP5OpNiFS/8SwvepFI+PM9KPd1/yo9MILMWESydI=
 honnef.co/go/tools v0.0.1-2019.2.3/go.mod h1:a3bituU0lyd329TUQxRnasdCoJDkEUEAqEt0JzvZhAg=
