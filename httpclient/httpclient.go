@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/pkg/errors"
 	"github.com/sony/gobreaker"
+	errors "golang.org/x/xerrors"
 )
 
 const (
@@ -75,7 +75,7 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 	// The Client will close any response body when retrying, but if the retry is aborted it is up to the CheckResponse callback
 	// to properly close any response body before returning.
 	rc.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
-		if cerr := errors.Cause(err); cerr == gobreaker.ErrOpenState || cerr == gobreaker.ErrTooManyRequests {
+		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
 			return true, nil
 		}
 		return false, err

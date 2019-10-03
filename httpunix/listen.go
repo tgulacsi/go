@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 // ListenAndServe is the same as http.ListenAndServe, except it can listen on unix domain sockets.
@@ -39,13 +39,11 @@ func ListenAndServe(ctx context.Context, addr string, hndl http.Handler) error {
 	}
 	addrU := addr
 	addr = strings.TrimPrefix(addr[4:], "://")
-	if strings.HasPrefix(addr, ":") {
-		addr = addr[1:]
-	}
+	addr = strings.TrimPrefix(addr, ":")
 	os.Remove(addr)
 	ln, err := net.Listen("unix", addr)
 	if err != nil {
-		return errors.Wrap(err, addrU)
+		return errors.Errorf("%s: %w", addrU, err)
 	}
 	defer ln.Close()
 	srv := http.Server{

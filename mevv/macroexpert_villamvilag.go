@@ -35,8 +35,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/http2"
+	errors "golang.org/x/xerrors"
 )
 
 var ErrAuth = errors.New("authentication error")
@@ -230,7 +230,7 @@ func (V Version) GetPDF(
 	}
 	req, err := http.NewRequest("GET", meURL, nil)
 	if err != nil {
-		return nil, "", "", errors.Wrapf(err, "url=%q", meURL)
+		return nil, "", "", errors.Errorf("url=%q: %w", meURL, err)
 	}
 	Log("msg", "MEVV", "username", username, "password", strings.Repeat("*", len(password)))
 	req.SetBasicAuth(username, password)
@@ -238,12 +238,12 @@ func (V Version) GetPDF(
 	Log("msg", "Get", "url", req.URL, "headers", req.Header)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "", "", errors.Wrapf(err, "Do %#v", req.URL.String())
+		return nil, "", "", errors.Errorf("Do %#v: %w", req.URL.String(), err)
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, "", "", errors.Wrap(ErrAuth, resp.Status)
+			return nil, "", "", errors.Errorf("%s: %w", resp.Status, ErrAuth)
 		}
 		return nil, "", "", errors.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
@@ -254,7 +254,7 @@ func (V Version) GetPDF(
 		if err := xml.NewDecoder(io.TeeReader(resp.Body, &buf)).Decode(&mr); err != nil {
 			_, _ = io.Copy(&buf, resp.Body)
 			resp.Body.Close()
-			return nil, "", "", errors.Wrapf(err, "parse %q", buf.String())
+			return nil, "", "", errors.Errorf("parse %q: %w", buf.String(), err)
 		}
 		return nil, "", "", mr
 	}
@@ -309,7 +309,7 @@ func fmtBool(b bool) string {
 func ReadUserPassw(filename string) (string, string, error) {
 	fh, err := os.Open(filename)
 	if err != nil {
-		return "", "", errors.Wrapf(err, "open %q", filename)
+		return "", "", errors.Errorf("open %q: %w", filename, err)
 	}
 	defer fh.Close()
 	scanner := bufio.NewScanner(fh)

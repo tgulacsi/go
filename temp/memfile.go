@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 // MaxInMemorySlurp is the threshold for in-memory or on-disk storage
@@ -61,7 +61,7 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 	ms := NewMemorySlurper(blobRef).(*memorySlurper)
 	n, err := io.Copy(ms, r)
 	if err != nil {
-		return nil, errors.Wrapf(err, "copy from %v to %v", r, ms)
+		return nil, errors.Errorf("copy from %v to %v: %w", r, ms, err)
 	}
 
 	if ms.stat == nil {
@@ -115,7 +115,7 @@ func (ms *memorySlurper) prepareRead() error {
 	ms.reading = true
 	if ms.file != nil {
 		if _, err := ms.file.Seek(0, 0); err != nil {
-			return errors.Wrapf(err, "file=%v", ms.file)
+			return errors.Errorf("file=%v: %w", ms.file, err)
 		}
 	} else {
 		ms.mem = bytes.NewReader(ms.buf.Bytes())

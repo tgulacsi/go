@@ -41,7 +41,7 @@ import (
 
 	"gopkg.in/goracle.v2"
 
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 var envEnc = namedEncoding{Encoding: encoding.Nop, Name: "utf-8"}
@@ -163,7 +163,7 @@ and dump all the columns of the cursor returned by the function.
 	}
 	db, err := sql.Open("goracle", *flagConnect)
 	if err != nil {
-		return errors.Wrap(err, *flagConnect)
+		return errors.Errorf("%s: %w", *flagConnect, err)
 	}
 	defer db.Close()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -172,7 +172,7 @@ and dump all the columns of the cursor returned by the function.
 	if err != nil {
 		log.Printf("[WARN] Read-Only transaction: %v", err)
 		if tx, err = db.BeginTx(ctx, nil); err != nil {
-			return errors.Wrap(err, "beginTx")
+			return errors.Errorf("%s: %w", "beginTx", err)
 		}
 	}
 	defer tx.Rollback()
@@ -184,7 +184,7 @@ and dump all the columns of the cursor returned by the function.
 	if !(*flagOut == "" || *flagOut == "-") {
 		os.MkdirAll(filepath.Dir(*flagOut), 0775)
 		if fh, err = os.Create(*flagOut); err != nil {
-			return errors.Wrap(err, *flagOut)
+			return errors.Errorf("%s: %w", *flagOut, err)
 		}
 	}
 	defer fh.Close()
@@ -200,7 +200,7 @@ and dump all the columns of the cursor returned by the function.
 	}
 	cancel()
 	if err != nil {
-		return errors.Wrap(err, "dump")
+		return errors.Errorf("dump: %w", err)
 	}
 	return fh.Close()
 }
@@ -243,7 +243,7 @@ func dumpCall(ctx context.Context, w io.Writer, db execer, qry string, params []
 	params = append(append(make([]interface{}, 0, 1+len(params)),
 		sql.Out{Dest: &rows}), params...)
 	if _, err := db.ExecContext(ctx, qry, params...); err != nil {
-		return errors.Wrapf(err, "executing %q", qry)
+		return errors.Errorf("executing %q: %w", qry, err)
 	}
 	defer rows.Close()
 
@@ -278,7 +278,7 @@ func dumpCall(ctx context.Context, w io.Writer, db execer, qry string, params []
 			if nextErr == io.EOF {
 				break
 			}
-			return errors.Wrap(nextErr, "Next")
+			return errors.Errorf("Next: %w", nextErr)
 		}
 		for i, data := range dest {
 			if i > 0 {
@@ -288,7 +288,7 @@ func dumpCall(ctx context.Context, w io.Writer, db execer, qry string, params []
 				continue
 			}
 			if err = values[i].Scan(data); err != nil {
-				return errors.Wrapf(err, "scan %q into col %d", data, i)
+				return errors.Errorf("scan %q into col %d: %w", data, i, err)
 			}
 			bw.WriteString(values[i].String())
 		}
@@ -300,7 +300,7 @@ func dumpCall(ctx context.Context, w io.Writer, db execer, qry string, params []
 		Log("msg", "dump finished", "rows", n, "dur", dur, "speed", float64(n)/float64(dur)*float64(time.Second))
 	}
 	if err != nil {
-		return errors.Wrapf(err, "fetching rows")
+		return errors.Errorf("fetching rows: %w", err)
 	}
 	return nil
 }
@@ -308,7 +308,7 @@ func dumpCall(ctx context.Context, w io.Writer, db execer, qry string, params []
 func dumpQry(ctx context.Context, w io.Writer, db queryer, qry string, header bool, sep string, Log func(...interface{}) error) error {
 	rows, err := db.QueryContext(ctx, qry, goracle.FetchRowCount(1024))
 	if err != nil {
-		return errors.Wrapf(err, "executing %q", qry)
+		return errors.Errorf("executing %q: %w", qry, err)
 	}
 	defer rows.Close()
 	//log.Printf("%q: columns: %#v", qry, columns)
@@ -342,7 +342,7 @@ func dumpQry(ctx context.Context, w io.Writer, db queryer, qry string, header bo
 	n := 0
 	for rows.Next() {
 		if err = rows.Scan(dest...); err != nil {
-			return errors.Wrapf(err, "scan into %#v", dest)
+			return errors.Errorf("scan into %#v: %w", dest, err)
 		}
 		for i, data := range dest {
 			if i > 0 {
@@ -362,7 +362,7 @@ func dumpQry(ctx context.Context, w io.Writer, db queryer, qry string, header bo
 		Log("msg", "dump finished", "rows", n, "dur", dur, "speed", float64(n)/float64(dur)*float64(time.Second), "error", err)
 	}
 	if err != nil {
-		return errors.Wrapf(err, "fetching rows")
+		return errors.Errorf("fetching rows: %w", err)
 	}
 	return nil
 }
@@ -510,7 +510,7 @@ func encFromName(e string) (namedEncoding, error) {
 	case "iso88592":
 		return namedEncoding{Encoding: charmap.ISO8859_2, Name: "iso-8859-2"}, nil
 	default:
-		return namedEncoding{Encoding: encoding.Nop, Name: e}, errors.Wrap(errors.New("unknown encoding"), e)
+		return namedEncoding{Encoding: encoding.Nop, Name: e}, errors.Errorf("%s: %w", e, errors.New("unknown encoding"))
 	}
 }
 

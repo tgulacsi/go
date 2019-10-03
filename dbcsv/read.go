@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -23,7 +22,7 @@ import (
 
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/extrame/xls"
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 var DefaultEncoding = encoding.Replacement
@@ -106,7 +105,7 @@ func (cfg *Config) Columns() ([]int, error) {
 	for _, x := range strings.Split(cfg.ColumnsString, ",") {
 		i, err := strconv.Atoi(x)
 		if err != nil {
-			return cfg.columns, errors.Wrap(err, x)
+			return cfg.columns, errors.Errorf("%s: %w", x, err)
 		}
 		cfg.columns = append(cfg.columns, i-1)
 	}
@@ -146,12 +145,12 @@ func (cfg *Config) Open(fileName string) error {
 	} else {
 		var err error
 		if cfg.file, err = os.Open(fileName); err != nil {
-			return errors.Wrap(err, "open "+fileName)
+			return errors.Errorf("open %s: %w", fileName, err)
 		}
 		fi, err := cfg.file.Stat()
 		if err != nil {
 			cfg.file.Close()
-			return errors.Wrap(err, "stat "+fileName)
+			return errors.Errorf("stat %s: %w", fileName, err)
 		}
 		slurp = !fi.Mode().IsRegular()
 	}
@@ -166,18 +165,21 @@ func (cfg *Config) Open(fileName string) error {
 		defer os.Remove(fileName)
 		log.Printf("Copying into temporary file %q...", fileName)
 		if _, err = io.Copy(fh, cfg.file); err != nil {
-			return errors.Wrap(err, "copy into "+fh.Name())
+			return errors.Errorf("copy into %s: %w", fh.Name(), err)
 		}
 		if err = fh.Close(); err != nil {
-			return errors.Wrap(err, "close "+fh.Name())
+			return errors.Errorf("close %s: %w", fh.Name(), err)
 		}
 		if cfg.file, err = os.Open(fileName); err != nil {
-			return errors.Wrap(err, "open "+fileName)
+			return errors.Errorf("open %s: %w", fileName, err)
 		}
 	}
 	cfg.fileName = fileName
 	_, err = cfg.Type()
-	return errors.Wrap(err, "type "+cfg.fileName)
+	if err != nil {
+		return errors.Errorf("type %s: %w", cfg.fileName, err)
+	}
+	return nil
 }
 
 func (cfg *Config) Close() error {
@@ -228,11 +230,11 @@ func ReadXLSXFile(ctx context.Context, fn func(string, Row) error, filename stri
 	}
 	xlFile, err := excelize.OpenFile(filename)
 	if err != nil {
-		return errors.Wrapf(err, "open %q", filename)
+		return errors.Errorf("open %q: %w", filename, err)
 	}
 	sheetName := xlFile.GetSheetName(sheetIndex)
 	if sheetName == "" {
-		return errors.Wrap(UnknownSheet, strconv.Itoa(sheetIndex))
+		return errors.Errorf("%d: %w", sheetIndex, UnknownSheet)
 	}
 	n := 0
 	var need map[int]bool
@@ -278,11 +280,11 @@ func ReadXLSFile(ctx context.Context, fn func(string, Row) error, filename strin
 	}
 	wb, err := xls.Open(filename, charset)
 	if err != nil {
-		return errors.Wrapf(err, "open %q", filename)
+		return errors.Errorf("open %q: %w", filename, err)
 	}
 	sheet := wb.GetSheet(sheetIndex)
 	if sheet == nil {
-		return errors.New(fmt.Sprintf("This XLS file does not contain sheet no %d!", sheetIndex))
+		return errors.Errorf("This XLS file does not contain sheet no %d!", sheetIndex)
 	}
 	var need map[int]bool
 	if len(columns) != 0 {

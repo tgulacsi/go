@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/mevv"
+	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -50,7 +50,7 @@ func Main() error {
 func director(dest string) func(r *http.Request) {
 	destURL, err := url.Parse(dest)
 	if err != nil {
-		panic(errors.Wrap(err, dest))
+		panic(errors.Errorf("%s: %w", dest, err))
 	}
 
 	/*
@@ -128,11 +128,11 @@ func director(dest string) func(r *http.Request) {
 		if q2.Get("date") == "" {
 			t1, err := time.Parse("2006-01-02", q1.Get("from_date"))
 			if err != nil {
-				log.Println(errors.Wrap(err, "from_date="+q1.Get("from_date")))
+				log.Printf("from_date=%s: %w", q1.Get("from_date"), err)
 			}
 			t2, err := time.Parse("2006-01-02", q1.Get("to_date"))
 			if err != nil {
-				log.Println(errors.Wrap(err, "to_date="+q1.Get("to_date")))
+				log.Printf("to_date=%s: %w", q1.Get("to_date"), err)
 			}
 			if t1.IsZero() && t2.IsZero() {
 				t2 = time.Now()

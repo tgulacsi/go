@@ -12,8 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/pkg/errors"
 	"github.com/tgulacsi/go/temp"
+	errors "golang.org/x/xerrors"
 )
 
 // Lister can list the archive's contents.
@@ -99,22 +99,22 @@ func NewRarLister(r io.Reader) (Lister, error) {
 	fh, err := os.Create(filepath.Join(rl.dir, rarName))
 	if err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Wrap(err, "create "+rarName)
+		return nil, errors.Errorf("create %s: %w", rarName, err)
 	}
 	if _, err = io.Copy(fh, r); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Wrap(err, "copy to "+fh.Name())
+		return nil, errors.Errorf("copy to %s: %w", fh.Name(), err)
 	}
 	if err = fh.Close(); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Wrap(err, "close "+fh.Name())
+		return nil, errors.Errorf("close %s: %w", fh.Name(), err)
 	}
 
 	cmd := exec.Command("unrar", "e", "-ep", rarName)
 	cmd.Dir = tempdir
 	if err = cmd.Run(); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Wrapf(err, "%q @%q", cmd.Args, cmd.Dir)
+		return nil, errors.Errorf("%q @%q: %w", cmd.Args, cmd.Dir, err)
 	}
 	os.Remove(fh.Name())
 	if err = filepath.Walk(
@@ -127,7 +127,7 @@ func NewRarLister(r io.Reader) (Lister, error) {
 		},
 	); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Wrap(err, "Walk "+tempdir)
+		return nil, errors.Errorf("walk %s: %w", tempdir, err)
 	}
 
 	return rl, nil
@@ -159,7 +159,7 @@ type rarExtracter struct {
 func (re rarExtracter) Open() (io.ReadCloser, error) {
 	fh, err := os.Open(re.path)
 	if err != nil {
-		return nil, errors.Wrap(err, "open "+re.path)
+		return nil, errors.Errorf("open %s: %w", re.path, err)
 	}
 	return unlinkCloser{fh}, nil
 }

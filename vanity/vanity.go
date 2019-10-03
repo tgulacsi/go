@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -63,14 +63,14 @@ func Main() error {
 	for nm, r := range repos {
 		fh, err := os.Create(filepath.Join(*flagDestDir, nm))
 		if err != nil {
-			return errors.WithStack(err)
+			return errors.Errorf("%w", err)
 		}
 		if err = templates.Execute(fh, r); err != nil {
 			fh.Close()
 			return err
 		}
 		if err = fh.Close(); err != nil {
-			return errors.Wrap(err, fh.Name())
+			return errors.Errorf("%s: %w", fh.Name(), err)
 		}
 	}
 	return nil

@@ -19,6 +19,9 @@ package byteutil
 import (
 	"unicode"
 	"unicode/utf8"
+
+	"reflect"
+	"unsafe"
 )
 
 // ByteContainsFold is like bytes.Contains but uses Unicode case-folding.
@@ -104,4 +107,41 @@ func EqualFoldRune(sr, tr rune) bool {
 		r = unicode.SimpleFold(r)
 	}
 	return r == tr
+}
+
+type stringHeader struct {
+	data unsafe.Pointer
+	len  int
+}
+
+type sliceHeader struct {
+	data unsafe.Pointer
+	len  int
+	cap  int
+}
+
+func init() {
+	// Check to make sure string header is what reflect thinks it is.
+	// They should be the same except for the type of the Data field.
+	if unsafe.Sizeof(stringHeader{}) != unsafe.Sizeof(reflect.StringHeader{}) {
+		panic("string layout has changed")
+	}
+}
+
+// StringToBytes returns the string as a []byte, unsafe.
+func StringToBytes(s string) []byte {
+	const max = 0x7fff0000
+	if len(s) > max {
+		panic("string too long")
+	}
+	return (*[max]byte)(unsafe.Pointer((*stringHeader)(unsafe.Pointer(&s)).data))[:len(s):len(s)]
+}
+
+// BytesToString returns the []byte as a string, unsafe.
+func BytesToString(p []byte) (s string) {
+	B := (*sliceHeader)(unsafe.Pointer(&p))
+	S := (*stringHeader)(unsafe.Pointer(&s))
+	S.data = B.data
+	S.len = B.len
+	return
 }

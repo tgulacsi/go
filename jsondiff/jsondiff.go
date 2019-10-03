@@ -28,7 +28,7 @@ import (
 	"sort"
 
 	"github.com/kylelemons/godebug/diff"
-	"github.com/pkg/errors"
+	errors "golang.org/x/xerrors"
 )
 
 func Pretty(w io.Writer, data map[string]interface{}, indent string) error {
@@ -107,20 +107,20 @@ func Diff(a map[string]interface{}, b map[string]interface{}) string {
 func DiffStrings(a, b string) (string, error) {
 	mA := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(a), &mA); err != nil {
-		return "", errors.Wrap(err, "unmarshal 1. arg")
+		return "", errors.Errorf("%s: %w", "unmarshal 1. arg", err)
 	}
 	var bA bytes.Buffer
 	if err := Pretty(&bA, mA, ""); err != nil {
-		return "", errors.Wrap(err, "pretty-print 1. arg")
+		return "", errors.Errorf("%s: %w", "pretty-print 1. arg", err)
 	}
 
 	mB := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(b), &mB); err != nil {
-		return "", errors.Wrap(err, "unmarshal 2. arg")
+		return "", errors.Errorf("%s: %w", "unmarshal 2. arg", err)
 	}
 	var bB bytes.Buffer
 	if err := Pretty(&bB, mB, ""); err != nil {
-		return "", errors.Wrap(err, "pretty-print 2. arg")
+		return "", errors.Errorf("%s: %w", "pretty-print 2. arg", err)
 	}
 
 	return diff.Diff(bA.String(), bB.String()), nil

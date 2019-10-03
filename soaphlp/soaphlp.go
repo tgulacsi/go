@@ -27,8 +27,8 @@ import (
 	"strconv"
 
 	"github.com/kylewolfe/soaptrip"
-	"github.com/pkg/errors"
 	bp "github.com/tgulacsi/go/bufpool"
+	errors "golang.org/x/xerrors"
 )
 
 // DefaultLog is the logging function in use.
@@ -91,7 +91,7 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 				}
 				break
 			}
-			return nil, errors.Wrap(err, buf.String())
+			return nil, errors.Errorf("%s: %w", buf.String(), err)
 		}
 		n++
 		switch x := tok.(type) {
@@ -102,7 +102,7 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 					x.Name.Space == "http://www.w3.org/2003/05/soap-envelope") {
 				start := d.InputOffset()
 				if err = d.Skip(); err != nil {
-					return nil, errors.Wrap(err, buf.String())
+					return nil, errors.Errorf("%s: %w", buf.String(), err)
 				}
 				end := d.InputOffset()
 				//Log("start", start, "end", end, "bytes", start, end, buf.Len())
@@ -121,7 +121,7 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 			}
 		}
 	}
-	return nil, errors.Wrap(ErrBodyNotFound, buf.String())
+	return nil, errors.Errorf("%s: %w", buf.String(), ErrBodyNotFound)
 }
 
 func (s soapClient) Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error) {
@@ -154,7 +154,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 	}
 	req, err := http.NewRequest("POST", s.URL, bytes.NewReader(buf.Bytes()))
 	if err != nil {
-		return nil, errors.Wrap(err, s.URL)
+		return nil, errors.Errorf("%s: %w", s.URL, err)
 	}
 	req.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	req.Header.Set("SOAPAction", soapAction)
@@ -179,7 +179,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		if len(b) == 0 {
 			return nil, err
 		}
-		return nil, errors.Wrap(err, string(b))
+		return nil, errors.Errorf("%s: %w", string(b), err)
 	}
 	return resp.Body, nil
 }

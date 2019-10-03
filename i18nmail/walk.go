@@ -20,9 +20,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/pkg/errors"
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/iohlp"
+	errors "golang.org/x/xerrors"
 )
 
 // MaxWalkDepth is the maximum depth Walk will descend.
@@ -121,7 +121,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 	}
 	debugf("Walk message headers=%q", msg.Header)
 	if e != nil {
-		return errors.Wrapf(e, "WalkMail")
+		return errors.Errorf("WalkMail: %w", e)
 	}
 	if ct == "" {
 		ct = "message/rfc822"
@@ -142,7 +142,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
 	if strings.HasPrefix(ct, "multipart/") {
 		if e = WalkMultipart(child, todo, dontDescend); e != nil {
-			return errors.Wrapf(e, "multipart")
+			return errors.Errorf("multipart: %w", e)
 		}
 		return nil
 	}
@@ -178,7 +178,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		b := make([]byte, 4096)
 		n, _ := io.ReadAtLeast(br, b, 2048)
 		infof("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
-		return errors.WithMessage(e, "WalkMail")
+		return errors.Errorf("WalkMail: %w", e)
 	}
 	if hsh != "" {
 		msg.Header["X-Hash"] = []string{hsh}
@@ -203,7 +203,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 	for i := 1; e == nil; i++ {
 		part.Header = DecodeHeaders(part.Header)
 		if ct, params, decoder, e = getCT(part.Header); e != nil {
-			return errors.Wrapf(e, "%d.getCT(%v)", i, part.Header)
+			return errors.Errorf("%d.getCT(%v): %w", i, part.Header, e)
 		}
 		if decoder != nil {
 			body = decoder(part)
@@ -226,14 +226,14 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 					e = nil
 					break
 				}
-				return errors.Wrapf(e, fmt.Sprintf("descending data=%s", data))
+				return errors.Errorf("descending data=%s: %w", data, e)
 			}
 		} else if !dontDescend && strings.HasPrefix(ct, "message/") {
 			if e = Walk(child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				child.Body = br
 				data, _ := br.Peek(1024)
-				return errors.Wrapf(e, fmt.Sprintf("descending data=%s", data))
+				return errors.Errorf("descending data=%s: %w", data, e)
 			}
 		} else {
 			fn := part.FileName()
@@ -246,7 +246,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			}
 			child.Header.Add("X-FileName", safeFn(fn, true))
 			if e = todo(child); e != nil {
-				return errors.Wrapf(e, "todo(%q)", fn)
+				return errors.Errorf("todo(%q): %w", fn, e)
 			}
 		}
 
@@ -258,7 +258,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 	}
 	if e != nil && e != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
 		infof("ERROR reading parts: %v", e)
-		return errors.Wrapf(e, "reading parts")
+		return errors.Errorf("reading parts: %w", e)
 	}
 	return nil
 }
@@ -282,7 +282,7 @@ func getCT(
 	var nct string
 	nct, params, err = mime.ParseMediaType(contentType)
 	if err != nil {
-		err = errors.Wrapf(err, "cannot parse Content-Type %s", contentType)
+		err = errors.Errorf("cannot parse Content-Type %s: %w", contentType, err)
 		return
 	}
 	contentType = nct
@@ -332,7 +332,7 @@ func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
 	))
 	if e != nil && m == nil {
 		infof("ERROR ReadMessage: %v", e)
-		return nil, "", errors.Wrap(e, buf.String())
+		return nil, "", errors.Errorf("%s: %w", buf.String(), e)
 	}
 	h.Write(bytes.TrimSpace(buf.Bytes()))
 	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil
