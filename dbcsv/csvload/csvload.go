@@ -580,7 +580,7 @@ func (c Column) FromString(ss []string) (interface{}, error) {
 				continue
 			}
 			var err error
-			if res[i], err = time.Parse(dateFormat[:len(s)], s); err != nil {
+			if res[i], err = time.ParseInLocation(dateFormat[:len(s)], s, time.Local); err != nil {
 				return res, errors.Errorf("%d. %q: %w", i, s, err)
 			}
 		}

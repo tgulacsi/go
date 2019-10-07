@@ -283,9 +283,9 @@ func strToDate(s string) (interface{}, error) {
 		return nil, nil
 	}
 	if 8 <= len(s) && len(s) <= 10 {
-		return time.Parse(dateFormat, justNums(s, 8))
+		return time.ParseInLocation(dateFormat, justNums(s, 8), time.Local)
 	}
-	return time.Parse(dateTimeFormat, justNums(s, 14))
+	return time.Parse(InLocationdateTimeFormat, justNums(s, 14), time.Local)
 }
 func justNums(s string, maxLen int) string {
 	var i int
