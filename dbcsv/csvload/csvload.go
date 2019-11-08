@@ -193,7 +193,7 @@ func Main() error {
 		return err
 	}
 	var buf strings.Builder
-	fmt.Fprintf(&buf, `INSERT INTO "%s" (`, tbl)
+	fmt.Fprintf(&buf, `INSERT INTO %s (`, tbl)
 	for i, c := range columns {
 		if i != 0 {
 			buf.WriteString(", ")
@@ -418,14 +418,19 @@ func typeOf(s string) Type {
 
 func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.Row, truncate bool, tablespace, copyTable string) ([]Column, error) {
 	tbl = strings.ToUpper(tbl)
-	qry := "SELECT COUNT(0) FROM user_tables WHERE UPPER(table_name) = :1"
+	var owner,ownerDot string
+	if i := strings.IndexByte(tbl, '.'); i >= 0 {
+		owner, tbl = tbl[:i], tbl[i+1:]
+		ownerDot = owner+"."
+	}
+	qry := "SELECT COUNT(0) FROM all_tables WHERE UPPER(table_name) = :1 AND owner = NVL(:2, owner)"
 	var n int64
 	var cols []Column
-	if err := db.QueryRowContext(ctx, qry, tbl).Scan(&n); err != nil {
+	if err := db.QueryRowContext(ctx, qry, tbl, owner).Scan(&n); err != nil {
 		return cols, errors.Errorf("%s: %w", qry, err)
 	}
 	if n > 0 && truncate {
-		qry = `TRUNCATE TABLE ` + tbl
+		qry = `TRUNCATE TABLE ` + ownerDot+tbl
 		if _, err := db.ExecContext(ctx, qry); err != nil {
 			return cols, errors.Errorf("%s: %w", qry, err)
 		}
@@ -436,7 +441,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 		if tablespace != "" {
 			tblsp = "TABLESPACE "+tablespace
 		}
-		qry := fmt.Sprintf("CREATE TABLE %s %s AS SELECT * FROM %s WHERE 1=0", tbl, tblsp, copyTable)
+		qry := fmt.Sprintf("CREATE TABLE %s%s %s AS SELECT * FROM %s WHERE 1=0", ownerDot,tbl, tblsp, copyTable)
 		if _, err := db.ExecContext(ctx, qry); err != nil {
 			return cols, errors.Errorf("%s: %w", qry , err)
 		}
@@ -495,7 +500,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 			}
 		}
 		var buf bytes.Buffer
-		buf.WriteString(`CREATE TABLE "` + tbl + `" (`)
+		buf.WriteString(`CREATE TABLE "` + ownerDot+tbl + `" (`)
 		for i, c := range cols {
 			if i != 0 {
 				buf.WriteString(",\n")
@@ -524,9 +529,9 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 	}
 
 	qry = `SELECT column_name, data_type, NVL(data_length, 0), NVL(data_precision, 0), NVL(data_scale, 0), nullable
-  FROM user_tab_cols WHERE table_name = :1
+  FROM all_tab_cols WHERE table_name = :1 AND owner = NVL(:2, owner)
   ORDER BY column_id`
-	tRows, err := db.QueryContext(ctx, qry, tbl)
+	tRows, err := db.QueryContext(ctx, qry, tbl, owner)
 	if err != nil {
 		return cols, errors.Errorf("%s: %w", qry, err)
 	}
@@ -631,7 +636,7 @@ func (c Column) FromString(ss []string) (interface{}, error) {
 
 func getColumns(ctx context.Context, db *sql.DB, tbl string) ([]Column, error) {
 	// TODO(tgulacsi): this is Oracle-specific!
-	const qry = "SELECT column_name, data_type, data_length, data_precision, data_scale, nullable FROM user_tab_cols WHERE table_name = UPPER(:1) ORDER BY column_id"
+	const qry = "SELECT column_name, data_type, data_length, data_precision, data_scale, nullable FROM all_tab_cols WHERE table_name = UPPER(:1) ORDER BY column_id"
 	rows, err := db.QueryContext(ctx, qry, tbl)
 	if err != nil {
 		return nil, errors.Errorf("%s: %w", qry, err)
