@@ -2,7 +2,7 @@ module github.com/tgulacsi/go
 
 require (
 	cloud.google.com/go v0.45.1 // indirect
-	github.com/360EntSecGroup-Skylar/excelize/v2 v2.0.1 // indirect
+	github.com/360EntSecGroup-Skylar/excelize/v2 v2.0.1
 	github.com/BurntSushi/toml v0.3.1
 	github.com/cznic/fileutil v0.0.0-20181122101858-4d67cfea8c87 // indirect
 	github.com/cznic/internal v0.0.0-20181122101858-3279554c546e // indirect
@@ -43,6 +43,7 @@ require (
 	github.com/tgulacsi/go/dbcsv v0.0.0-20190510155420-94be4d588fb9 // indirect
 	github.com/tgulacsi/go/dbcsv/csvload v0.0.0-20190201131341-e440493e22f6 // indirect
 	github.com/tgulacsi/statik v0.1.3
+	github.com/valyala/quicktemplate v1.4.1
 	go4.org v0.0.0-20190313082347-94abd6928b1d // indirect
 	golang.org/x/build v0.0.0-20190111050920-041ab4dc3f9d // indirect
 	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472
