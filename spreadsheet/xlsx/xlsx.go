@@ -18,10 +18,11 @@ package xlsx
 
 import (
 	"fmt"
-	errors "golang.org/x/xerrors"
 	"io"
 	"strings"
 	"time"
+
+	errors "golang.org/x/xerrors"
 
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/tgulacsi/go/spreadsheet"
@@ -86,7 +87,7 @@ func (xlw *XLSXWriter) NewSheet(name string, columns []spreadsheet.Column) (spre
 			}
 		}
 	}
-	xls := &XLSXSheet{xl: xlw.xl}
+	xls := &XLSXSheet{xl: xlw.xl, Name: name}
 	if hasHeader {
 		xls.row++
 	}
@@ -97,7 +98,7 @@ func (xlw XLSXWriter) getStyle(style spreadsheet.Style) int {
 	if !style.FontBold && style.Format == "" {
 		return 0
 	}
-	k := fmt.Sprintf("%b\t%s", style.FontBold, style.Format)
+	k := fmt.Sprintf("%t\t%s", style.FontBold, style.Format)
 	s, ok := xlw.styles[k]
 	if ok {
 		return s
@@ -105,18 +106,21 @@ func (xlw XLSXWriter) getStyle(style spreadsheet.Style) int {
 	var buf strings.Builder
 	buf.WriteByte('{')
 	if style.FontBold {
-		buf.WriteString(`{"font":{"bold":true}}`)
+		buf.WriteString(`"font":{"bold":true}`)
 	}
 	if style.Format != "" {
 		if buf.Len() > 1 {
 			buf.WriteByte(',')
 		}
-		fmt.Fprintf(&buf, `{"custom_number_format":%q}`, style.Format)
+		fmt.Fprintf(&buf, `"custom_number_format":%q`, style.Format)
 	}
 	buf.WriteByte('}')
 	s, err := xlw.xl.NewStyle(buf.String())
 	if err != nil {
 		panic(errors.Errorf("%s: %w", err))
+	}
+	if xlw.styles == nil {
+		xlw.styles = make(map[string]int)
 	}
 	xlw.styles[k] = s
 	return s
@@ -126,16 +130,16 @@ func (xls *XLSXSheet) Close() error { return nil }
 func (xls *XLSXSheet) AppendRow(values ...interface{}) error {
 	xls.row++
 	for i, v := range values {
-		axis, err := excelize.CoordinatesToCellName(i, int(xls.row))
+		axis, err := excelize.CoordinatesToCellName(i+1, int(xls.row))
 		if err != nil {
-			return err
+			return errors.Errorf("%d/%d: %w", i, int(xls.row), err)
 		}
 		isNil := v == nil
 		if !isNil {
 			if t, ok := v.(time.Time); ok {
 				if isNil = t.IsZero(); !isNil {
 					if err = xls.xl.SetCellStr(xls.Name, axis, t.Format("2006-01-02")); err != nil {
-						return err
+						return errors.Errorf("%s[%s]: %w", xls.Name, axis, err)
 					}
 					continue
 				}
@@ -145,7 +149,7 @@ func (xls *XLSXSheet) AppendRow(values ...interface{}) error {
 			continue
 		}
 		if err = xls.xl.SetCellValue(xls.Name, axis, v); err != nil {
-			return err
+			return errors.Errorf("%s[%s]: %w", xls.Name, axis, err)
 		}
 	}
 	return nil
