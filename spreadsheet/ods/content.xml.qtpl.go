@@ -10,181 +10,125 @@ import "strings"
 //line content.xml.qtpl:2
 import "encoding/xml"
 
+//line content.xml.qtpl:3
+import "time"
+
+//line content.xml.qtpl:4
+import "fmt"
+
 //line content.xml.qtpl:5
+import "github.com/tgulacsi/go/spreadsheet"
+
+//line content.xml.qtpl:8
 import (
 	qtio422016 "io"
 
 	qt422016 "github.com/valyala/quicktemplate"
 )
 
-//line content.xml.qtpl:5
+//line content.xml.qtpl:8
 var (
 	_ = qtio422016.Copy
 	_ = qt422016.AcquireByteBuffer
 )
 
-//line content.xml.qtpl:5
+//line content.xml.qtpl:8
 func StreamXML(qw422016 *qt422016.Writer, s string) {
-//line content.xml.qtpl:7
+//line content.xml.qtpl:10
 	var buf strings.Builder
 	_ = xml.EscapeText(&buf, []byte(s))
 
-//line content.xml.qtpl:10
+//line content.xml.qtpl:13
 	qw422016.N().S(buf.String())
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 }
 
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 func WriteXML(qq422016 qtio422016.Writer, s string) {
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	StreamXML(qw422016, s)
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 }
 
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 func XML(s string) string {
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	WriteXML(qb422016, s)
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 	return qs422016
-//line content.xml.qtpl:11
+//line content.xml.qtpl:14
 }
 
-//line content.xml.qtpl:14
-func StreamBeginSheets(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:14
-	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
+//line content.xml.qtpl:15
+func streamgetValueString(qw422016 *qt422016.Writer, v interface{}) {
+//line content.xml.qtpl:17
+	var buf strings.Builder
+	switch x := v.(type) {
+	case time.Time:
+		if !x.IsZero() {
+			buf.WriteString(x.Format(time.RFC3339))
+		}
+	case int, int8, int16, int32, int64, uint, uint16, uint32, uint64:
+		fmt.Fprintf(&buf, "%d", v)
+	case float32, float64:
+		fmt.Fprintf(&buf, "%f", v)
+	case string:
+		_ = xml.EscapeText(&buf, []byte(x))
+	case fmt.Stringer:
+		_ = xml.EscapeText(&buf, []byte(x.String()))
+	default:
+		_ = xml.EscapeText(&buf, []byte(fmt.Sprintf("%v", v)))
+	}
 
+//line content.xml.qtpl:34
+	qw422016.N().S(buf.String())
+//line content.xml.qtpl:35
+}
+
+//line content.xml.qtpl:35
+func writegetValueString(qq422016 qtio422016.Writer, v interface{}) {
+//line content.xml.qtpl:35
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:35
+	streamgetValueString(qw422016, v)
+//line content.xml.qtpl:35
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:35
+}
+
+//line content.xml.qtpl:35
+func getValueString(v interface{}) string {
+//line content.xml.qtpl:35
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:35
+	writegetValueString(qb422016, v)
+//line content.xml.qtpl:35
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:35
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:35
+	return qs422016
+//line content.xml.qtpl:35
+}
+
+//line content.xml.qtpl:38
+func StreamBeginSpreadsheet(qw422016 *qt422016.Writer) {
+//line content.xml.qtpl:38
+	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:xforms="http://www.w3.org/2002/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gnm="http://www.gnumeric.org/odf-extension/1.0" xmlns:css3t="http://www.w3.org/TR/css3-text/" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" office:version="1.2">
   <office:scripts/>
   <office:font-face-decls/>
-  <office:automatic-styles>
-    <style:style style:name="ta-0" style:family="table" style:master-page-name="ta-mp-0">
-      <style:table-properties table:display="true" style:writing-mode="lr-tb"/>
-    </style:style>
-    <style:style style:name="AC-weight100" style:family="text">
-      <style:text-properties fo:font-weight="100"/>
-    </style:style>
-    <style:style style:name="AC-weight200" style:family="text">
-      <style:text-properties fo:font-weight="200"/>
-    </style:style>
-    <style:style style:name="AC-weight300" style:family="text">
-      <style:text-properties fo:font-weight="300"/>
-    </style:style>
-    <style:style style:name="AC-weight400" style:family="text">
-      <style:text-properties fo:font-weight="normal"/>
-    </style:style>
-    <style:style style:name="AC-weight500" style:family="text">
-      <style:text-properties fo:font-weight="500"/>
-    </style:style>
-    <style:style style:name="AC-weight600" style:family="text">
-      <style:text-properties fo:font-weight="600"/>
-    </style:style>
-    <style:style style:name="AC-weight700" style:family="text">
-      <style:text-properties fo:font-weight="bold"/>
-    </style:style>
-    <style:style style:name="AC-weight800" style:family="text">
-      <style:text-properties fo:font-weight="800"/>
-    </style:style>
-    <style:style style:name="AC-weight900" style:family="text">
-      <style:text-properties fo:font-weight="900"/>
-    </style:style>
-    <style:style style:name="AC-weight1000" style:family="text">
-      <style:text-properties fo:font-weight="900"/>
-    </style:style>
-    <style:style style:name="AC-italic" style:family="text">
-      <style:text-properties fo:font-style="italic"/>
-    </style:style>
-    <style:style style:name="AC-roman" style:family="text">
-      <style:text-properties fo:font-style="normal"/>
-    </style:style>
-    <style:style style:name="AC-subscript" style:family="text">
-      <style:text-properties style:text-position="sub 83%"/>
-    </style:style>
-    <style:style style:name="AC-superscript" style:family="text">
-      <style:text-properties style:text-position="super 83%"/>
-    </style:style>
-    <style:style style:name="AC-script" style:family="text">
-      <style:text-properties style:text-position="0% 100%"/>
-    </style:style>
-    <style:style style:name="AC-strikethrough-solid" style:family="text">
-      <style:text-properties style:text-line-through-type="single" style:text-line-through-style="solid"/>
-    </style:style>
-    <style:style style:name="AC-strikethrough-none" style:family="text">
-      <style:text-properties style:text-line-through-type="none" style:text-line-through-style="none"/>
-    </style:style>
-    <style:style style:name="AC-underline-none" style:family="text">
-      <style:text-properties style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto"/>
-    </style:style>
-    <style:style style:name="AC-underline-single" style:family="text">
-      <style:text-properties style:text-underline-type="single" style:text-underline-style="solid" style:text-underline-width="auto"/>
-    </style:style>
-    <style:style style:name="AC-underline-double" style:family="text">
-      <style:text-properties style:text-underline-type="double" style:text-underline-style="solid" style:text-underline-width="auto"/>
-    </style:style>
-    <style:style style:name="AC-underline-low" style:family="text">
-      <style:text-properties style:text-underline-type="single" style:text-underline-style="solid" style:text-underline-width="bold"/>
-    </style:style>
-    <style:style style:name="AC-underline-error" style:family="text">
-      <style:text-properties style:text-underline-type="single" style:text-underline-style="wave" style:text-underline-width="auto"/>
-    </style:style>
-    <style:style style:name="AROW-0" style:family="table-row">
-      <style:table-row-properties style:row-height="12.75pt" style:use-optimal-row-height="true"/>
-    </style:style>
-    <style:style style:name="ACOL-0" style:family="table-column">
-      <style:table-column-properties style:column-width="48pt" style:use-optimal-column-width="true"/>
-    </style:style>
-    <style:style style:name="ACE-0" style:family="table-cell" style:data-style-name="General">
-      <style:table-cell-properties fo:background-color="transparent" fo:border-top="0.000cm none #c7c7c7" fo:border-bottom="0.000cm none #c7c7c7" fo:border-left="0.000cm none #c7c7c7" fo:border-right="0.000cm none #c7c7c7" style:diagonal-bl-tr="0.000cm none #c7c7c7" style:diagonal-tl-br="0.000cm none #c7c7c7" style:vertical-align="bottom" fo:wrap-option="no-wrap" style:shrink-to-fit="false" style:writing-mode="page" style:glyph-orientation-vertical="auto" style:cell-protect="protected" style:rotation-align="none" style:rotation-angle="0" style:print-content="true" style:decimal-places="13" style:text-align-source="fix" style:repeat-content="false"/>
-      <style:paragraph-properties style:writing-mode-automatic="true" fo:text-align="right" fo:margin-left="0pt"/>
-      <style:text-properties text:display="true" fo:font-weight="bold" fo:font-style="normal" style:text-line-through-type="none" style:text-line-through-style="none" style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto" style:text-underline-color="font-color" style:text-underline-mode="continuous" style:text-position="0% 100%" fo:font-size="10pt" fo:color="#000000" fo:font-family="Verdana"/>
-    </style:style>
-    <style:style style:name="ACE-1" style:family="table-cell" style:data-style-name="General">
-      <style:table-cell-properties fo:background-color="transparent" fo:border-top="0.000cm none #c7c7c7" fo:border-bottom="0.000cm none #c7c7c7" fo:border-left="0.000cm none #c7c7c7" fo:border-right="0.000cm none #c7c7c7" style:diagonal-bl-tr="0.000cm none #c7c7c7" style:diagonal-tl-br="0.000cm none #c7c7c7" style:vertical-align="bottom" fo:wrap-option="no-wrap" style:shrink-to-fit="false" style:writing-mode="page" style:glyph-orientation-vertical="auto" style:cell-protect="protected" style:rotation-align="none" style:rotation-angle="0" style:print-content="true" style:decimal-places="13" style:text-align-source="fix" style:repeat-content="false"/>
-      <style:paragraph-properties style:writing-mode-automatic="true" fo:text-align="right" fo:margin-left="0pt"/>
-      <style:text-properties text:display="true" fo:font-weight="normal" fo:font-style="normal" style:text-line-through-type="none" style:text-line-through-style="none" style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto" style:text-underline-color="font-color" style:text-underline-mode="continuous" style:text-position="0% 100%" fo:font-size="10pt" fo:color="#000000" fo:font-family="Verdana"/>
-    </style:style>
-    <style:style style:name="ACE-2" style:family="table-cell" style:data-style-name="General">
-      <style:table-cell-properties fo:background-color="transparent" fo:border-top="0.000cm none #c7c7c7" fo:border-bottom="0.000cm none #c7c7c7" fo:border-left="0.000cm none #c7c7c7" fo:border-right="0.000cm none #c7c7c7" style:diagonal-bl-tr="0.000cm none #c7c7c7" style:diagonal-tl-br="0.000cm none #c7c7c7" style:vertical-align="bottom" fo:wrap-option="no-wrap" style:shrink-to-fit="false" style:writing-mode="page" style:glyph-orientation-vertical="auto" style:cell-protect="protected" style:rotation-align="none" style:rotation-angle="0" style:print-content="true" style:decimal-places="13" style:text-align-source="value-type" style:repeat-content="false"/>
-      <style:paragraph-properties style:writing-mode-automatic="true" fo:margin-left="0pt"/>
-      <style:text-properties text:display="true" fo:font-weight="normal" fo:font-style="normal" style:text-line-through-type="none" style:text-line-through-style="none" style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto" style:text-underline-color="font-color" style:text-underline-mode="continuous" style:text-position="0% 100%" fo:font-size="10pt" fo:color="#000000" fo:font-family="Sans"/>
-    </style:style>
-    <style:style style:name="ACE-3" style:family="table-cell" style:data-style-name="ND-0">
-      <style:table-cell-properties fo:background-color="transparent" fo:border-top="0.000cm none #c7c7c7" fo:border-bottom="0.000cm none #c7c7c7" fo:border-left="0.000cm none #c7c7c7" fo:border-right="0.000cm none #c7c7c7" style:diagonal-bl-tr="0.000cm none #c7c7c7" style:diagonal-tl-br="0.000cm none #c7c7c7" style:vertical-align="bottom" fo:wrap-option="no-wrap" style:shrink-to-fit="false" style:writing-mode="page" style:glyph-orientation-vertical="auto" style:cell-protect="protected" style:rotation-align="none" style:rotation-angle="0" style:print-content="true" style:decimal-places="13" style:text-align-source="fix" style:repeat-content="false"/>
-      <style:paragraph-properties style:writing-mode-automatic="true" fo:text-align="right" fo:margin-left="0pt"/>
-      <style:text-properties text:display="true" fo:font-weight="normal" fo:font-style="normal" style:text-line-through-type="none" style:text-line-through-style="none" style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto" style:text-underline-color="font-color" style:text-underline-mode="continuous" style:text-position="0% 100%" fo:font-size="10pt" fo:color="#000000" fo:font-family="Verdana"/>
-    </style:style>
-    <style:style style:name="ACE-4" style:family="table-cell" style:data-style-name="ND-1">
-      <style:table-cell-properties fo:background-color="transparent" fo:border-top="0.000cm none #c7c7c7" fo:border-bottom="0.000cm none #c7c7c7" fo:border-left="0.000cm none #c7c7c7" fo:border-right="0.000cm none #c7c7c7" style:diagonal-bl-tr="0.000cm none #c7c7c7" style:diagonal-tl-br="0.000cm none #c7c7c7" style:vertical-align="bottom" fo:wrap-option="no-wrap" style:shrink-to-fit="false" style:writing-mode="page" style:glyph-orientation-vertical="auto" style:cell-protect="protected" style:rotation-align="none" style:rotation-angle="0" style:print-content="true" style:decimal-places="13" style:text-align-source="fix" style:repeat-content="false"/>
-      <style:paragraph-properties style:writing-mode-automatic="true" fo:text-align="right" fo:margin-left="0pt"/>
-      <style:text-properties text:display="true" fo:font-weight="bold" fo:font-style="normal" style:text-line-through-type="none" style:text-line-through-style="none" style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto" style:text-underline-color="font-color" style:text-underline-mode="continuous" style:text-position="0% 100%" fo:font-size="10pt" fo:color="#000000" fo:font-family="Verdana"/>
-    </style:style>
-    <style:style style:name="ACE-5" style:family="table-cell" style:data-style-name="ND-1">
-      <style:table-cell-properties fo:background-color="transparent" fo:border-top="0.000cm none #c7c7c7" fo:border-bottom="0.000cm none #c7c7c7" fo:border-left="0.000cm none #c7c7c7" fo:border-right="0.000cm none #c7c7c7" style:diagonal-bl-tr="0.000cm none #c7c7c7" style:diagonal-tl-br="0.000cm none #c7c7c7" style:vertical-align="bottom" fo:wrap-option="no-wrap" style:shrink-to-fit="false" style:writing-mode="page" style:glyph-orientation-vertical="auto" style:cell-protect="protected" style:rotation-align="none" style:rotation-angle="0" style:print-content="true" style:decimal-places="13" style:text-align-source="fix" style:repeat-content="false"/>
-      <style:paragraph-properties style:writing-mode-automatic="true" fo:text-align="right" fo:margin-left="0pt"/>
-      <style:text-properties text:display="true" fo:font-weight="normal" fo:font-style="normal" style:text-line-through-type="none" style:text-line-through-style="none" style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto" style:text-underline-color="font-color" style:text-underline-mode="continuous" style:text-position="0% 100%" fo:font-size="10pt" fo:color="#000000" fo:font-family="Verdana"/>
-    </style:style>
-    <style:style style:name="ACE-6" style:family="table-cell" style:data-style-name="ND-0">
-      <style:table-cell-properties fo:background-color="transparent" fo:border-top="0.000cm none #c7c7c7" fo:border-bottom="0.000cm none #c7c7c7" fo:border-left="0.000cm none #c7c7c7" fo:border-right="0.000cm none #c7c7c7" style:diagonal-bl-tr="0.000cm none #c7c7c7" style:diagonal-tl-br="0.000cm none #c7c7c7" style:vertical-align="bottom" fo:wrap-option="no-wrap" style:shrink-to-fit="false" style:writing-mode="page" style:glyph-orientation-vertical="auto" style:cell-protect="protected" style:rotation-align="none" style:rotation-angle="0" style:print-content="true" style:decimal-places="13" style:text-align-source="fix" style:repeat-content="false"/>
-      <style:paragraph-properties style:writing-mode-automatic="true" fo:text-align="right" fo:margin-left="0pt"/>
-      <style:text-properties text:display="true" fo:font-weight="bold" fo:font-style="normal" style:text-line-through-type="none" style:text-line-through-style="none" style:text-underline-type="none" style:text-underline-style="none" style:text-underline-width="auto" style:text-underline-color="font-color" style:text-underline-mode="continuous" style:text-position="0% 100%" fo:font-size="10pt" fo:color="#000000" fo:font-family="Verdana"/>
-    </style:style>
-    <style:style style:name="ACOL-1" style:family="table-column"/>
-    <style:style style:name="AROW-1" style:family="table-row">
-      <style:table-row-properties style:row-height="13.5pt" style:use-optimal-row-height="true"/>
-    </style:style>
-    <style:style style:name="AROW-2" style:family="table-row"/>
-  </office:automatic-styles>
+  <office:automatic-styles/>
   <office:body>
     <office:spreadsheet>
       <table:calculation-settings table:null-year="1930" table:automatic-find-labels="false" table:case-sensitive="false" table:precision-as-shown="false" table:search-criteria-must-apply-to-whole-cell="true" table:use-regular-expressions="false" table:use-wildcards="false">
@@ -192,280 +136,308 @@ func StreamBeginSheets(qw422016 *qt422016.Writer) {
         <table:iteration table:maximum-difference="0.001" table:status="enable" table:steps="100"/>
       </table:calculation-settings>
 `)
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
 }
 
-//line content.xml.qtpl:142
-func WriteBeginSheets(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
+func WriteBeginSpreadsheet(qq422016 qtio422016.Writer) {
+//line content.xml.qtpl:49
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:142
-	StreamBeginSheets(qw422016)
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
+	StreamBeginSpreadsheet(qw422016)
+//line content.xml.qtpl:49
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
 }
 
-//line content.xml.qtpl:142
-func BeginSheets() string {
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
+func BeginSpreadsheet() string {
+//line content.xml.qtpl:49
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:142
-	WriteBeginSheets(qb422016)
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
+	WriteBeginSpreadsheet(qb422016)
+//line content.xml.qtpl:49
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
 	return qs422016
-//line content.xml.qtpl:142
+//line content.xml.qtpl:49
 }
 
-//line content.xml.qtpl:144
-func (t Table) StreamBegin(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:144
+//line content.xml.qtpl:51
+func (ow *ODSWriter) StreamBeginSheet(qw422016 *qt422016.Writer, name string, cols []spreadsheet.Column) {
+//line content.xml.qtpl:51
 	qw422016.N().S(`<table:table table:name="`)
-//line content.xml.qtpl:144
-	StreamXML(qw422016, t.Name)
-//line content.xml.qtpl:144
-	qw422016.N().S(`" table:style-name="ta-0" table:print="true">
-		`)
-//line content.xml.qtpl:145
-	if t.Style != "" {
-//line content.xml.qtpl:145
+//line content.xml.qtpl:51
+	StreamXML(qw422016, name)
+//line content.xml.qtpl:51
+	qw422016.N().S(`" table:print="true">`)
+//line content.xml.qtpl:52
+	var hasHeader bool
+
+//line content.xml.qtpl:53
+	for _, c := range cols {
+//line content.xml.qtpl:53
 		qw422016.N().S(`<table:table-column table:style-name="`)
-//line content.xml.qtpl:145
-		StreamXML(qw422016, t.Style)
-//line content.xml.qtpl:145
-		qw422016.N().S(`" table:number-columns-repeated="`)
-//line content.xml.qtpl:145
-		qw422016.N().D(t.ColCount)
-//line content.xml.qtpl:145
-		qw422016.N().S(`"/>`)
-//line content.xml.qtpl:145
-	}
-//line content.xml.qtpl:145
-	qw422016.N().S(`
-		`)
-//line content.xml.qtpl:146
-	t.Heading.StreamXML(qw422016)
-//line content.xml.qtpl:146
-	qw422016.N().S(`
-`)
-//line content.xml.qtpl:147
-}
-
-//line content.xml.qtpl:147
-func (t Table) WriteBegin(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:147
-	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:147
-	t.StreamBegin(qw422016)
-//line content.xml.qtpl:147
-	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:147
-}
-
-//line content.xml.qtpl:147
-func (t Table) Begin() string {
-//line content.xml.qtpl:147
-	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:147
-	t.WriteBegin(qb422016)
-//line content.xml.qtpl:147
-	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:147
-	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:147
-	return qs422016
-//line content.xml.qtpl:147
-}
-
-//line content.xml.qtpl:149
-func (row Row) StreamXML(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:150
-	if len(row.Cells) != 0 {
-//line content.xml.qtpl:150
-		qw422016.N().S(`<table:table-row table:style-name="`)
-//line content.xml.qtpl:150
-		StreamXML(qw422016, row.Style)
-//line content.xml.qtpl:150
-		qw422016.N().S(`">`)
-//line content.xml.qtpl:151
-		for _, cell := range row.Cells {
-//line content.xml.qtpl:151
-			cell.StreamXML(qw422016)
-//line content.xml.qtpl:152
+//line content.xml.qtpl:53
+		qw422016.E().S(ow.getStyleName(c.Column))
+//line content.xml.qtpl:53
+		qw422016.N().S(`" />`)
+//line content.xml.qtpl:53
+		if c.Name != "" {
+			hasHeader = true
 		}
-//line content.xml.qtpl:152
-		qw422016.N().S(`</table:table-row>`)
-//line content.xml.qtpl:153
+
+//line content.xml.qtpl:54
 	}
-//line content.xml.qtpl:153
+//line content.xml.qtpl:55
+	if hasHeader {
+//line content.xml.qtpl:55
+		qw422016.N().S(`<table:table-row>`)
+//line content.xml.qtpl:56
+		for _, c := range cols {
+//line content.xml.qtpl:56
+			qw422016.N().S(`<table:table-cell office:value-type="string" table:style-name="`)
+//line content.xml.qtpl:56
+			qw422016.N().S(ow.getStyleName(c.Header))
+//line content.xml.qtpl:56
+			qw422016.N().S(`"><text:p>`)
+//line content.xml.qtpl:56
+			StreamXML(qw422016, c.Name)
+//line content.xml.qtpl:56
+			qw422016.N().S(`</text:p></table:table-cell>`)
+//line content.xml.qtpl:57
+		}
+//line content.xml.qtpl:57
+		qw422016.N().S(`</table:table-row>`)
+//line content.xml.qtpl:58
+	}
+//line content.xml.qtpl:58
 	qw422016.N().S(`
 `)
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
 }
 
-//line content.xml.qtpl:154
-func (row Row) WriteXML(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
+func (ow *ODSWriter) WriteBeginSheet(qq422016 qtio422016.Writer, name string, cols []spreadsheet.Column) {
+//line content.xml.qtpl:59
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:154
-	row.StreamXML(qw422016)
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
+	ow.StreamBeginSheet(qw422016, name, cols)
+//line content.xml.qtpl:59
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
 }
 
-//line content.xml.qtpl:154
-func (row Row) XML() string {
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
+func (ow *ODSWriter) BeginSheet(name string, cols []spreadsheet.Column) string {
+//line content.xml.qtpl:59
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:154
-	row.WriteXML(qb422016)
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
+	ow.WriteBeginSheet(qb422016, name, cols)
+//line content.xml.qtpl:59
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
 	return qs422016
-//line content.xml.qtpl:154
+//line content.xml.qtpl:59
 }
 
-//line content.xml.qtpl:156
-func (cell Cell) StreamXML(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:156
-	qw422016.N().S(`<table:table-cell table:style-name="`)
-//line content.xml.qtpl:156
-	StreamXML(qw422016, cell.Style)
-//line content.xml.qtpl:156
-	qw422016.N().S(`" office:value-type="`)
-//line content.xml.qtpl:156
-	qw422016.N().S(cell.Type.String())
-//line content.xml.qtpl:156
-	qw422016.N().S(`"`)
-//line content.xml.qtpl:157
-	if cell.Type == FloatType {
-//line content.xml.qtpl:157
-		qw422016.N().S(` office:value="`)
-//line content.xml.qtpl:157
-		StreamXML(qw422016, cell.Value)
-//line content.xml.qtpl:157
-		qw422016.N().S(`"`)
-//line content.xml.qtpl:158
-	} else if cell.Type == DateType {
-//line content.xml.qtpl:158
-		qw422016.N().S(` office:date-value="`)
-//line content.xml.qtpl:158
-		StreamXML(qw422016, cell.Value)
-//line content.xml.qtpl:158
-		qw422016.N().S(`"`)
-//line content.xml.qtpl:159
-	}
-//line content.xml.qtpl:159
-	qw422016.N().S(`><text:p>`)
-//line content.xml.qtpl:159
-	StreamXML(qw422016, cell.Value)
-//line content.xml.qtpl:159
-	qw422016.N().S(`</text:p></table:table-cell>`)
-//line content.xml.qtpl:159
-}
-
-//line content.xml.qtpl:159
-func (cell Cell) WriteXML(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:159
-	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:159
-	cell.StreamXML(qw422016)
-//line content.xml.qtpl:159
-	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:159
-}
-
-//line content.xml.qtpl:159
-func (cell Cell) XML() string {
-//line content.xml.qtpl:159
-	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:159
-	cell.WriteXML(qb422016)
-//line content.xml.qtpl:159
-	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:159
-	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:159
-	return qs422016
-//line content.xml.qtpl:159
-}
-
-//line content.xml.qtpl:161
-func StreamEndTable(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:161
+//line content.xml.qtpl:61
+func (ow *ODSWriter) StreamEndSheet(qw422016 *qt422016.Writer) {
+//line content.xml.qtpl:61
 	qw422016.N().S(`
       </table:table>
 `)
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
 }
 
-//line content.xml.qtpl:163
-func WriteEndTable(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
+func (ow *ODSWriter) WriteEndSheet(qq422016 qtio422016.Writer) {
+//line content.xml.qtpl:63
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:163
-	StreamEndTable(qw422016)
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
+	ow.StreamEndSheet(qw422016)
+//line content.xml.qtpl:63
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
 }
 
-//line content.xml.qtpl:163
-func EndTable() string {
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
+func (ow *ODSWriter) EndSheet() string {
+//line content.xml.qtpl:63
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:163
-	WriteEndTable(qb422016)
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
+	ow.WriteEndSheet(qb422016)
+//line content.xml.qtpl:63
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
 	return qs422016
-//line content.xml.qtpl:163
+//line content.xml.qtpl:63
 }
 
-//line content.xml.qtpl:165
-func StreamEndSheets(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:165
+//line content.xml.qtpl:66
+func StreamRow(qw422016 *qt422016.Writer, values ...interface{}) {
+//line content.xml.qtpl:66
+	qw422016.N().S(`<table:table-row>`)
+//line content.xml.qtpl:67
+	for _, v := range values {
+//line content.xml.qtpl:67
+		typ := getValueType(v)
+
+//line content.xml.qtpl:67
+		qw422016.N().S(`
+	<table:table-cell office:value-type="`)
+//line content.xml.qtpl:68
+		qw422016.N().S(typ.String())
+//line content.xml.qtpl:68
+		qw422016.N().S(`"`)
+//line content.xml.qtpl:69
+		if typ == FloatType {
+//line content.xml.qtpl:69
+			qw422016.N().S(` office:value="`)
+//line content.xml.qtpl:69
+			qw422016.N().S(fmt.Sprintf("%v", v))
+//line content.xml.qtpl:69
+			qw422016.N().S(`"`)
+//line content.xml.qtpl:70
+		} else if typ == DateType {
+//line content.xml.qtpl:70
+			qw422016.N().S(` office:date-value="getValueString(v)"`)
+//line content.xml.qtpl:71
+		}
+//line content.xml.qtpl:71
+		qw422016.N().S(`><text:p>`)
+//line content.xml.qtpl:71
+		streamgetValueString(qw422016, v)
+//line content.xml.qtpl:71
+		qw422016.N().S(`</text:p></table:table-cell>`)
+//line content.xml.qtpl:72
+	}
+//line content.xml.qtpl:72
+	qw422016.N().S(`</table:table-row>
+`)
+//line content.xml.qtpl:73
+}
+
+//line content.xml.qtpl:73
+func WriteRow(qq422016 qtio422016.Writer, values ...interface{}) {
+//line content.xml.qtpl:73
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:73
+	StreamRow(qw422016, values...)
+//line content.xml.qtpl:73
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:73
+}
+
+//line content.xml.qtpl:73
+func Row(values ...interface{}) string {
+//line content.xml.qtpl:73
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:73
+	WriteRow(qb422016, values...)
+//line content.xml.qtpl:73
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:73
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:73
+	return qs422016
+//line content.xml.qtpl:73
+}
+
+//line content.xml.qtpl:75
+func StreamEndSpreadsheet(qw422016 *qt422016.Writer) {
+//line content.xml.qtpl:75
 	qw422016.N().S(`
     </office:spreadsheet>
   </office:body>
 </office:document-content>
 `)
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
 }
 
-//line content.xml.qtpl:169
-func WriteEndSheets(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
+func WriteEndSpreadsheet(qq422016 qtio422016.Writer) {
+//line content.xml.qtpl:79
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:169
-	StreamEndSheets(qw422016)
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
+	StreamEndSpreadsheet(qw422016)
+//line content.xml.qtpl:79
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
 }
 
-//line content.xml.qtpl:169
-func EndSheets() string {
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
+func EndSpreadsheet() string {
+//line content.xml.qtpl:79
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:169
-	WriteEndSheets(qb422016)
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
+	WriteEndSpreadsheet(qb422016)
+//line content.xml.qtpl:79
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
 	return qs422016
-//line content.xml.qtpl:169
+//line content.xml.qtpl:79
+}
+
+//line content.xml.qtpl:81
+func StreamStyles(qw422016 *qt422016.Writer, styles map[string]string) {
+//line content.xml.qtpl:81
+	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:xforms="http://www.w3.org/2002/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gnm="http://www.gnumeric.org/odf-extension/1.0" xmlns:css3t="http://www.w3.org/TR/css3-text/" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" office:version="1.2">
+  <office:styles>
+    <style:default-style style:family="table-column">
+      <style:table-column-properties style:use-optimal-column-width="true"/>
+    </style:default-style>
+    <style:default-style style:family="table-row">
+      <style:table-row-properties style:use-optimal-row-height="true"/>
+    </style:default-style>
+  </office:styles>
+  <office:automatic-styles>
+	`)
+//line content.xml.qtpl:92
+	for _, s := range styles {
+//line content.xml.qtpl:92
+		qw422016.N().S(s)
+//line content.xml.qtpl:93
+	}
+//line content.xml.qtpl:93
+	qw422016.N().S(`
+  </office:automatic-styles>
+</office:document-styles>
+`)
+//line content.xml.qtpl:96
+}
+
+//line content.xml.qtpl:96
+func WriteStyles(qq422016 qtio422016.Writer, styles map[string]string) {
+//line content.xml.qtpl:96
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:96
+	StreamStyles(qw422016, styles)
+//line content.xml.qtpl:96
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:96
+}
+
+//line content.xml.qtpl:96
+func Styles(styles map[string]string) string {
+//line content.xml.qtpl:96
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:96
+	WriteStyles(qb422016, styles)
+//line content.xml.qtpl:96
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:96
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:96
+	return qs422016
+//line content.xml.qtpl:96
 }

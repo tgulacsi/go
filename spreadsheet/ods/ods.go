@@ -19,15 +19,19 @@ package ods
 import (
 	"archive/zip"
 	"encoding/xml"
+	"fmt"
+	"hash/fnv"
 	"io"
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	qt "github.com/valyala/quicktemplate"
 	errors "golang.org/x/xerrors"
 
 	"github.com/rakyll/statik/fs"
+	"github.com/tgulacsi/go/spreadsheet"
 	_ "github.com/tgulacsi/go/spreadsheet/ods/statik"
 )
 
@@ -47,27 +51,6 @@ func AcquireWriter(w io.Writer) *qt.Writer {
 // ReleaseWriter returns the *quicktemplate.Writer to the pool.
 func ReleaseWriter(W *qt.Writer) { qtMu.Lock(); qt.ReleaseWriter(W); qtMu.Unlock() }
 
-// Table or sheet.
-type Table struct {
-	Name     string
-	Style    string
-	ColCount int
-	Heading  Row
-}
-
-// Row with style.
-type Row struct {
-	Style string
-	Cells []Cell
-}
-
-// Cell with style, type and value.
-type Cell struct {
-	Style string
-	Type  ValueType
-	Value string
-}
-
 // ValueType is the cell's value's type.
 type ValueType uint8
 
@@ -79,6 +62,18 @@ func (v ValueType) String() string {
 		return "date"
 	default:
 		return "string"
+	}
+}
+func getValueType(v interface{}) ValueType {
+	switch v.(type) {
+	case float32, float64,
+		int, int8, int16, int32, int64,
+		uint, uint16, uint32, uint64:
+		return FloatType
+	case time.Time:
+		return DateType
+	default:
+		return StringType
 	}
 }
 
@@ -133,7 +128,7 @@ func NewWriter(w io.Writer) (*ODSWriter, error) {
 		return nil, err
 	}
 	W := AcquireWriter(bw)
-	StreamBeginSheets(W)
+	StreamBeginSpreadsheet(W)
 
 	return &ODSWriter{qtWriter: W, zipWriter: zw}, nil
 }
@@ -142,6 +137,7 @@ func NewWriter(w io.Writer) (*ODSWriter, error) {
 type ODSWriter struct {
 	qtWriter  *qt.Writer
 	zipWriter *zip.Writer
+	styles    map[string]string
 }
 
 func (ow *ODSWriter) QTWriter() *qt.Writer { return ow.qtWriter }
@@ -151,11 +147,61 @@ func (ow *ODSWriter) Close() error {
 	if ow == nil || ow.qtWriter == nil {
 		return nil
 	}
-	StreamEndSheets(ow.qtWriter)
+	StreamEndSpreadsheet(ow.qtWriter)
+	ReleaseWriter(ow.qtWriter)
 	ow.qtWriter = nil
-	err := ow.zipWriter.Close()
+	zw := ow.zipWriter
 	ow.zipWriter = nil
-	return err
+	defer zw.Close()
+	bw, err := zw.Create("styles.xml")
+	if err != nil {
+		return err
+	}
+	W := AcquireWriter(bw)
+	StreamStyles(W, ow.styles)
+	ReleaseWriter(W)
+	return zw.Close()
+}
+
+func (ow *ODSWriter) NewSheet(name string, cols []spreadsheet.Column) (spreadsheet.Sheet, error) {
+	ow.StreamBeginSheet(ow.qtWriter, name, cols)
+	return &ODSSheet{ow: ow}, nil
+}
+
+func (ow *ODSWriter) getStyleName(style spreadsheet.Style) string {
+	if !style.FontBold {
+		return ""
+	}
+	hsh := fnv.New32()
+	//fmt.Fprintf(hsh, "%t\t%s", style.FontBold, style.Format)
+	fmt.Fprintf(hsh, "%t", style.FontBold)
+	k := fmt.Sprintf("bf-%d", hsh.Sum32())
+	if _, ok := ow.styles[k]; ok {
+		return k
+	}
+	if ow.styles == nil {
+		ow.styles = make(map[string]string, 1)
+	}
+	ow.styles[k] = `<style:style style:name="` + k + `" style:family="table-cell"><style:text-properties text:display="true" fo:font-weight="bold" /></style:style>`
+	return k
+}
+
+type ODSSheet struct {
+	ow *ODSWriter
+}
+
+func (ods *ODSSheet) AppendRow(values ...interface{}) error {
+	StreamRow(ods.ow.qtWriter, values...)
+	return nil
+}
+
+func (ods *ODSSheet) Close() error {
+	ow := ods.ow
+	ods.ow = nil
+	if ow != nil {
+		ow.StreamEndSheet(ow.qtWriter)
+	}
+	return nil
 }
 
 // Style information - generated from content.xml with github.com/miek/zek/cmd/zek.
