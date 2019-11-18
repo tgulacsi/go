@@ -22,20 +22,18 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"net/http"
-	"os"
 	"sync"
+	"strings"
 	"time"
 
 	qt "github.com/valyala/quicktemplate"
 	errors "golang.org/x/xerrors"
 
-	"github.com/rakyll/statik/fs"
 	"github.com/tgulacsi/go/spreadsheet"
-	_ "github.com/tgulacsi/go/spreadsheet/ods/statik"
 )
 
-//go:generate statik -f -src assets
+var _  = errors.Errorf
+
 //go:generate qtc
 
 var qtMu sync.Mutex
@@ -86,40 +84,35 @@ const (
 	StringType = ValueType('s')
 )
 
-var statikFS http.FileSystem
-
-func init() {
-	var err error
-	if statikFS, err = fs.New(); err != nil {
-		panic(err)
-	}
-}
 
 // NewWriter returns a content writer and a zip closer for an ods file.
 func NewWriter(w io.Writer) (*ODSWriter, error) {
 	zw := zip.NewWriter(w)
-	if err := fs.Walk(statikFS, "/", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	for _, elt := range []struct {
+		Name string
+		Stream func(*qt.Writer) 
+	}{
+		{"mimetype", StreamMimetype},
+		{"meta.xml", StreamMeta},
+		{"META-INF/manifest.xml", StreamManifest},
+		{"settings.xml", StreamSettings},
+	} {
+		parts := strings.SplitAfter(elt.Name, "/")
+		var prev string
+		for _, p := range parts[:len(parts)-1] {
+			prev += p
+			if _, err := zw.CreateHeader(&zip.FileHeader{Name:prev}); err != nil {
+				return nil, err
+			}
 		}
-		b, err := fs.ReadFile(statikFS, path)
+		sub, err := zw.CreateHeader(&zip.FileHeader{Name:elt.Name})
 		if err != nil {
-			return errors.Errorf("%s %s: %w", path, info, err)
+			zw.Close()
+			return nil, err
 		}
-		hdr, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return errors.Errorf("%s: %w", path, err)
-		}
-		hdr.Method = zip.Deflate
-		w, err := zw.CreateHeader(hdr)
-		if err != nil {
-			return err
-		}
-		_, err = w.Write(b)
-		return err
-	}); err != nil {
-		zw.Close()
-		return nil, errors.Errorf("Walk: %w", err)
+		W := AcquireWriter(sub)
+		elt.Stream(W)
+		ReleaseWriter(W)
 	}
 
 	bw, err := zw.Create("content.xml")

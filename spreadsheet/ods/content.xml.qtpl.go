@@ -541,3 +541,193 @@ func Styles(styles map[string]string) string {
 	return qs422016
 //line content.xml.qtpl:131
 }
+
+//line content.xml.qtpl:133
+func StreamMimetype(qw422016 *qt422016.Writer) {
+//line content.xml.qtpl:133
+	qw422016.N().S(`application/vnd.oasis.opendocument.spreadsheet`)
+//line content.xml.qtpl:133
+}
+
+//line content.xml.qtpl:133
+func WriteMimetype(qq422016 qtio422016.Writer) {
+//line content.xml.qtpl:133
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:133
+	StreamMimetype(qw422016)
+//line content.xml.qtpl:133
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:133
+}
+
+//line content.xml.qtpl:133
+func Mimetype() string {
+//line content.xml.qtpl:133
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:133
+	WriteMimetype(qb422016)
+//line content.xml.qtpl:133
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:133
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:133
+	return qs422016
+//line content.xml.qtpl:133
+}
+
+//line content.xml.qtpl:135
+func StreamMeta(qw422016 *qt422016.Writer) {
+//line content.xml.qtpl:135
+	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
+<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:ooo="http://openoffice.org/2004/office" office:version="1.2">
+  <office:meta>
+    <dc:date>`)
+//line content.xml.qtpl:138
+	t := time.Now()
+
+//line content.xml.qtpl:138
+	qw422016.N().S(t.Format(time.RFC3339))
+//line content.xml.qtpl:138
+	qw422016.N().S(`</dc:date>
+    <meta:creation-date>`)
+//line content.xml.qtpl:139
+	qw422016.N().S(t.Format(time.RFC3339))
+//line content.xml.qtpl:139
+	qw422016.N().S(`</meta:creation-date>
+    <meta:generator>github.com/tgulacsi/go/spreadsheet/ods</meta:generator>
+  </office:meta>
+</office:document-meta>`)
+//line content.xml.qtpl:142
+}
+
+//line content.xml.qtpl:142
+func WriteMeta(qq422016 qtio422016.Writer) {
+//line content.xml.qtpl:142
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:142
+	StreamMeta(qw422016)
+//line content.xml.qtpl:142
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:142
+}
+
+//line content.xml.qtpl:142
+func Meta() string {
+//line content.xml.qtpl:142
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:142
+	WriteMeta(qb422016)
+//line content.xml.qtpl:142
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:142
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:142
+	return qs422016
+//line content.xml.qtpl:142
+}
+
+//line content.xml.qtpl:144
+func StreamManifest(qw422016 *qt422016.Writer) {
+//line content.xml.qtpl:144
+	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+  <manifest:file-entry manifest:media-type="application/vnd.oasis.opendocument.spreadsheet" manifest:full-path="/"/>
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="meta.xml"/>
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="content.xml"/>
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="styles.xml"/>
+  <manifest:file-entry manifest:media-type="text/xml" manifest:full-path="settings.xml"/>
+</manifest:manifest>`)
+//line content.xml.qtpl:151
+}
+
+//line content.xml.qtpl:151
+func WriteManifest(qq422016 qtio422016.Writer) {
+//line content.xml.qtpl:151
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:151
+	StreamManifest(qw422016)
+//line content.xml.qtpl:151
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:151
+}
+
+//line content.xml.qtpl:151
+func Manifest() string {
+//line content.xml.qtpl:151
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:151
+	WriteManifest(qb422016)
+//line content.xml.qtpl:151
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:151
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:151
+	return qs422016
+//line content.xml.qtpl:151
+}
+
+//line content.xml.qtpl:153
+func StreamSettings(qw422016 *qt422016.Writer) {
+//line content.xml.qtpl:153
+	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
+<office:document-settings xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:xforms="http://www.w3.org/2002/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gnm="http://www.gnumeric.org/odf-extension/1.0" xmlns:css3t="http://www.w3.org/TR/css3-text/" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" office:version="1.2">
+  <office:settings>
+    <config:config-item-set config:name="gnm:settings">
+      <config:config-item config:name="gnm:has_foreign" config:type="boolean">false</config:config-item>
+      <config:config-item config:name="gnm:active-sheet" config:type="string">Sheet1</config:config-item>
+      <config:config-item config:name="gnm:geometry-width" config:type="int">956</config:config-item>
+      <config:config-item config:name="gnm:geometry-height" config:type="int">843</config:config-item>
+    </config:config-item-set>
+    <config:config-item-set config:name="ooo:view-settings">
+      <config:config-item-map-indexed config:name="Views">
+        <config:config-item-map-entry>
+          <config:config-item config:name="ViewId" config:type="string">View1</config:config-item>
+          <config:config-item-map-named config:name="Tables">
+            <config:config-item-map-entry config:name="Sheet1">
+              <config:config-item config:name="CursorPositionX" config:type="int">0</config:config-item>
+              <config:config-item config:name="CursorPositionY" config:type="int">0</config:config-item>
+              <config:config-item config:name="ZoomValue" config:type="int">100</config:config-item>
+              <config:config-item config:name="ShowGrid" config:type="boolean">true</config:config-item>
+              <config:config-item config:name="HasColumnRowHeaders" config:type="boolean">true</config:config-item>
+              <config:config-item config:name="ShowZeroValues" config:type="boolean">true</config:config-item>
+              <config:config-item config:name="PositionLeft" config:type="int">0</config:config-item>
+              <config:config-item config:name="PositionRight" config:type="int">0</config:config-item>
+              <config:config-item config:name="PositionTop" config:type="int">0</config:config-item>
+              <config:config-item config:name="PositionBottom" config:type="int">0</config:config-item>
+            </config:config-item-map-entry>
+          </config:config-item-map-named>
+          <config:config-item config:name="ActiveTable" config:type="string">Sheet1</config:config-item>
+        </config:config-item-map-entry>
+      </config:config-item-map-indexed>
+    </config:config-item-set>
+  </office:settings>
+</office:document-settings>
+`)
+//line content.xml.qtpl:186
+}
+
+//line content.xml.qtpl:186
+func WriteSettings(qq422016 qtio422016.Writer) {
+//line content.xml.qtpl:186
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:186
+	StreamSettings(qw422016)
+//line content.xml.qtpl:186
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:186
+}
+
+//line content.xml.qtpl:186
+func Settings() string {
+//line content.xml.qtpl:186
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:186
+	WriteSettings(qb422016)
+//line content.xml.qtpl:186
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:186
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:186
+	return qs422016
+//line content.xml.qtpl:186
+}
