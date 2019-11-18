@@ -12,7 +12,41 @@
 	%}
 	{%s= buf.String() %}
 {% endfunc %}
-{% func getValueString(v interface{}) %}
+{% func getDateValue(v interface{}) %}
+	{% code
+	var buf strings.Builder
+	if x, ok := v.(time.Time); !ok || x.IsZero() {
+		buf.WriteString("1899-12-30")
+	} else {
+		// https://www.w3.org/TR/2004/REC-xmlschema-2-20041028/#dateTime
+		buf.WriteString(x.Format(time.RFC3339))
+	} %}
+	{%s= buf.String() %}
+{% endfunc %}
+{% func getValue(v interface{}) %}
+	{% code 
+	var buf strings.Builder
+	switch x := v.(type) {
+	case time.Time:
+		if x.IsZero() {
+			buf.WriteString("1899-12-30")
+		} else {
+			buf.WriteString(x.Format(time.RFC3339))
+		}
+	case int, int8, int16, int32, int64, uint, uint16, uint32, uint64:
+		fmt.Fprintf(&buf, "%d", v)
+	case float32, float64:
+		fmt.Fprintf(&buf, "%f", v)
+	case string:
+		_ = xml.EscapeText(&buf, []byte(x))
+	case fmt.Stringer:
+		_ = xml.EscapeText(&buf, []byte(x.String()))
+	default:
+		_ = xml.EscapeText(&buf, []byte(fmt.Sprintf("%v", v)))
+	} %}
+	{%s= buf.String() %}
+{% endfunc %}
+{% func getText(v interface{}) %}
 	{% code 
 	var buf strings.Builder
 	switch x := v.(type) {
@@ -65,10 +99,11 @@
 
 {% func Row(values ...interface{}) %}<table:table-row>{%
 	for _, v := range values %}{%code typ := getValueType(v) %}
-	<table:table-cell office:value-type="{%s= typ.String() %}"{%
-		if typ == FloatType  %} office:value="{%s= fmt.Sprintf("%v", v) %}"{%
-		elseif typ == DateType %} office:date-value="{%= getValueString(v) %}"{%
-		endif %}><text:p>{%= getValueString(v) %}</text:p></table:table-cell>{%
+	<table:table-cell {%
+		if typ == FloatType  %} office:value-type="float" office:value="{%s= fmt.Sprintf("%v", v) %}" calcext:value-type="float"{%
+		elseif false && typ == DateType %} office:value-type="date" office:date-value="{%= getDateValue(v) %}" calcext:value-type="date"{%
+		else %} office:value-type="string"{%
+		endif %} ><text:p>{%= getText(v) %}</text:p></table:table-cell>{%
 	endfor %}</table:table-row>
 {% endfunc %}
 

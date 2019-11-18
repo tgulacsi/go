@@ -70,8 +70,104 @@ func XML(s string) string {
 }
 
 //line content.xml.qtpl:15
-func streamgetValueString(qw422016 *qt422016.Writer, v interface{}) {
+func streamgetDateValue(qw422016 *qt422016.Writer, v interface{}) {
 //line content.xml.qtpl:17
+	var buf strings.Builder
+	if x, ok := v.(time.Time); !ok || x.IsZero() {
+		buf.WriteString("1899-12-30")
+	} else {
+		// https://www.w3.org/TR/2004/REC-xmlschema-2-20041028/#dateTime
+		buf.WriteString(x.Format(time.RFC3339))
+	}
+
+//line content.xml.qtpl:24
+	qw422016.N().S(buf.String())
+//line content.xml.qtpl:25
+}
+
+//line content.xml.qtpl:25
+func writegetDateValue(qq422016 qtio422016.Writer, v interface{}) {
+//line content.xml.qtpl:25
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:25
+	streamgetDateValue(qw422016, v)
+//line content.xml.qtpl:25
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:25
+}
+
+//line content.xml.qtpl:25
+func getDateValue(v interface{}) string {
+//line content.xml.qtpl:25
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:25
+	writegetDateValue(qb422016, v)
+//line content.xml.qtpl:25
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:25
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:25
+	return qs422016
+//line content.xml.qtpl:25
+}
+
+//line content.xml.qtpl:26
+func streamgetValue(qw422016 *qt422016.Writer, v interface{}) {
+//line content.xml.qtpl:28
+	var buf strings.Builder
+	switch x := v.(type) {
+	case time.Time:
+		if x.IsZero() {
+			buf.WriteString("1899-12-30")
+		} else {
+			buf.WriteString(x.Format(time.RFC3339))
+		}
+	case int, int8, int16, int32, int64, uint, uint16, uint32, uint64:
+		fmt.Fprintf(&buf, "%d", v)
+	case float32, float64:
+		fmt.Fprintf(&buf, "%f", v)
+	case string:
+		_ = xml.EscapeText(&buf, []byte(x))
+	case fmt.Stringer:
+		_ = xml.EscapeText(&buf, []byte(x.String()))
+	default:
+		_ = xml.EscapeText(&buf, []byte(fmt.Sprintf("%v", v)))
+	}
+
+//line content.xml.qtpl:47
+	qw422016.N().S(buf.String())
+//line content.xml.qtpl:48
+}
+
+//line content.xml.qtpl:48
+func writegetValue(qq422016 qtio422016.Writer, v interface{}) {
+//line content.xml.qtpl:48
+	qw422016 := qt422016.AcquireWriter(qq422016)
+//line content.xml.qtpl:48
+	streamgetValue(qw422016, v)
+//line content.xml.qtpl:48
+	qt422016.ReleaseWriter(qw422016)
+//line content.xml.qtpl:48
+}
+
+//line content.xml.qtpl:48
+func getValue(v interface{}) string {
+//line content.xml.qtpl:48
+	qb422016 := qt422016.AcquireByteBuffer()
+//line content.xml.qtpl:48
+	writegetValue(qb422016, v)
+//line content.xml.qtpl:48
+	qs422016 := string(qb422016.B)
+//line content.xml.qtpl:48
+	qt422016.ReleaseByteBuffer(qb422016)
+//line content.xml.qtpl:48
+	return qs422016
+//line content.xml.qtpl:48
+}
+
+//line content.xml.qtpl:49
+func streamgetText(qw422016 *qt422016.Writer, v interface{}) {
+//line content.xml.qtpl:51
 	var buf strings.Builder
 	switch x := v.(type) {
 	case time.Time:
@@ -90,40 +186,40 @@ func streamgetValueString(qw422016 *qt422016.Writer, v interface{}) {
 		_ = xml.EscapeText(&buf, []byte(fmt.Sprintf("%v", v)))
 	}
 
-//line content.xml.qtpl:34
+//line content.xml.qtpl:68
 	qw422016.N().S(buf.String())
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
 }
 
-//line content.xml.qtpl:35
-func writegetValueString(qq422016 qtio422016.Writer, v interface{}) {
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
+func writegetText(qq422016 qtio422016.Writer, v interface{}) {
+//line content.xml.qtpl:69
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:35
-	streamgetValueString(qw422016, v)
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
+	streamgetText(qw422016, v)
+//line content.xml.qtpl:69
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
 }
 
-//line content.xml.qtpl:35
-func getValueString(v interface{}) string {
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
+func getText(v interface{}) string {
+//line content.xml.qtpl:69
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:35
-	writegetValueString(qb422016, v)
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
+	writegetText(qb422016, v)
+//line content.xml.qtpl:69
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
 	return qs422016
-//line content.xml.qtpl:35
+//line content.xml.qtpl:69
 }
 
-//line content.xml.qtpl:38
+//line content.xml.qtpl:72
 func StreamBeginSpreadsheet(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:38
+//line content.xml.qtpl:72
 	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:xforms="http://www.w3.org/2002/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gnm="http://www.gnumeric.org/odf-extension/1.0" xmlns:css3t="http://www.w3.org/TR/css3-text/" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" office:version="1.2">
   <office:scripts/>
@@ -136,264 +232,264 @@ func StreamBeginSpreadsheet(qw422016 *qt422016.Writer) {
         <table:iteration table:maximum-difference="0.001" table:status="enable" table:steps="100"/>
       </table:calculation-settings>
 `)
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 }
 
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 func WriteBeginSpreadsheet(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	StreamBeginSpreadsheet(qw422016)
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 }
 
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 func BeginSpreadsheet() string {
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	WriteBeginSpreadsheet(qb422016)
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 	return qs422016
-//line content.xml.qtpl:49
+//line content.xml.qtpl:83
 }
 
-//line content.xml.qtpl:51
+//line content.xml.qtpl:85
 func (ow *ODSWriter) StreamBeginSheet(qw422016 *qt422016.Writer, name string, cols []spreadsheet.Column) {
-//line content.xml.qtpl:51
+//line content.xml.qtpl:85
 	qw422016.N().S(`<table:table table:name="`)
-//line content.xml.qtpl:51
+//line content.xml.qtpl:85
 	StreamXML(qw422016, name)
-//line content.xml.qtpl:51
+//line content.xml.qtpl:85
 	qw422016.N().S(`" table:print="true">`)
-//line content.xml.qtpl:52
+//line content.xml.qtpl:86
 	var hasHeader bool
 
-//line content.xml.qtpl:53
+//line content.xml.qtpl:87
 	for _, c := range cols {
-//line content.xml.qtpl:53
+//line content.xml.qtpl:87
 		qw422016.N().S(`<table:table-column table:style-name="`)
-//line content.xml.qtpl:53
+//line content.xml.qtpl:87
 		qw422016.E().S(ow.getStyleName(c.Column))
-//line content.xml.qtpl:53
+//line content.xml.qtpl:87
 		qw422016.N().S(`" />`)
-//line content.xml.qtpl:53
+//line content.xml.qtpl:87
 		if c.Name != "" {
 			hasHeader = true
 		}
 
-//line content.xml.qtpl:54
+//line content.xml.qtpl:88
 	}
-//line content.xml.qtpl:55
+//line content.xml.qtpl:89
 	if hasHeader {
-//line content.xml.qtpl:55
+//line content.xml.qtpl:89
 		qw422016.N().S(`<table:table-row>`)
-//line content.xml.qtpl:56
+//line content.xml.qtpl:90
 		for _, c := range cols {
-//line content.xml.qtpl:56
+//line content.xml.qtpl:90
 			qw422016.N().S(`<table:table-cell office:value-type="string" table:style-name="`)
-//line content.xml.qtpl:56
+//line content.xml.qtpl:90
 			qw422016.N().S(ow.getStyleName(c.Header))
-//line content.xml.qtpl:56
+//line content.xml.qtpl:90
 			qw422016.N().S(`"><text:p>`)
-//line content.xml.qtpl:56
+//line content.xml.qtpl:90
 			StreamXML(qw422016, c.Name)
-//line content.xml.qtpl:56
+//line content.xml.qtpl:90
 			qw422016.N().S(`</text:p></table:table-cell>`)
-//line content.xml.qtpl:57
+//line content.xml.qtpl:91
 		}
-//line content.xml.qtpl:57
+//line content.xml.qtpl:91
 		qw422016.N().S(`</table:table-row>`)
-//line content.xml.qtpl:58
+//line content.xml.qtpl:92
 	}
-//line content.xml.qtpl:58
+//line content.xml.qtpl:92
 	qw422016.N().S(`
 `)
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 }
 
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 func (ow *ODSWriter) WriteBeginSheet(qq422016 qtio422016.Writer, name string, cols []spreadsheet.Column) {
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	ow.StreamBeginSheet(qw422016, name, cols)
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 }
 
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 func (ow *ODSWriter) BeginSheet(name string, cols []spreadsheet.Column) string {
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	ow.WriteBeginSheet(qb422016, name, cols)
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 	return qs422016
-//line content.xml.qtpl:59
+//line content.xml.qtpl:93
 }
 
-//line content.xml.qtpl:61
+//line content.xml.qtpl:95
 func (ow *ODSWriter) StreamEndSheet(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:61
+//line content.xml.qtpl:95
 	qw422016.N().S(`
       </table:table>
 `)
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 }
 
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 func (ow *ODSWriter) WriteEndSheet(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	ow.StreamEndSheet(qw422016)
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 }
 
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 func (ow *ODSWriter) EndSheet() string {
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	ow.WriteEndSheet(qb422016)
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 	return qs422016
-//line content.xml.qtpl:63
+//line content.xml.qtpl:97
 }
 
-//line content.xml.qtpl:66
+//line content.xml.qtpl:100
 func StreamRow(qw422016 *qt422016.Writer, values ...interface{}) {
-//line content.xml.qtpl:66
+//line content.xml.qtpl:100
 	qw422016.N().S(`<table:table-row>`)
-//line content.xml.qtpl:67
+//line content.xml.qtpl:101
 	for _, v := range values {
-//line content.xml.qtpl:67
+//line content.xml.qtpl:101
 		typ := getValueType(v)
 
-//line content.xml.qtpl:67
+//line content.xml.qtpl:101
 		qw422016.N().S(`
-	<table:table-cell office:value-type="`)
-//line content.xml.qtpl:68
-		qw422016.N().S(typ.String())
-//line content.xml.qtpl:68
-		qw422016.N().S(`"`)
-//line content.xml.qtpl:69
+	<table:table-cell `)
+//line content.xml.qtpl:103
 		if typ == FloatType {
-//line content.xml.qtpl:69
-			qw422016.N().S(` office:value="`)
-//line content.xml.qtpl:69
+//line content.xml.qtpl:103
+			qw422016.N().S(` office:value-type="float" office:value="`)
+//line content.xml.qtpl:103
 			qw422016.N().S(fmt.Sprintf("%v", v))
-//line content.xml.qtpl:69
-			qw422016.N().S(`"`)
-//line content.xml.qtpl:70
-		} else if typ == DateType {
-//line content.xml.qtpl:70
-			qw422016.N().S(` office:date-value="`)
-//line content.xml.qtpl:70
-			streamgetValueString(qw422016, v)
-//line content.xml.qtpl:70
-			qw422016.N().S(`"`)
-//line content.xml.qtpl:71
+//line content.xml.qtpl:103
+			qw422016.N().S(`" calcext:value-type="float"`)
+//line content.xml.qtpl:104
+		} else if false && typ == DateType {
+//line content.xml.qtpl:104
+			qw422016.N().S(` office:value-type="date" office:date-value="`)
+//line content.xml.qtpl:104
+			streamgetDateValue(qw422016, v)
+//line content.xml.qtpl:104
+			qw422016.N().S(`" calcext:value-type="date"`)
+//line content.xml.qtpl:105
+		} else {
+//line content.xml.qtpl:105
+			qw422016.N().S(` office:value-type="string"`)
+//line content.xml.qtpl:106
 		}
-//line content.xml.qtpl:71
-		qw422016.N().S(`><text:p>`)
-//line content.xml.qtpl:71
-		streamgetValueString(qw422016, v)
-//line content.xml.qtpl:71
+//line content.xml.qtpl:106
+		qw422016.N().S(` ><text:p>`)
+//line content.xml.qtpl:106
+		streamgetText(qw422016, v)
+//line content.xml.qtpl:106
 		qw422016.N().S(`</text:p></table:table-cell>`)
-//line content.xml.qtpl:72
+//line content.xml.qtpl:107
 	}
-//line content.xml.qtpl:72
+//line content.xml.qtpl:107
 	qw422016.N().S(`</table:table-row>
 `)
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 }
 
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 func WriteRow(qq422016 qtio422016.Writer, values ...interface{}) {
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	StreamRow(qw422016, values...)
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 }
 
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 func Row(values ...interface{}) string {
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	WriteRow(qb422016, values...)
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 	return qs422016
-//line content.xml.qtpl:73
+//line content.xml.qtpl:108
 }
 
-//line content.xml.qtpl:75
+//line content.xml.qtpl:110
 func StreamEndSpreadsheet(qw422016 *qt422016.Writer) {
-//line content.xml.qtpl:75
+//line content.xml.qtpl:110
 	qw422016.N().S(`
     </office:spreadsheet>
   </office:body>
 </office:document-content>
 `)
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 }
 
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 func WriteEndSpreadsheet(qq422016 qtio422016.Writer) {
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	StreamEndSpreadsheet(qw422016)
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 }
 
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 func EndSpreadsheet() string {
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	WriteEndSpreadsheet(qb422016)
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 	return qs422016
-//line content.xml.qtpl:79
+//line content.xml.qtpl:114
 }
 
-//line content.xml.qtpl:81
+//line content.xml.qtpl:116
 func StreamStyles(qw422016 *qt422016.Writer, styles map[string]string) {
-//line content.xml.qtpl:81
+//line content.xml.qtpl:116
 	qw422016.N().S(`<?xml version="1.0" encoding="UTF-8"?>
 <office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:xforms="http://www.w3.org/2002/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gnm="http://www.gnumeric.org/odf-extension/1.0" xmlns:css3t="http://www.w3.org/TR/css3-text/" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" office:version="1.2">
   <office:styles>
@@ -406,42 +502,42 @@ func StreamStyles(qw422016 *qt422016.Writer, styles map[string]string) {
   </office:styles>
   <office:automatic-styles>
 	`)
-//line content.xml.qtpl:92
+//line content.xml.qtpl:127
 	for _, s := range styles {
-//line content.xml.qtpl:92
+//line content.xml.qtpl:127
 		qw422016.N().S(s)
-//line content.xml.qtpl:93
+//line content.xml.qtpl:128
 	}
-//line content.xml.qtpl:93
+//line content.xml.qtpl:128
 	qw422016.N().S(`
   </office:automatic-styles>
 </office:document-styles>
 `)
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 }
 
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 func WriteStyles(qq422016 qtio422016.Writer, styles map[string]string) {
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	qw422016 := qt422016.AcquireWriter(qq422016)
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	StreamStyles(qw422016, styles)
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	qt422016.ReleaseWriter(qw422016)
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 }
 
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 func Styles(styles map[string]string) string {
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	qb422016 := qt422016.AcquireByteBuffer()
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	WriteStyles(qb422016, styles)
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	qs422016 := string(qb422016.B)
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	qt422016.ReleaseByteBuffer(qb422016)
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 	return qs422016
-//line content.xml.qtpl:96
+//line content.xml.qtpl:131
 }
