@@ -67,7 +67,7 @@
 	for _, v := range values %}{%code typ := getValueType(v) %}
 	<table:table-cell office:value-type="{%s= typ.String() %}"{%
 		if typ == FloatType  %} office:value="{%s= fmt.Sprintf("%v", v) %}"{%
-		elseif typ == DateType %} office:date-value="getValueString(v)"{%
+		elseif typ == DateType %} office:date-value="{%= getValueString(v) %}"{%
 		endif %}><text:p>{%= getValueString(v) %}</text:p></table:table-cell>{%
 	endfor %}</table:table-row>
 {% endfunc %}

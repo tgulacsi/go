@@ -307,7 +307,11 @@ func StreamRow(qw422016 *qt422016.Writer, values ...interface{}) {
 //line content.xml.qtpl:70
 		} else if typ == DateType {
 //line content.xml.qtpl:70
-			qw422016.N().S(` office:date-value="getValueString(v)"`)
+			qw422016.N().S(` office:date-value="`)
+//line content.xml.qtpl:70
+			streamgetValueString(qw422016, v)
+//line content.xml.qtpl:70
+			qw422016.N().S(`"`)
 //line content.xml.qtpl:71
 		}
 //line content.xml.qtpl:71
