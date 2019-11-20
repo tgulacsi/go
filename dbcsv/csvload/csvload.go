@@ -58,6 +58,7 @@ func Main() error {
 	flag.IntVar(&cfg.Skip, "skip", 0, "skip rows")
 	flag.IntVar(&cfg.Sheet, "sheet", 0, "sheet of spreadsheet")
 	flag.StringVar(&cfg.ColumnsString, "columns", "", "columns, comma separated indexes")
+	flagFields := flag.String("fields", "", "target fields, comma separated names")
 	flag.BoolVar(&ForceString, "force-string", false, "force all columns to be VARCHAR2")
 	flagMemProf := flag.String("memprofile", "", "file to output memory profile to")
 	flagCPUProf := flag.String("cpuprofile", "", "file to output CPU profile to")
@@ -108,6 +109,11 @@ func Main() error {
 	db.SetMaxIdleConns(*flagConcurrency)
 
 	tbl := strings.ToUpper(flag.Arg(0))
+	var fields []string
+	var tblFullInsert bool
+	if tblFullInsert = strings.HasPrefix(tbl, "INSERT INTO "); !tblFullInsert {
+		fields = strings.FieldsFunc(*flagFields, func(r rune) bool { return r == ',' || r == ';' || r == ' ' })
+	}
 	src := flag.Arg(1)
 
 	if ForceString {
@@ -138,27 +144,49 @@ func Main() error {
 	}()
 
 	if *flagJustPrint {
+		fmt.Println("INSERT ALL")
 		cols, err := getColumns(ctx, db, tbl)
 		if err != nil {
 			return err
 		}
 		var buf strings.Builder
-		for i, col := range cols {
-			if i != 0 {
-				buf.Write([]byte{',', ' '})
+		var pattern string
+		if tblFullInsert {
+			i := strings.Index(tbl, "VALUES")
+			j := strings.LastIndexByte(tbl[:i], ')')
+			pattern = strings.TrimSpace(tbl[i:])
+			for i := range cols {
+				pattern = strings.Replace(pattern, fmt.Sprintf(":%d", i+1), "%s", 1)
 			}
-			buf.WriteString(col.Name)
+			pattern = strings.TrimSpace(strings.TrimPrefix(tbl[:j+1], "INSERT")) + pattern + "\n"
+		} else {
+			cols = filterCols(cols, fields)
+			for i, col := range cols {
+				if i != 0 {
+					buf.Write([]byte{',', ' '})
+				}
+				buf.WriteString(col.Name)
+			}
+			pattern = "  INTO " + tbl + " (" + buf.String() + ") VALUES ("
+			colMap := make(map[string]Column, len(cols))
+			for _, col := range cols {
+				colMap[col.Name] = col
+			}
+			cols = cols[:0]
+			for _, nm := range (<-rows).Values {
+				cols = append(cols, colMap[strings.ToUpper(nm)])
+			}
+
+			buf.Reset()
+			for j := range cols {
+				if j != 0 {
+					buf.Write([]byte{',', ' '})
+				}
+				fmt.Fprintf(&buf, ":%d", j+1)
+			}
+			pattern += buf.String() + ")\n"
 		}
-		fmt.Println("INSERT ALL")
-		prefix := "  INTO " + tbl + " (" + buf.String() + ")"
-		colMap := make(map[string]Column, len(cols))
-		for _, col := range cols {
-			colMap[col.Name] = col
-		}
-		cols = cols[:0]
-		for _, nm := range (<-rows).Values {
-			cols = append(cols, colMap[strings.ToUpper(nm)])
-		}
+
 		dRepl := strings.NewReplacer(".", "", "-", "")
 		for row := range rows {
 			allEmpty := true
@@ -169,12 +197,10 @@ func Main() error {
 			if allEmpty {
 				continue
 			}
-			
-			buf.Reset()
+
+			vals := make([]string, len(cols))
 			for j, s := range row.Values {
-				if j != 0 {
-					buf.Write([]byte{',', ' '})
-				}
+				buf.Reset()
 				col := cols[j]
 				if col.Type != Date {
 					if err = quote(&buf, s); err != nil {
@@ -189,35 +215,49 @@ func Main() error {
 					buf.WriteString(d)
 					buf.WriteString("','YYYYMMDD')")
 				}
+				vals[j] = buf.String()
 			}
-			fmt.Printf("%s VALUES (%s)\n", prefix, buf.String())
+			fmt.Printf(pattern, vals)
 		}
 		fmt.Println("SELECT 1 FROM DUAL;")
 		return nil
 	}
 
-	columns, err := CreateTable(ctx, db, tbl, rows, *flagTruncate, *flagTablespace, *flagCopy)
-	cancel()
-	if err != nil {
-		return err
-	}
-	var buf strings.Builder
-	fmt.Fprintf(&buf, `INSERT INTO %s (`, tbl)
-	for i, c := range columns {
-		if i != 0 {
-			buf.WriteString(", ")
+	var columns []Column
+	var qry string
+	if tblFullInsert {
+		qry = tbl
+		s := qry[strings.Index(qry, "VALUES")+6:]
+		s = s[strings.IndexByte(s, '(')+1 : strings.LastIndexByte(s, ')')]
+		log.Println(s)
+		for x, i := strings.Count(s, ":"), 0; i < x; i++ {
+			columns = append(columns, Column{Name: fmt.Sprintf("%d", i+1)})
 		}
-		buf.WriteString(c.Name)
-	}
-	buf.WriteString(") VALUES (")
-	for i := range columns {
-		if i != 0 {
-			buf.WriteString(", ")
+	} else {
+		columns, err = CreateTable(ctx, db, tbl, rows, *flagTruncate, *flagTablespace, *flagCopy)
+		cancel()
+		if err != nil {
+			return err
 		}
-		fmt.Fprintf(&buf, ":%d", i+1)
+		columns = filterCols(columns, fields)
+		var buf strings.Builder
+		fmt.Fprintf(&buf, `INSERT INTO %s (`, tbl)
+		for i, c := range columns {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(c.Name)
+		}
+		buf.WriteString(") VALUES (")
+		for i := range columns {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			fmt.Fprintf(&buf, ":%d", i+1)
+		}
+		buf.WriteString(")")
+		qry = buf.String()
 	}
-	buf.WriteString(")")
-	qry := buf.String()
 	log.Println(qry)
 
 	start := time.Now()
@@ -702,6 +742,23 @@ func quote(w io.Writer, s string) error {
 	}
 	_, err := w.Write([]byte{'\''})
 	return err
+}
+
+func filterCols(cols []Column, fields []string) []Column {
+	if len(fields) == 0 {
+		return cols
+	}
+	m := make(map[string]int, len(cols))
+	for i, c := range cols {
+		m[c.Name] = i
+	}
+	columns := make([]Column, 0, len(fields))
+	for _, f := range fields {
+		if i, ok := m[strings.ToUpper(f)]; ok {
+			columns = append(columns, cols[i])
+		}
+	}
+	return columns
 }
 
 // vim: set fileencoding=utf-8 noet:
