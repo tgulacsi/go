@@ -161,6 +161,15 @@ func Main() error {
 		}
 		dRepl := strings.NewReplacer(".", "", "-", "")
 		for row := range rows {
+			allEmpty := true
+			for i, s := range row.Values {
+				row.Values[i] = strings.TrimSpace(s)
+				allEmpty = allEmpty && row.Values[i] == ""
+			}
+			if allEmpty {
+				continue
+			}
+			
 			buf.Reset()
 			for j, s := range row.Values {
 				if j != 0 {
@@ -261,7 +270,9 @@ func Main() error {
 				}
 				for k, row := range chunk {
 					if len(row) > len(cols) {
-						log.Printf("%d. more elements in the row (%d) then columns (%d)!", rs.Start+int64(k), len(row), len(cols))
+						if row[len(row)-1] != "" {
+							log.Printf("%d. more elements in the row (%d) then columns (%d)!", rs.Start+int64(k), len(row), len(cols))
+						}
 						row = row[:len(cols)]
 					}
 					for j, v := range row {
@@ -343,8 +354,13 @@ func Main() error {
 			} else if n%10000 == 0 {
 				writeHeapProf()
 			}
+			allEmpty := true
 			for i, s := range row.Values {
 				row.Values[i] = strings.TrimSpace(s)
+				allEmpty = allEmpty && row.Values[i] == ""
+			}
+			if allEmpty {
+				return nil
 			}
 			chunk = append(chunk, row.Values)
 			if len(chunk) < chunkSize {
@@ -418,10 +434,10 @@ func typeOf(s string) Type {
 
 func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.Row, truncate bool, tablespace, copyTable string) ([]Column, error) {
 	tbl = strings.ToUpper(tbl)
-	var owner,ownerDot string
+	var owner, ownerDot string
 	if i := strings.IndexByte(tbl, '.'); i >= 0 {
 		owner, tbl = tbl[:i], tbl[i+1:]
-		ownerDot = owner+"."
+		ownerDot = owner + "."
 	}
 	qry := "SELECT COUNT(0) FROM all_tables WHERE UPPER(table_name) = :1 AND owner = NVL(:2, owner)"
 	var n int64
@@ -430,7 +446,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 		return cols, errors.Errorf("%s: %w", qry, err)
 	}
 	if n > 0 && truncate {
-		qry = `TRUNCATE TABLE ` + ownerDot+tbl
+		qry = `TRUNCATE TABLE ` + ownerDot + tbl
 		if _, err := db.ExecContext(ctx, qry); err != nil {
 			return cols, errors.Errorf("%s: %w", qry, err)
 		}
@@ -439,11 +455,11 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 	if n == 0 && copyTable != "" {
 		var tblsp string
 		if tablespace != "" {
-			tblsp = "TABLESPACE "+tablespace
+			tblsp = "TABLESPACE " + tablespace
 		}
-		qry := fmt.Sprintf("CREATE TABLE %s%s %s AS SELECT * FROM %s WHERE 1=0", ownerDot,tbl, tblsp, copyTable)
+		qry := fmt.Sprintf("CREATE TABLE %s%s %s AS SELECT * FROM %s WHERE 1=0", ownerDot, tbl, tblsp, copyTable)
 		if _, err := db.ExecContext(ctx, qry); err != nil {
-			return cols, errors.Errorf("%s: %w", qry , err)
+			return cols, errors.Errorf("%s: %w", qry, err)
 		}
 	} else if n == 0 && copyTable == "" {
 		row := <-rows
@@ -500,7 +516,7 @@ func CreateTable(ctx context.Context, db *sql.DB, tbl string, rows <-chan dbcsv.
 			}
 		}
 		var buf bytes.Buffer
-		buf.WriteString(`CREATE TABLE "` + ownerDot+tbl + `" (`)
+		buf.WriteString(`CREATE TABLE "` + ownerDot + tbl + `" (`)
 		for i, c := range cols {
 			if i != 0 {
 				buf.WriteString(",\n")

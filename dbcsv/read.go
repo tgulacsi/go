@@ -307,16 +307,18 @@ func ReadXLSFile(ctx context.Context, fn func(string, Row) error, filename strin
 		}
 		vals := make([]string, 0, maxWidth)
 		off := row.FirstCol()
-		if len(vals) <= row.LastCol() {
-			maxWidth = row.LastCol() + 1
-			vals = append(vals, make([]string, maxWidth-len(vals))...)
+		if w := row.LastCol()-off ; cap(vals) < w {
+			maxWidth = w
+			vals = make([]string, w)
+		} else {
+			vals =vals[:w]
 		}
 
 		for j := off; j < row.LastCol(); j++ {
 			if need != nil && !need[int(j)] {
 				continue
 			}
-			vals[j] = row.Col(j)
+			vals[j-off] = row.Col(j)
 		}
 		select {
 		case <-ctx.Done():
