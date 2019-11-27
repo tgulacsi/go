@@ -46,6 +46,8 @@ func Main() error {
 	flagDest := flag.String("dst", os.Getenv("BRUNO_ID"), "user/passw@sid to write to")
 	flagReplace := flag.String("replace", "", "replace FIELD_NAME=WITH_VALUE,OTHER=NEXT")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
+	flagTimeout := flag.Duration("timeout", 1*time.Minute, "timeout")
+	flagTableTimeout := flag.Duration("table-timeout", 10*time.Second, "per-table-timeout")
 	flagConc := flag.Int("concurrency", 8, "concurrency")
 	flagTruncate := flag.Bool("truncate", false, "truncate dest tables (must have different name)")
 
@@ -66,6 +68,12 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	if *flagTimeout == 0 {
+		*flagTimeout = time.Hour
+	}
+	if *flagTableTimeout > *flagTimeout {
+		*flagTableTimeout = *flagTimeout
+	}
 
 	var Log func(...interface{}) error
 	if *flagVerbose {
@@ -135,7 +143,7 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		return errors.Errorf("%s: %w", *flagDest, err)
 	}
 	defer dstDB.Close()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), *flagTimeout)
 	defer cancel()
 
 	grp, subCtx := errgroup.WithContext(ctx)
@@ -162,9 +170,9 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		if task.Dst == "" {
 			task.Dst = task.Src
 		} else if !strings.EqualFold(task.Dst, task.Src) {
-			dstDB.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM %s WHERE 1=0", task.Dst, task.Src))
+			dstDB.ExecContext(subCtx, fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM %s WHERE 1=0", task.Dst, task.Src))
 			if task.Truncate {
-				dstDB.ExecContext(ctx, "TRUNCATE TABLE "+task.Dst)
+				dstDB.ExecContext(subCtx, "TRUNCATE TABLE "+task.Dst)
 			}
 		}
 	}
@@ -181,7 +189,9 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 				return subCtx.Err()
 			}
 			start := time.Now()
-			n, err := One(subCtx, dstTx, srcTx, task, Log)
+			oneCtx, oneCancel := context.WithTimeout(subCtx, *flagTableTimeout)
+			n, err := One(oneCtx, dstTx, srcTx, task, Log)
+			oneCancel()
 			dur := time.Since(start)
 			log.Println(task.Src, n, dur)
 			return err
@@ -280,7 +290,7 @@ func One(ctx context.Context, dstTx, srcTx *sql.Tx, task copyTask, Log func(...i
 			return n, err
 		}
 		if _, err = stmt.ExecContext(ctx, values...); err != nil {
-			return n, errors.Wrapf(err, "%s %v", dstQry.String(), values)
+			return n, errors.Errorf("%s %v: %w", dstQry.String(), values, err)
 		}
 		n++
 	}
