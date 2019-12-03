@@ -1,5 +1,5 @@
 /*
-   Copyright 2017 Tamás Gulácsi
+   Copyright 2019 Tamás Gulácsi
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 
+	"github.com/tgulacsi/go/spreadsheet"
+	"github.com/tgulacsi/go/spreadsheet/ods"
 	"gopkg.in/goracle.v2"
 
 	errors "golang.org/x/xerrors"
@@ -74,6 +76,8 @@ func Main() error {
 	flagHeader := flag.Bool("header", true, "print header")
 	flagEnc := flag.String("encoding", envEnc.Name, "encoding to use for output")
 	flagOut := flag.String("o", "-", "output (defaults to stdout)")
+	flagSheets := flagStrings()
+	flag.Var(flagSheets, "sheet", "each -sheet=name:SELECT will become a separate sheet on the output ods")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
 	flagCall := flag.Bool("call", false, "the first argument is not the WHERE, but the PL/SQL block to be called, the followings are not the columns but the arguments")
 
@@ -126,9 +130,11 @@ and dump all the columns of the cursor returned by the function.
 		"05", "59",
 	).Replace(dateFormat) + `"`
 
-	var qry string
+	var queries []string
 	var params []interface{}
-	if *flagCall {
+	if len(flagSheets.Strings) != 0 {
+		queries = flagSheets.Strings
+	} else if *flagCall {
 		var buf strings.Builder
 		fmt.Fprintf(&buf, `BEGIN :1 := %s(`, flag.Arg(0))
 		params = make([]interface{}, flag.NArg()-1)
@@ -144,10 +150,11 @@ and dump all the columns of the cursor returned by the function.
 			fmt.Fprintf(&buf, "%s=>:%d", arg[0], i+2)
 		}
 		buf.WriteString("); END;")
-		qry = buf.String()
+		qry := buf.String()
 		if Log != nil {
 			Log("call", qry, "params", params)
 		}
+		queries = append(queries, qry)
 	} else {
 		var (
 			where   string
@@ -159,7 +166,8 @@ and dump all the columns of the cursor returned by the function.
 				columns = flag.Args()[2:]
 			}
 		}
-		qry = getQuery(flag.Arg(0), where, columns, envEnc)
+		qry := getQuery(flag.Arg(0), where, columns, envEnc)
+		queries = append(queries, qry)
 	}
 	db, err := sql.Open("goracle", *flagConnect)
 	if err != nil {
@@ -168,17 +176,6 @@ and dump all the columns of the cursor returned by the function.
 	defer db.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		log.Printf("[WARN] Read-Only transaction: %v", err)
-		if tx, err = db.BeginTx(ctx, nil); err != nil {
-			return errors.Errorf("%s: %w", "beginTx", err)
-		}
-	}
-	defer tx.Rollback()
-	if Log != nil {
-		Log("env_encoding", envEnc.Name)
-	}
 
 	fh := os.Stdout
 	if !(*flagOut == "" || *flagOut == "-") {
@@ -192,11 +189,69 @@ and dump all the columns of the cursor returned by the function.
 	if Log != nil {
 		Log("msg", "writing", "file", fh.Name(), "encoding", enc)
 	}
-	w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
-	if *flagCall {
-		err = dumpCall(ctx, w, tx, qry, params, *flagHeader, *flagSep, Log)
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		log.Printf("[WARN] Read-Only transaction: %v", err)
+		if tx, err = db.BeginTx(ctx, nil); err != nil {
+			return errors.Errorf("%s: %w", "beginTx", err)
+		}
+	}
+	defer tx.Rollback()
+
+	if len(flagSheets.Strings) == 0 {
+		w := io.Writer(encoding.ReplaceUnsupported(enc.NewEncoder()).Writer(fh))
+		if Log != nil {
+			Log("env_encoding", envEnc.Name)
+		}
+
+		rows, columns, qErr := doQuery(ctx, tx, queries[0], params, *flagCall)
+		if qErr != nil {
+			err = qErr
+		} else {
+			defer rows.Close()
+			err = dumpCSV(ctx, w, rows, columns, *flagHeader, *flagSep, Log)
+		}
 	} else {
-		err = dumpQry(ctx, w, tx, qry, *flagHeader, *flagSep, Log)
+		w, err := ods.NewWriter(fh)
+		if err != nil {
+			return err
+		}
+		defer w.Close()
+		for sheetNo, qry := range queries {
+			var name string
+			i := strings.IndexByte(qry, ':')
+			if i >= 0 {
+				name, qry = qry[:i], qry[i+1:]
+			}
+			if name == "" {
+				name = strconv.Itoa(sheetNo + 1)
+			}
+			rows, columns, qErr := doQuery(ctx, tx, qry, nil, false)
+			if qErr != nil {
+				err = qErr
+				break
+			}
+			header := make([]spreadsheet.Column, len(columns))
+			if *flagHeader {
+				for i, c := range columns {
+					header[i].Name = c.Name
+				}
+			}
+			rows.Close()
+			sheet, sErr := w.NewSheet(name, header)
+			if sErr != nil {
+				rows.Close()
+				err = sErr
+				break
+			}
+			err = dumpSheet(ctx, sheet, rows, columns, Log)
+			rows.Close()
+			if err != nil {
+				return err
+			}
+
+		}
+		err = w.Close()
 	}
 	cancel()
 	if err != nil {
@@ -237,87 +292,35 @@ type queryer interface {
 type execer interface {
 	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
 }
-
-func dumpCall(ctx context.Context, w io.Writer, db execer, qry string, params []interface{}, header bool, sep string, Log func(...interface{}) error) error {
-	var rows driver.Rows
-	params = append(append(make([]interface{}, 0, 1+len(params)),
-		sql.Out{Dest: &rows}), params...)
-	if _, err := db.ExecContext(ctx, qry, params...); err != nil {
-		return errors.Errorf("executing %q: %w", qry, err)
-	}
-	defer rows.Close()
-
-	columns, err := getColumns(rows)
-	if err != nil {
-		return err
-	}
-
-	sepB := []byte(sep)
-	dest := make([]driver.Value, len(columns))
-	bw := bufio.NewWriterSize(w, 65536)
-	defer bw.Flush()
-	values := make([]stringer, len(columns))
-	for i, col := range columns {
-		c := col.Converter(sep)
-		values[i] = c
-	}
-	if header {
-		for i, col := range columns {
-			if i > 0 {
-				bw.Write(sepB)
-			}
-			csvQuote(bw, sep, col.Name)
-		}
-		bw.Write([]byte{'\n'})
-	}
-
-	start := time.Now()
-	n := 0
-	for {
-		if nextErr := rows.Next(dest); nextErr != nil {
-			if nextErr == io.EOF {
-				break
-			}
-			return errors.Errorf("Next: %w", nextErr)
-		}
-		for i, data := range dest {
-			if i > 0 {
-				bw.Write(sepB)
-			}
-			if data == nil {
-				continue
-			}
-			if err = values[i].Scan(data); err != nil {
-				return errors.Errorf("scan %q into col %d: %w", data, i, err)
-			}
-			bw.WriteString(values[i].String())
-		}
-		bw.Write([]byte{'\n'})
-		n++
-	}
-	dur := time.Since(start)
-	if Log != nil {
-		Log("msg", "dump finished", "rows", n, "dur", dur, "speed", float64(n)/float64(dur)*float64(time.Second))
-	}
-	if err != nil {
-		return errors.Errorf("fetching rows: %w", err)
-	}
-	return nil
+type queryExecer interface {
+	queryer
+	execer
 }
 
-func dumpQry(ctx context.Context, w io.Writer, db queryer, qry string, header bool, sep string, Log func(...interface{}) error) error {
-	rows, err := db.QueryContext(ctx, qry, goracle.FetchRowCount(1024))
-	if err != nil {
-		return errors.Errorf("executing %q: %w", qry, err)
+func doQuery(ctx context.Context, db queryExecer, qry string, params []interface{}, isCall bool) (*sql.Rows, []Column, error) {
+	var rows *sql.Rows
+	var err error
+	if isCall {
+		var dRows driver.Rows
+		params = append(append(make([]interface{}, 0, 1+len(params)),
+			sql.Out{Dest: &dRows}), params...)
+		_, err = db.ExecContext(ctx, qry, params...)
+		// FIXME(tgulacsi): dRows -> rows ?
+	} else {
+		rows, err = db.QueryContext(ctx, qry, goracle.FetchRowCount(1024))
 	}
-	defer rows.Close()
-	//log.Printf("%q: columns: %#v", qry, columns)
-
+	if err != nil {
+		return nil, nil, errors.Errorf("executing %q: %w", qry, err)
+	}
 	columns, err := getColumns(rows)
 	if err != nil {
-		return err
+		rows.Close()
+		return nil, nil, err
 	}
+	return rows, columns, err
+}
 
+func dumpCSV(ctx context.Context, w io.Writer, rows *sql.Rows, columns []Column, header bool, sep string, Log func(...interface{}) error) error {
 	sepB := []byte(sep)
 	dest := make([]interface{}, len(columns))
 	bw := bufio.NewWriterSize(w, 65536)
@@ -341,7 +344,7 @@ func dumpQry(ctx context.Context, w io.Writer, db queryer, qry string, header bo
 	start := time.Now()
 	n := 0
 	for rows.Next() {
-		if err = rows.Scan(dest...); err != nil {
+		if err := rows.Scan(dest...); err != nil {
 			return errors.Errorf("scan into %#v: %w", dest, err)
 		}
 		for i, data := range dest {
@@ -356,15 +359,39 @@ func dumpQry(ctx context.Context, w io.Writer, db queryer, qry string, header bo
 		bw.Write([]byte{'\n'})
 		n++
 	}
-	err = rows.Err()
+	err := rows.Err()
 	dur := time.Since(start)
 	if Log != nil {
 		Log("msg", "dump finished", "rows", n, "dur", dur, "speed", float64(n)/float64(dur)*float64(time.Second), "error", err)
 	}
-	if err != nil {
-		return errors.Errorf("fetching rows: %w", err)
+	return err
+}
+
+func dumpSheet(ctx context.Context, sheet spreadsheet.Sheet, rows *sql.Rows, columns []Column, Log func(...interface{}) error) error {
+	dest := make([]interface{}, len(columns))
+	values := make([]stringer, len(columns))
+	for i, col := range columns {
+		c := col.Converter("")
+		values[i] = c
+		dest[i] = c.Pointer()
 	}
-	return nil
+	start := time.Now()
+	n := 0
+	for rows.Next() {
+		if err := rows.Scan(dest...); err != nil {
+			return errors.Errorf("scan into %#v: %w", dest, err)
+		}
+		if err := sheet.AppendRow(dest...); err != nil {
+			return err
+		}
+		n++
+	}
+	err := rows.Err()
+	dur := time.Since(start)
+	if Log != nil {
+		Log("msg", "dump finished", "rows", n, "dur", dur, "speed", float64(n)/float64(dur)*float64(time.Second), "error", err)
+	}
+	return err
 }
 
 type Column struct {
@@ -538,5 +565,16 @@ func getColumns(rows interface{}) ([]Column, error) {
 	}
 	return cols, nil
 }
+
+func flagStrings() *stringsValue {
+	return &stringsValue{}
+}
+
+type stringsValue struct {
+	Strings []string
+}
+
+func (ss stringsValue) String() string      { return fmt.Sprintf("%v", ss.Strings) }
+func (ss *stringsValue) Set(s string) error { ss.Strings = append(ss.Strings, s); return nil }
 
 // vim: se noet fileencoding=utf-8:
