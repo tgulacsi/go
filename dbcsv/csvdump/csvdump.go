@@ -245,6 +245,9 @@ and dump all the columns of the cursor returned by the function.
 				break
 			}
 			err = dumpSheet(ctx, sheet, rows, columns, Log)
+			if closeErr := sheet.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
 			rows.Close()
 			if err != nil {
 				return err
