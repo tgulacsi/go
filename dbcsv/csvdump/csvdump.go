@@ -97,7 +97,7 @@ and dump all the columns of the cursor returned by the function.
 	}
 	flag.Parse()
 
-	var Log func(...interface{}) error
+	Log := func(...interface{}) error { return nil }
 	if *flagVerbose {
 		Log = func(keyvals ...interface{}) error {
 			if len(keyvals)%2 != 0 {
@@ -226,6 +226,7 @@ and dump all the columns of the cursor returned by the function.
 			if name == "" {
 				name = strconv.Itoa(sheetNo + 1)
 			}
+			Log(name, qry)
 			rows, columns, qErr := doQuery(ctx, tx, qry, nil, false)
 			if qErr != nil {
 				err = qErr
@@ -237,7 +238,6 @@ and dump all the columns of the cursor returned by the function.
 					header[i].Name = c.Name
 				}
 			}
-			rows.Close()
 			sheet, sErr := w.NewSheet(name, header)
 			if sErr != nil {
 				rows.Close()
@@ -245,6 +245,7 @@ and dump all the columns of the cursor returned by the function.
 				break
 			}
 			err = dumpSheet(ctx, sheet, rows, columns, Log)
+			rows.Close()
 			if closeErr := sheet.Close(); closeErr != nil && err == nil {
 				err = closeErr
 			}
@@ -254,13 +255,15 @@ and dump all the columns of the cursor returned by the function.
 			}
 
 		}
-		err = w.Close()
+		if closeErr := w.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
 	}
 	cancel()
-	if err != nil {
-		return errors.Errorf("dump: %w", err)
+	if closeErr := fh.Close(); closeErr != nil && err == nil {
+		err = closeErr
 	}
-	return fh.Close()
+	return err
 }
 
 func getQuery(table, where string, columns []string, enc encoding.Encoding) string {
@@ -313,14 +316,14 @@ func doQuery(ctx context.Context, db queryExecer, qry string, params []interface
 		rows, err = db.QueryContext(ctx, qry, goracle.FetchRowCount(1024))
 	}
 	if err != nil {
-		return nil, nil, errors.Errorf("executing %q: %w", qry, err)
+		return nil, nil, errors.Errorf("%q: %w", qry, err)
 	}
 	columns, err := getColumns(rows)
 	if err != nil {
 		rows.Close()
 		return nil, nil, err
 	}
-	return rows, columns, err
+	return rows, columns, nil
 }
 
 func dumpCSV(ctx context.Context, w io.Writer, rows *sql.Rows, columns []Column, header bool, sep string, Log func(...interface{}) error) error {
@@ -372,10 +375,12 @@ func dumpCSV(ctx context.Context, w io.Writer, rows *sql.Rows, columns []Column,
 
 func dumpSheet(ctx context.Context, sheet spreadsheet.Sheet, rows *sql.Rows, columns []Column, Log func(...interface{}) error) error {
 	dest := make([]interface{}, len(columns))
+	vals := make([]interface{}, len(columns))
 	values := make([]stringer, len(columns))
 	for i, col := range columns {
 		c := col.Converter("")
 		values[i] = c
+		vals[i] = c
 		dest[i] = c.Pointer()
 	}
 	start := time.Now()
@@ -384,7 +389,7 @@ func dumpSheet(ctx context.Context, sheet spreadsheet.Sheet, rows *sql.Rows, col
 		if err := rows.Scan(dest...); err != nil {
 			return errors.Errorf("scan into %#v: %w", dest, err)
 		}
-		if err := sheet.AppendRow(dest...); err != nil {
+		if err := sheet.AppendRow(vals...); err != nil {
 			return err
 		}
 		n++
@@ -498,7 +503,7 @@ func getColConverter(typ reflect.Type, sep string) stringer {
 	}
 	switch typ {
 	case reflect.TypeOf(time.Time{}):
-		return &ValTime{Quote: strings.Contains(dateFormat, sep)}
+		return &ValTime{Quote: sep != "" && strings.Contains(dateFormat, sep)}
 	}
 	return &ValString{Sep: sep}
 }
@@ -506,6 +511,9 @@ func getColConverter(typ reflect.Type, sep string) stringer {
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) }}
 
 func csvQuoteString(sep, s string) string {
+	if sep == "" {
+		return s
+	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
