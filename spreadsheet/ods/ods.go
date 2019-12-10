@@ -134,7 +134,7 @@ type ODSWriter struct {
 	zipWriter *zip.Writer
 	w         io.Writer
 	hasSheet  bool
-	files     []finishingFile
+	files     []<-chan *os.File
 
 	styles map[string]string
 }
@@ -154,7 +154,11 @@ func (ow *ODSWriter) Close() error {
 	files := ow.files
 	ow.files = nil
 
-	for _, f := range files {
+	for _, ch := range files {
+		f := <-ch
+		if f == nil {
+			continue
+		}
 		os.Remove(f.Name())
 		if _, err := f.Seek(0, 0); err != nil {
 			f.Close()
@@ -187,7 +191,7 @@ func (ow *ODSWriter) Close() error {
 func (ow *ODSWriter) NewSheet(name string, cols []spreadsheet.Column) (spreadsheet.Sheet, error) {
 	ow.mu.Lock()
 	defer ow.mu.Unlock()
-	sheet := &ODSSheet{Name: name, ow: ow, mu: &sync.Mutex{}, done:make(chan struct{})}
+	sheet := &ODSSheet{Name: name, ow: ow, mu: &sync.Mutex{}}
 	if !ow.hasSheet {
 		// The first sheet is written directly
 		ow.hasSheet = true
@@ -200,15 +204,12 @@ func (ow *ODSWriter) NewSheet(name string, cols []spreadsheet.Column) (spreadshe
 		}
 		os.Remove(sheet.f.Name())
 		sheet.w = AcquireWriter(sheet.f)
-		ow.files = append(ow.files, finishingFile{done: sheet.done, File: sheet.f})
+		ch := make(chan *os.File, 1)
+		sheet.done = ch
+		ow.files = append(ow.files, ch)
 	}
 	ow.StreamBeginSheet(sheet.w, name, cols)
 	return sheet, nil
-}
-
-type finishingFile struct {
-	done <-chan struct{}
-	*os.File
 }
 
 func (ow *ODSWriter) getStyleName(style spreadsheet.Style) string {
@@ -238,7 +239,7 @@ type ODSSheet struct {
 	ow   *ODSWriter
 	w    *qt.Writer
 	f    *os.File
-	done chan struct{}
+	done chan<- *os.File
 }
 
 func (ods *ODSSheet) AppendRow(values ...interface{}) error {
@@ -266,10 +267,12 @@ func (ods *ODSSheet) Close() error {
 	}
 	ow.StreamEndSheet(W)
 	ReleaseWriter(W)
-	if f == nil {
-		return nil
+	if done != nil {
+		if f != nil {
+			done <- f
+		}
+		close(done)
 	}
-	close(done)
 	return nil
 }
 
