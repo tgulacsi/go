@@ -41,6 +41,7 @@ import (
 
 	"github.com/tgulacsi/go/spreadsheet"
 	"github.com/tgulacsi/go/spreadsheet/ods"
+	"github.com/tgulacsi/go/spreadsheet/xlsx"
 	"gopkg.in/goracle.v2"
 
 	errors "golang.org/x/xerrors"
@@ -212,12 +213,21 @@ and dump all the columns of the cursor returned by the function.
 			err = dumpCSV(ctx, w, rows, columns, *flagHeader, *flagSep, Log)
 		}
 	} else {
-		w, err := ods.NewWriter(fh)
-		if err != nil {
-			return err
+		var w spreadsheet.Writer
+		if strings.HasSuffix(fh.Name(), ".xlsx") {
+			w = xlsx.NewWriter(fh)
+		} else {
+			w, err = ods.NewWriter(fh)
+			if err != nil {
+				return err
+			}
 		}
 		defer w.Close()
+		dec := enc.Encoding.NewDecoder()
 		for sheetNo, qry := range queries {
+			if qry, err = dec.String(qry); err != nil {
+				return errors.Errorf("%q: %w", queries[sheetNo], err)
+			}
 			var name string
 			i := strings.IndexByte(qry, ':')
 			if i >= 0 {
