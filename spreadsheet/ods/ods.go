@@ -134,6 +134,7 @@ type ODSWriter struct {
 	zipWriter *zip.Writer
 	w         io.Writer
 	hasSheet  bool
+	files     []finishingFile
 
 	styles map[string]string
 }
@@ -150,6 +151,22 @@ func (ow *ODSWriter) Close() error {
 	if ow.w == nil {
 		return nil
 	}
+	files := ow.files
+	ow.files = nil
+
+	for _, f := range files {
+		os.Remove(f.Name())
+		if _, err := f.Seek(0, 0); err != nil {
+			f.Close()
+			return err
+		}
+		_, err := io.Copy(ow.w, f)
+		f.Close()
+		if err != nil {
+			return err
+		}
+	}
+
 	W := AcquireWriter(ow.w)
 	StreamEndSpreadsheet(W)
 	ReleaseWriter(W)
@@ -170,11 +187,12 @@ func (ow *ODSWriter) Close() error {
 func (ow *ODSWriter) NewSheet(name string, cols []spreadsheet.Column) (spreadsheet.Sheet, error) {
 	ow.mu.Lock()
 	defer ow.mu.Unlock()
-	sheet := &ODSSheet{ow: ow, done: make(chan struct{})}
+	sheet := &ODSSheet{Name: name, ow: ow, mu: &sync.Mutex{}, done:make(chan struct{})}
 	if !ow.hasSheet {
 		// The first sheet is written directly
 		ow.hasSheet = true
 		sheet.w = AcquireWriter(ow.w)
+		sheet.mu = &ow.mu
 	} else {
 		var err error
 		if sheet.f, err = ioutil.TempFile("", "spreadsheet-ods-*.xml"); err != nil {
@@ -182,9 +200,15 @@ func (ow *ODSWriter) NewSheet(name string, cols []spreadsheet.Column) (spreadshe
 		}
 		os.Remove(sheet.f.Name())
 		sheet.w = AcquireWriter(sheet.f)
+		ow.files = append(ow.files, finishingFile{done: sheet.done, File: sheet.f})
 	}
 	ow.StreamBeginSheet(sheet.w, name, cols)
 	return sheet, nil
+}
+
+type finishingFile struct {
+	done <-chan struct{}
+	*os.File
 }
 
 func (ow *ODSWriter) getStyleName(style spreadsheet.Style) string {
@@ -208,6 +232,9 @@ func (ow *ODSWriter) getStyleName(style spreadsheet.Style) string {
 }
 
 type ODSSheet struct {
+	Name string
+
+	mu   *sync.Mutex
 	ow   *ODSWriter
 	w    *qt.Writer
 	f    *os.File
@@ -215,7 +242,9 @@ type ODSSheet struct {
 }
 
 func (ods *ODSSheet) AppendRow(values ...interface{}) error {
+	ods.mu.Lock()
 	StreamRow(ods.w, values...)
+	ods.mu.Unlock()
 	return nil
 }
 
@@ -223,28 +252,25 @@ func (ods *ODSSheet) Close() error {
 	if ods == nil {
 		return nil
 	}
-	d := ods.done
-	ods.done = nil
-	if d != nil {
-		defer close(d)
-	}
-	ow, W, f := ods.ow, ods.w, ods.f
-	ods.ow, ods.w, ods.f = nil, nil, nil
+	ods.mu.Lock()
+	defer ods.mu.Unlock()
+
+	ow, W, f, done := ods.ow, ods.w, ods.f, ods.done
+	ods.ow, ods.w, ods.f, ods.done = nil, nil, nil, nil
 	if W == nil {
 		return nil
+	}
+	if &ow.mu != ods.mu {
+		ow.mu.Lock()
+		defer ow.mu.Unlock()
 	}
 	ow.StreamEndSheet(W)
 	ReleaseWriter(W)
 	if f == nil {
 		return nil
 	}
-	defer os.Remove(f.Name())
-	defer f.Close()
-	if _, err := f.Seek(0, 0); err != nil {
-		return err
-	}
-	_, err := io.Copy(ow.w, f)
-	return err
+	close(done)
+	return nil
 }
 
 // Style information - generated from content.xml with github.com/miek/zek/cmd/zek.
