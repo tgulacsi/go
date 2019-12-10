@@ -226,7 +226,8 @@ and dump all the columns of the cursor returned by the function.
 		defer w.Close()
 		dec := enc.Encoding.NewDecoder()
 		var grp errgroup.Group
-		for sheetNo, qry := range queries {
+		for sheetNo := range queries {
+			qry := queries[sheetNo]
 			if qry, err = dec.String(qry); err != nil {
 				return errors.Errorf("%q: %w", queries[sheetNo], err)
 			}
@@ -238,7 +239,6 @@ and dump all the columns of the cursor returned by the function.
 			if name == "" {
 				name = strconv.Itoa(sheetNo + 1)
 			}
-			Log(name, qry)
 			rows, columns, qErr := doQuery(ctx, tx, qry, nil, false)
 			if qErr != nil {
 				err = qErr
@@ -257,13 +257,17 @@ and dump all the columns of the cursor returned by the function.
 				break
 			}
 			grp.Go(func() error {
+				Log(name, qry)
 				err := dumpSheet(ctx, sheet, rows, columns, Log)
 				rows.Close()
 				if closeErr := sheet.Close(); closeErr != nil && err == nil {
-					err = closeErr
+					return closeErr
 				}
 				return err
 			})
+		}
+		if err != nil {
+			return err
 		}
 		err = grp.Wait()
 		if closeErr := w.Close(); closeErr != nil && err == nil {
