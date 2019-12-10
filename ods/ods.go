@@ -1,41 +1,23 @@
-/*
-Copyright 2019 Tamás Gulácsi
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright 2019 Tamás Gulácsi. All rights reserved.
 
 package ods
 
 import (
 	"archive/zip"
 	"encoding/xml"
-	"fmt"
-	"hash/fnv"
 	"io"
-	"io/ioutil"
+	"net/http"
 	"os"
-	"strings"
 	"sync"
-	"time"
 
 	qt "github.com/valyala/quicktemplate"
 	errors "golang.org/x/xerrors"
 
-	"github.com/tgulacsi/go/spreadsheet"
+	"github.com/rakyll/statik/fs"
+	_ "github.com/tgulacsi/go/ods/statik"
 )
 
-var _ = errors.Errorf
-
+//go:generate statik -f -src assets
 //go:generate qtc
 
 var qtMu sync.Mutex
@@ -51,6 +33,27 @@ func AcquireWriter(w io.Writer) *qt.Writer {
 // ReleaseWriter returns the *quicktemplate.Writer to the pool.
 func ReleaseWriter(W *qt.Writer) { qtMu.Lock(); qt.ReleaseWriter(W); qtMu.Unlock() }
 
+// Table or sheet.
+type Table struct {
+	Name     string
+	Style    string
+	ColCount int
+	Heading  Row
+}
+
+// Row with style.
+type Row struct {
+	Style string
+	Cells []Cell
+}
+
+// Cell with style, type and value.
+type Cell struct {
+	Style string
+	Type  ValueType
+	Value string
+}
+
 // ValueType is the cell's value's type.
 type ValueType uint8
 
@@ -64,18 +67,6 @@ func (v ValueType) String() string {
 		return "string"
 	}
 }
-func getValueType(v interface{}) ValueType {
-	switch v.(type) {
-	case float32, float64,
-		int, int8, int16, int32, int64,
-		uint, uint16, uint32, uint64:
-		return FloatType
-	case time.Time:
-		return DateType
-	default:
-		return StringType
-	}
-}
 
 const (
 	// FloatType for numerical data
@@ -86,34 +77,40 @@ const (
 	StringType = ValueType('s')
 )
 
+var statikFS http.FileSystem
+
+func init() {
+	var err error
+	if statikFS, err = fs.New(); err != nil {
+		panic(err)
+	}
+}
+
 // NewWriter returns a content writer and a zip closer for an ods file.
 func NewWriter(w io.Writer) (*ODSWriter, error) {
 	zw := zip.NewWriter(w)
-	for _, elt := range []struct {
-		Name   string
-		Stream func(*qt.Writer)
-	}{
-		{"mimetype", StreamMimetype},
-		{"meta.xml", StreamMeta},
-		{"META-INF/manifest.xml", StreamManifest},
-		{"settings.xml", StreamSettings},
-	} {
-		parts := strings.SplitAfter(elt.Name, "/")
-		var prev string
-		for _, p := range parts[:len(parts)-1] {
-			prev += p
-			if _, err := zw.CreateHeader(&zip.FileHeader{Name: prev}); err != nil {
-				return nil, err
-			}
-		}
-		sub, err := zw.CreateHeader(&zip.FileHeader{Name: elt.Name})
+	if err := fs.Walk(statikFS, "/", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			zw.Close()
-			return nil, err
+			return err
 		}
-		W := AcquireWriter(sub)
-		elt.Stream(W)
-		ReleaseWriter(W)
+		b, err := fs.ReadFile(statikFS, path)
+		if err != nil {
+			return errors.Errorf("%s %s: %w", path, info, err)
+		}
+		hdr, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return errors.Errorf("%s: %w", path, err)
+		}
+		hdr.Method = zip.Deflate
+		w, err := zw.CreateHeader(hdr)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(b)
+		return err
+	}); err != nil {
+		zw.Close()
+		return nil, errors.Errorf("Walk: %w", err)
 	}
 
 	bw, err := zw.Create("content.xml")
@@ -122,128 +119,28 @@ func NewWriter(w io.Writer) (*ODSWriter, error) {
 		return nil, err
 	}
 	W := AcquireWriter(bw)
-	StreamBeginSpreadsheet(W)
-	ReleaseWriter(W)
+	StreamBeginSheets(W)
 
-	return &ODSWriter{w: bw, zipWriter: zw}, nil
+	return &ODSWriter{qtWriter: W, zipWriter: zw}, nil
 }
 
 // ODSWriter writes content.xml of ODS zip.
 type ODSWriter struct {
-	mu        sync.Mutex
+	qtWriter  *qt.Writer
 	zipWriter *zip.Writer
-	w         io.Writer
-	hasSheet  bool
-
-	styles map[string]string
 }
 
-//func (ow *ODSWriter) QTWriter() *qt.Writer { return ow.qtWriter }
+func (ow *ODSWriter) QTWriter() *qt.Writer { return ow.qtWriter }
 
 // Close the ODSWriter.
 func (ow *ODSWriter) Close() error {
-	if ow == nil {
+	if ow == nil || ow.qtWriter == nil {
 		return nil
 	}
-	ow.mu.Lock()
-	defer ow.mu.Unlock()
-	if ow.w == nil {
-		return nil
-	}
-	W := AcquireWriter(ow.w)
-	StreamEndSpreadsheet(W)
-	ReleaseWriter(W)
-	ow.w = nil
-	zw := ow.zipWriter
+	StreamEndSheets(ow.qtWriter)
+	ow.qtWriter = nil
+	err := ow.zipWriter.Close()
 	ow.zipWriter = nil
-	defer zw.Close()
-	bw, err := zw.Create("styles.xml")
-	if err != nil {
-		return err
-	}
-	W = AcquireWriter(bw)
-	StreamStyles(W, ow.styles)
-	ReleaseWriter(W)
-	return zw.Close()
-}
-
-func (ow *ODSWriter) NewSheet(name string, cols []spreadsheet.Column) (spreadsheet.Sheet, error) {
-	ow.mu.Lock()
-	defer ow.mu.Unlock()
-	sheet := &ODSSheet{ow: ow, done: make(chan struct{})}
-	if !ow.hasSheet {
-		// The first sheet is written directly
-		ow.hasSheet = true
-		sheet.w = AcquireWriter(ow.w)
-	} else {
-		var err error
-		if sheet.f, err = ioutil.TempFile("", "spreadsheet-ods-*.xml"); err != nil {
-			return nil, err
-		}
-		os.Remove(sheet.f.Name())
-		sheet.w = AcquireWriter(sheet.f)
-	}
-	ow.StreamBeginSheet(sheet.w, name, cols)
-	return sheet, nil
-}
-
-func (ow *ODSWriter) getStyleName(style spreadsheet.Style) string {
-	if !style.FontBold {
-		return ""
-	}
-	hsh := fnv.New32()
-	//fmt.Fprintf(hsh, "%t\t%s", style.FontBold, style.Format)
-	fmt.Fprintf(hsh, "%t", style.FontBold)
-	k := fmt.Sprintf("bf-%d", hsh.Sum32())
-	ow.mu.Lock()
-	defer ow.mu.Unlock()
-	if _, ok := ow.styles[k]; ok {
-		return k
-	}
-	if ow.styles == nil {
-		ow.styles = make(map[string]string, 1)
-	}
-	ow.styles[k] = `<style:style style:name="` + k + `" style:family="table-cell"><style:text-properties text:display="true" fo:font-weight="bold" /></style:style>`
-	return k
-}
-
-type ODSSheet struct {
-	ow   *ODSWriter
-	w    *qt.Writer
-	f    *os.File
-	done chan struct{}
-}
-
-func (ods *ODSSheet) AppendRow(values ...interface{}) error {
-	StreamRow(ods.w, values...)
-	return nil
-}
-
-func (ods *ODSSheet) Close() error {
-	if ods == nil {
-		return nil
-	}
-	d := ods.done
-	ods.done = nil
-	if d != nil {
-		defer close(d)
-	}
-	ow, W, f := ods.ow, ods.w, ods.f
-	ods.ow, ods.w, ods.f = nil, nil, nil
-	if W == nil {
-		return nil
-	}
-	ow.StreamEndSheet(W)
-	ReleaseWriter(W)
-	if f == nil {
-		return nil
-	}
-	defer os.Remove(f.Name())
-	defer f.Close()
-	if _, err := f.Seek(0, 0); err != nil {
-		return err
-	}
-	_, err := io.Copy(ow.w, f)
 	return err
 }
 

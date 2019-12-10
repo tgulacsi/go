@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	errors "golang.org/x/xerrors"
@@ -31,6 +32,7 @@ import (
 var _ = (spreadsheet.Writer)((*XLSXWriter)(nil))
 
 type XLSXWriter struct {
+	mu     sync.Mutex
 	xl     *excelize.File
 	w      io.Writer
 	sheets []string
@@ -49,6 +51,11 @@ func NewWriter(w io.Writer) *XLSXWriter {
 }
 
 func (xlw *XLSXWriter) Close() error {
+	if xlw == nil {
+		return nil
+	}
+	xlw.mu.Lock()
+	defer xlw.mu.Unlock()
 	xl, w := xlw.xl, xlw.w
 	xlw.xl, xlw.w = nil, nil
 	if xl == nil || w == nil {
@@ -58,6 +65,8 @@ func (xlw *XLSXWriter) Close() error {
 	return err
 }
 func (xlw *XLSXWriter) NewSheet(name string, columns []spreadsheet.Column) (spreadsheet.Sheet, error) {
+	xlw.mu.Lock()
+	defer xlw.mu.Unlock()
 	xlw.sheets = append(xlw.sheets, name)
 	if len(xlw.sheets) == 1 { // first
 		xlw.xl.SetSheetName("Sheet1", name)
@@ -94,10 +103,12 @@ func (xlw *XLSXWriter) NewSheet(name string, columns []spreadsheet.Column) (spre
 	return xls, nil
 }
 
-func (xlw XLSXWriter) getStyle(style spreadsheet.Style) int {
+func (xlw *XLSXWriter) getStyle(style spreadsheet.Style) int {
 	if !style.FontBold && style.Format == "" {
 		return 0
 	}
+	xlw.mu.Lock()
+	defer xlw.mu.Unlock()
 	k := fmt.Sprintf("%t\t%s", style.FontBold, style.Format)
 	s, ok := xlw.styles[k]
 	if ok {

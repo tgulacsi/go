@@ -36,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 
@@ -224,6 +225,7 @@ and dump all the columns of the cursor returned by the function.
 		}
 		defer w.Close()
 		dec := enc.Encoding.NewDecoder()
+		var grp errgroup.Group
 		for sheetNo, qry := range queries {
 			if qry, err = dec.String(qry); err != nil {
 				return errors.Errorf("%q: %w", queries[sheetNo], err)
@@ -254,17 +256,16 @@ and dump all the columns of the cursor returned by the function.
 				err = sErr
 				break
 			}
-			err = dumpSheet(ctx, sheet, rows, columns, Log)
-			rows.Close()
-			if closeErr := sheet.Close(); closeErr != nil && err == nil {
-				err = closeErr
-			}
-			rows.Close()
-			if err != nil {
+			grp.Go(func() error {
+				err := dumpSheet(ctx, sheet, rows, columns, Log)
+				rows.Close()
+				if closeErr := sheet.Close(); closeErr != nil && err == nil {
+					err = closeErr
+				}
 				return err
-			}
-
+			})
 		}
+		err = grp.Wait()
 		if closeErr := w.Close(); closeErr != nil && err == nil {
 			err = closeErr
 		}
