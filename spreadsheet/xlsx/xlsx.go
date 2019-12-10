@@ -42,6 +42,7 @@ type XLSXWriter struct {
 type XLSXSheet struct {
 	Name string
 
+	mu sync.Mutex
 	xl  *excelize.File
 	row int64
 }
@@ -139,6 +140,8 @@ func (xlw *XLSXWriter) getStyle(style spreadsheet.Style) int {
 
 func (xls *XLSXSheet) Close() error { return nil }
 func (xls *XLSXSheet) AppendRow(values ...interface{}) error {
+	xls.mu.Lock()
+	xls.mu.Unlock()
 	xls.row++
 	for i, v := range values {
 		axis, err := excelize.CoordinatesToCellName(i+1, int(xls.row))
