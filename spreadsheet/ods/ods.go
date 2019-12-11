@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	qt "github.com/valyala/quicktemplate"
 	errors "golang.org/x/xerrors"
 
@@ -133,13 +134,10 @@ type ODSWriter struct {
 	mu        sync.Mutex
 	zipWriter *zip.Writer
 	w         io.Writer
-	hasSheet  bool
-	files     []<-chan *os.File
+	files     []<-chan io.ReadCloser
 
 	styles map[string]string
 }
-
-//func (ow *ODSWriter) QTWriter() *qt.Writer { return ow.qtWriter }
 
 // Close the ODSWriter.
 func (ow *ODSWriter) Close() error {
@@ -151,25 +149,11 @@ func (ow *ODSWriter) Close() error {
 	if ow.w == nil {
 		return nil
 	}
-	files := ow.files
-	ow.files = nil
 
-	for _, ch := range files {
-		f := <-ch
-		if f == nil {
-			continue
-		}
-		os.Remove(f.Name())
-		if _, err := f.Seek(0, 0); err != nil {
-			f.Close()
-			return err
-		}
-		_, err := io.Copy(ow.w, f)
-		f.Close()
-		if err != nil {
-			return err
-		}
+	if err := ow.copyFiles(true); err != nil {
+		return err
 	}
+	ow.files = nil
 
 	W := AcquireWriter(ow.w)
 	StreamEndSpreadsheet(W)
@@ -188,26 +172,50 @@ func (ow *ODSWriter) Close() error {
 	return zw.Close()
 }
 
+// copyFiles copies the finished files.
+func (ow *ODSWriter) copyFiles(wait bool) error {
+	for _, ch := range ow.files {
+		var f io.ReadCloser
+		if wait {
+			f = <-ch
+		} else {
+			select {
+			case f = <-ch:
+			default:
+				return nil
+			}
+		}
+		if f == nil {
+			continue
+		}
+		_, err := io.Copy(ow.w, f)
+		f.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (ow *ODSWriter) NewSheet(name string, cols []spreadsheet.Column) (spreadsheet.Sheet, error) {
 	ow.mu.Lock()
 	defer ow.mu.Unlock()
-	sheet := &ODSSheet{Name: name, ow: ow, mu: &sync.Mutex{}}
-	if !ow.hasSheet {
-		// The first sheet is written directly
-		ow.hasSheet = true
-		sheet.w = AcquireWriter(ow.w)
-		sheet.mu = &ow.mu
-	} else {
-		var err error
-		if sheet.f, err = ioutil.TempFile("", "spreadsheet-ods-*.xml"); err != nil {
-			return nil, err
-		}
-		os.Remove(sheet.f.Name())
-		sheet.w = AcquireWriter(sheet.f)
-		ch := make(chan *os.File, 1)
-		sheet.done = ch
-		ow.files = append(ow.files, ch)
+	sheet := &ODSSheet{Name: name, ow: ow}
+
+	var err error
+	if sheet.f, err = ioutil.TempFile("", "spreadsheet-ods-*.xml"); err != nil {
+		return nil, err
 	}
+	os.Remove(sheet.f.Name())
+	if sheet.zw, err = zstd.NewWriter(sheet.f, zstd.WithEncoderLevel(zstd.SpeedFastest)); err != nil {
+		sheet.f.Close()
+		return nil, err
+	}
+	sheet.w = AcquireWriter(sheet.zw)
+	ch := make(chan io.ReadCloser, 1)
+	sheet.done = ch
+	ow.files = append(ow.files, ch)
+
 	ow.StreamBeginSheet(sheet.w, name, cols)
 	return sheet, nil
 }
@@ -220,8 +228,6 @@ func (ow *ODSWriter) getStyleName(style spreadsheet.Style) string {
 	//fmt.Fprintf(hsh, "%t\t%s", style.FontBold, style.Format)
 	fmt.Fprintf(hsh, "%t", style.FontBold)
 	k := fmt.Sprintf("bf-%d", hsh.Sum32())
-	ow.mu.Lock()
-	defer ow.mu.Unlock()
 	if _, ok := ow.styles[k]; ok {
 		return k
 	}
@@ -235,11 +241,12 @@ func (ow *ODSWriter) getStyleName(style spreadsheet.Style) string {
 type ODSSheet struct {
 	Name string
 
-	mu   *sync.Mutex
+	mu   sync.Mutex
 	ow   *ODSWriter
 	w    *qt.Writer
 	f    *os.File
-	done chan<- *os.File
+	zw   *zstd.Encoder
+	done chan<- io.ReadCloser
 }
 
 func (ods *ODSSheet) AppendRow(values ...interface{}) error {
@@ -256,24 +263,54 @@ func (ods *ODSSheet) Close() error {
 	ods.mu.Lock()
 	defer ods.mu.Unlock()
 
-	ow, W, f, done := ods.ow, ods.w, ods.f, ods.done
-	ods.ow, ods.w, ods.f, ods.done = nil, nil, nil, nil
+	ow, W, zw, f, done := ods.ow, ods.w, ods.zw, ods.f, ods.done
+	ods.ow, ods.w, ods.zw, ods.f, ods.done = nil, nil, nil, nil, nil
 	if W == nil {
 		return nil
 	}
-	if &ow.mu != ods.mu {
-		ow.mu.Lock()
-		defer ow.mu.Unlock()
-	}
-	ow.StreamEndSheet(W)
+	StreamEndSheet(W)
 	ReleaseWriter(W)
-	if done != nil {
-		if f != nil {
-			done <- f
-		}
-		close(done)
+	if done == nil {
+		return nil
 	}
-	return nil
+	defer close(done)
+	if f == nil {
+		return nil
+	}
+	if zw != nil {
+		if err := zw.Close(); err != nil {
+			return err
+		}
+	}
+	var err error
+	if _, err = f.Seek(0, 0); err != nil {
+		f.Close()
+		return err
+	}
+	if zw == nil {
+		done <- f
+		return nil
+	}
+	var zr *zstd.Decoder
+	if zr, err = zstd.NewReader(f); err != nil {
+		return nil
+	}
+	done <- struct {
+		io.Reader
+		io.Closer
+	}{
+		Reader: zr,
+		Closer: closerFunc(func() error {
+			zr.Close()
+			f.Close()
+			os.Remove(f.Name())
+			return nil
+		}),
+	}
+	ow.mu.Lock()
+	err = ow.copyFiles(false)
+	ow.mu.Unlock()
+	return err
 }
 
 // Style information - generated from content.xml with github.com/miek/zek/cmd/zek.
@@ -337,3 +374,7 @@ type Style struct {
 		MarginLeft           string `xml:"margin-left,attr"`
 	} `xml:"paragraph-properties"`
 }
+
+type closerFunc func() error
+
+func (f closerFunc) Close() error { return f() }

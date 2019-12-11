@@ -92,7 +92,7 @@
 	endif %}
 {% endfunc %}
 
-{% func (ow *ODSWriter) EndSheet() %}
+{% func EndSheet() %}
       </table:table>
 {% endfunc %}
 

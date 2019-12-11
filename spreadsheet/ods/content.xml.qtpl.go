@@ -342,7 +342,7 @@ func (ow *ODSWriter) BeginSheet(name string, cols []spreadsheet.Column) string {
 }
 
 //line content.xml.qtpl:95
-func (ow *ODSWriter) StreamEndSheet(qw422016 *qt422016.Writer) {
+func StreamEndSheet(qw422016 *qt422016.Writer) {
 //line content.xml.qtpl:95
 	qw422016.N().S(`
       </table:table>
@@ -351,22 +351,22 @@ func (ow *ODSWriter) StreamEndSheet(qw422016 *qt422016.Writer) {
 }
 
 //line content.xml.qtpl:97
-func (ow *ODSWriter) WriteEndSheet(qq422016 qtio422016.Writer) {
+func WriteEndSheet(qq422016 qtio422016.Writer) {
 //line content.xml.qtpl:97
 	qw422016 := qt422016.AcquireWriter(qq422016)
 //line content.xml.qtpl:97
-	ow.StreamEndSheet(qw422016)
+	StreamEndSheet(qw422016)
 //line content.xml.qtpl:97
 	qt422016.ReleaseWriter(qw422016)
 //line content.xml.qtpl:97
 }
 
 //line content.xml.qtpl:97
-func (ow *ODSWriter) EndSheet() string {
+func EndSheet() string {
 //line content.xml.qtpl:97
 	qb422016 := qt422016.AcquireByteBuffer()
 //line content.xml.qtpl:97
-	ow.WriteEndSheet(qb422016)
+	WriteEndSheet(qb422016)
 //line content.xml.qtpl:97
 	qs422016 := string(qb422016.B)
 //line content.xml.qtpl:97

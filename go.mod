@@ -23,7 +23,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jung-kurt/gofpdf v1.10.1
 	github.com/kardianos/osext v0.0.0-20151222153229-29ae4ffbc9a6 // indirect
-	github.com/klauspost/compress v1.8.2 // indirect
+	github.com/klauspost/compress v1.8.2
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/klauspost/pgzip v1.2.1
 	github.com/kylelemons/godebug v1.1.0
