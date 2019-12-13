@@ -13,6 +13,7 @@ require (
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/go-kit/kit v0.9.0
+	github.com/godror/godror v0.9.0
 	github.com/gogo/protobuf v1.3.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
@@ -49,11 +50,10 @@ require (
 	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472
 	golang.org/x/image v0.0.0-20190902063713-cb417be4ba39 // indirect
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297
-	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
-	gopkg.in/goracle.v2 v2.12.7
+	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 	perkeep.org v0.0.0-20190926184543-d342b0e26632
 )
 

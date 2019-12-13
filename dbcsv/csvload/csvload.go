@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	errors "golang.org/x/xerrors"
 
-	_ "gopkg.in/goracle.v2"
+	_ "github.com/godror/godror"
 )
 
 func main() {
@@ -100,7 +100,7 @@ func Main() error {
 	if strings.HasPrefix(*flagDB, "$") {
 		*flagDB = os.ExpandEnv(*flagDB)
 	}
-	db, err := sql.Open("goracle", *flagDB)
+	db, err := sql.Open("godror", *flagDB)
 	if err != nil {
 		return errors.Errorf("%s: %w", *flagDB, err)
 	}

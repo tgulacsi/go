@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	_ "gopkg.in/goracle.v2"
+	_ "github.com/godror/godror"
 
 	"golang.org/x/sync/errgroup"
 	errors "golang.org/x/xerrors"
@@ -133,12 +133,12 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		tables = append(tables, tbl)
 	}
 
-	srcDB, err := sql.Open("goracle", *flagSource)
+	srcDB, err := sql.Open("godror", *flagSource)
 	if err != nil {
 		return errors.Errorf("%s: %w", *flagDest, err)
 	}
 	defer srcDB.Close()
-	dstDB, err := sql.Open("goracle", *flagDest)
+	dstDB, err := sql.Open("godror", *flagDest)
 	if err != nil {
 		return errors.Errorf("%s: %w", *flagDest, err)
 	}

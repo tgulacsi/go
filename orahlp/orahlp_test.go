@@ -12,7 +12,7 @@ import (
 
 	"github.com/kylelemons/godebug/diff"
 	"github.com/tgulacsi/go/dber"
-	_ "gopkg.in/goracle.v2"
+	_ "github.com/godror/godror"
 )
 
 var flagConnect = flag.String("connect", "", "user/passw@sid to connect to")

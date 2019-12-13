@@ -43,7 +43,7 @@ import (
 	"github.com/tgulacsi/go/spreadsheet"
 	"github.com/tgulacsi/go/spreadsheet/ods"
 	"github.com/tgulacsi/go/spreadsheet/xlsx"
-	"gopkg.in/goracle.v2"
+	"github.com/godror/godror"
 
 	errors "golang.org/x/xerrors"
 )
@@ -171,7 +171,7 @@ and dump all the columns of the cursor returned by the function.
 		qry := getQuery(flag.Arg(0), where, columns, envEnc)
 		queries = append(queries, qry)
 	}
-	db, err := sql.Open("goracle", *flagConnect)
+	db, err := sql.Open("godror", *flagConnect)
 	if err != nil {
 		return errors.Errorf("%s: %w", *flagConnect, err)
 	}
@@ -328,7 +328,7 @@ func doQuery(ctx context.Context, db queryExecer, qry string, params []interface
 		_, err = db.ExecContext(ctx, qry, params...)
 		// FIXME(tgulacsi): dRows -> rows ?
 	} else {
-		rows, err = db.QueryContext(ctx, qry, goracle.FetchRowCount(1024))
+		rows, err = db.QueryContext(ctx, qry, godror.FetchRowCount(1024))
 	}
 	if err != nil {
 		return nil, nil, errors.Errorf("%q: %w", qry, err)

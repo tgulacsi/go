@@ -23,7 +23,7 @@ import (
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 
-	_ "gopkg.in/goracle.v2"
+	_ "github.com/godror/godror"
 )
 
 var (
@@ -179,7 +179,7 @@ Usage:
 	}
 
 	dsn := os.ExpandEnv(*flagConnect)
-	db, err := sql.Open("goracle", dsn)
+	db, err := sql.Open("godror", dsn)
 	if err != nil {
 		log.Fatalf("%s: %w", dsn, err)
 	}
