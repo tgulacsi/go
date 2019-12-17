@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"flag"
 	"fmt"
 	"log"
@@ -29,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/godror/godror"
+	godror "github.com/godror/godror"
 
 	"golang.org/x/sync/errgroup"
 	errors "golang.org/x/xerrors"
@@ -43,7 +44,9 @@ func main() {
 
 func Main() error {
 	flagSource := flag.String("src", os.Getenv("BRUNO_ID"), "user/passw@sid to read from")
+	flagSourcePrep := flag.String("src-prep", "", "prepare source connection (run statements separated by ;\\n)")
 	flagDest := flag.String("dst", os.Getenv("BRUNO_ID"), "user/passw@sid to write to")
+	flagDestPrep := flag.String("dst-prep", "", "prepare destination connection (run statements separated by ;\\n)")
 	flagReplace := flag.String("replace", "", "replace FIELD_NAME=WITH_VALUE,OTHER=NEXT")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
 	flagTimeout := flag.Duration("timeout", 1*time.Minute, "timeout")
@@ -133,16 +136,41 @@ will execute a "SELECT * FROM Source_table@source_db WHERE F_ield=1" and an "INS
 		tables = append(tables, tbl)
 	}
 
-	srcDB, err := sql.Open("godror", *flagSource)
-	if err != nil {
-		return errors.Errorf("%s: %w", *flagDest, err)
+	mkInit := func(queries string) func(driver.Conn) error {
+		if queries == "" {
+			return func(driver.Conn) error { return nil }
+		}
+		qs := strings.Split(queries, ";\n") 
+		return func(conn driver.Conn) error {
+			for _, qry := range qs {
+			stmt, err := conn.Prepare(qry)
+			if err != nil {
+				return errors.Errorf("%s: %w", qry, err)
+			}
+			_, err = stmt.Exec(nil)
+			stmt.Close()
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
+}
+
+	srcConnector, err := godror.NewConnector(*flagSource, mkInit(*flagSourcePrep))
+	if err != nil {
+		return err
+	}
+	srcDB := sql.OpenDB(srcConnector)
 	defer srcDB.Close()
-	dstDB, err := sql.Open("godror", *flagDest)
+
+	dstConnector, err := godror.NewConnector(*flagDest, mkInit(*flagDestPrep))
 	if err != nil {
-		return errors.Errorf("%s: %w", *flagDest, err)
+		return err
 	}
+	dstDB := sql.OpenDB(dstConnector)
 	defer dstDB.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), *flagTimeout)
 	defer cancel()
 
