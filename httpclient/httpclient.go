@@ -62,7 +62,7 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 		},
 	})
 	rc := retryablehttp.NewClient()
-	if cl != nil {
+	if cl != nil && cl != http.DefaultClient {
 		rc.HTTPClient = cl
 	}
 	rc.RetryWaitMin = timeout / 2
@@ -81,11 +81,9 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 		return false, err
 	}
 	if true {
-		{
-			cl := *rc.HTTPClient
-			cl.Transport = TransportWithBreaker{Tripper: cl.Transport, Breaker: GoBreaker{CircuitBreaker: cb}}
-			rc.HTTPClient = &cl
-		}
+		cl := *rc.HTTPClient
+		cl.Transport = TransportWithBreaker{Tripper: cl.Transport, Breaker: GoBreaker{CircuitBreaker: cb}}
+		rc.HTTPClient = &cl
 	}
 	return rc
 }
