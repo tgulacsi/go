@@ -1,4 +1,4 @@
-// Copyright 2015 Tamás Gulácsi. All rights reserved.
+// Copyright 2019 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -20,7 +20,7 @@ type DBer interface {
 }
 
 type Execer interface {
-	Exec(string, ...interface{}) (sql.Result, error)
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
 }
 
 type Txer interface {
@@ -31,8 +31,8 @@ type Txer interface {
 }
 
 type Queryer interface {
-	Query(string, ...interface{}) (Rowser, error)
-	QueryRow(string, ...interface{}) Scanner
+	QueryContext(context.Context, string, ...interface{}) (Rowser, error)
+	QueryRowContext(context.Context,string, ...interface{}) Scanner
 }
 
 type Scanner interface {
@@ -53,8 +53,9 @@ type SqlDBer struct {
 	*sql.DB
 }
 
-func (db SqlDBer) Begin() (Txer, error) {
-	tx, err := db.DB.Begin()
+func (db SqlDBer) Begin() (Txer, error) { return db.BeginTx(context.Background(), nil) }
+func (db SqlDBer) BeginTx(ctx context.Context, opt *sql.TxOptions) (Txer, error) {
+	tx, err := db.DB.BeginTx(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
