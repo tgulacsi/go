@@ -77,6 +77,8 @@ github.com/godror/godror v0.9.0 h1:IQ+HRUl00B1V03jR4AduWKkKlP9RsTq9E4iEG3gcCZY=
 github.com/godror/godror v0.9.0/go.mod h1:06LLZykQEXjuUYiVKBa7Ls+AvbUZ8sbtolIALCeL/jw=
 github.com/godror/godror v0.9.1 h1:OsuUFd8fsgncTxmv2jPlY8BBpvZl3K51mTdEAZTEs3o=
 github.com/godror/godror v0.9.1/go.mod h1:06LLZykQEXjuUYiVKBa7Ls+AvbUZ8sbtolIALCeL/jw=
+github.com/godror/godror v0.10.0 h1:IKDOEkjd1ni9qajvXIITY4qaYpj+r71Yc03UagzPnlo=
+github.com/godror/godror v0.10.0/go.mod h1:9MVLtu25FBJBMHkPs0m3Ngf/VmwGcLpM2HS8PlNGw9U=
 github.com/gogo/protobuf v1.1.1/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7atdtwQ=
 github.com/gogo/protobuf v1.3.0/go.mod h1:SlYgWuQ5SjCEi6WLHjHCa1yvBfUnHcTbrrZtXPKa29o=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
@@ -114,6 +116,7 @@ github.com/grpc-ecosystem/grpc-gateway v1.5.0/go.mod h1:RSKVYQBd5MCa4OVpNdGskqpg
 github.com/hashicorp/go-cleanhttp v0.5.1/go.mod h1:JpRdi6/HCYpAwUzNwuwqhbovhLtngrth3wmdIIUrZ80=
 github.com/hashicorp/go-hclog v0.9.2/go.mod h1:5CU+agLiy3J7N7QjHK5d05KxGsuXiQLrjA0H7acj2lQ=
 github.com/hashicorp/go-retryablehttp v0.6.2/go.mod h1:gEx6HMUGxYYhJScX7W1Il64m6cc2C1mDaW3NQ9sY1FY=
+github.com/hashicorp/go-retryablehttp v0.6.4/go.mod h1:vAew36LZh98gCBJNLH42IQ1ER/9wtLZZ8meHqQvEYWY=
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hhrutter/lzw v0.0.0-20190827003112-58b82c5a41cc/go.mod h1:yJBvOcu1wLQ9q9XZmfiPfur+3dQJuIhYQsMGLYcItZk=

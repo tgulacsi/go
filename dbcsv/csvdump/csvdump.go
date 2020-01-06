@@ -321,14 +321,15 @@ type queryExecer interface {
 func doQuery(ctx context.Context, db queryExecer, qry string, params []interface{}, isCall bool) (*sql.Rows, []Column, error) {
 	var rows *sql.Rows
 	var err error
-	if isCall {
+	if !isCall {
+		rows, err = db.QueryContext(ctx, qry, godror.FetchRowCount(1024))
+	} else {
 		var dRows driver.Rows
 		params = append(append(make([]interface{}, 0, 1+len(params)),
 			sql.Out{Dest: &dRows}), params...)
-		_, err = db.ExecContext(ctx, qry, params...)
-		// FIXME(tgulacsi): dRows -> rows ?
-	} else {
-		rows, err = db.QueryContext(ctx, qry, godror.FetchRowCount(1024))
+		if _, err = db.ExecContext(ctx, qry, params...); err == nil {
+			rows, err = godror.WrapRows(ctx,db,dRows)
+		}
 	}
 	if err != nil {
 		return nil, nil, errors.Errorf("%q: %w", qry, err)
