@@ -24,6 +24,7 @@ import (
 	"golang.org/x/text/transform"
 
 	_ "github.com/godror/godror"
+	errors "golang.org/x/xerrors"
 )
 
 var (
@@ -34,12 +35,18 @@ var (
 )
 
 func main() {
+	if err := Main(); err != nil {
+		log.Fatalf("ERROR: %+v", err)
+	}
+}
+
+func Main() error {
 	if lang := os.Getenv("LANG"); lang != "" {
 		if i := strings.LastIndex(lang, "."); i >= 0 {
 			lang = lang[i+1:]
 			enc, err := htmlindex.Get(lang)
 			if err != nil {
-				log.Fatalf("Get encoding for %q: %v", lang, err)
+				return errors.Errorf("Get encoding for %q: %w", lang, err)
 			}
 			stdout = transform.NewWriter(stdout, enc.NewEncoder())
 			stderr = transform.NewWriter(stderr, enc.NewEncoder())
@@ -77,7 +84,7 @@ Usage:
 	flag.Parse()
 	if flag.NArg() != 1 {
 		flag.Usage()
-		os.Exit(1)
+		return errors.New("one argument: the filename is needed")
 	}
 
 	ctxData := struct {
@@ -91,20 +98,15 @@ Usage:
 			tpl := template.Must(template.New(parts[0]).Parse(parts[1]))
 			buf.Reset()
 			if err := tpl.Execute(&buf, ctxData); err != nil {
-				log.Fatal(err)
+				return err
 			}
 			fixParams = append(fixParams, [2]string{parts[0], buf.String()})
 		}
 	}
 
-	inp := os.Stdin
-	if flag.Arg(0) != "" && flag.Arg(0) != "-" {
-		var err error
-		if inp, err = os.Open(flag.Arg(0)); err != nil {
-			log.Fatalf("open %q: %v", flag.Arg(0), err)
-		}
+	if err := cfg.Open(flag.Arg(0)); err != nil {
+		return err
 	}
-	defer inp.Close()
 
 	rows := make(chan dbcsv.Row, 8)
 	errch := make(chan error, 8)
@@ -115,7 +117,7 @@ Usage:
 		defer errWg.Done()
 		for err := range errch {
 			if err != nil {
-				log.Printf("ERROR: %v", err)
+				log.Printf("ERROR: %+v", err)
 				errs = append(errs, err.Error())
 			}
 		}
@@ -156,7 +158,7 @@ Usage:
 
 	columns, err := cfg.Columns()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	if len(columns) > 0 {
 		// change column order
@@ -181,7 +183,7 @@ Usage:
 	dsn := os.ExpandEnv(*flagConnect)
 	db, err := sql.Open("godror", dsn)
 	if err != nil {
-		log.Fatalf("%s: %w", dsn, err)
+		return errors.Errorf("%s: %w", dsn, err)
 	}
 	defer db.Close()
 
@@ -190,14 +192,15 @@ Usage:
 	n, err = dbExec(db, *flagFunc, fixParams, int64(*flagFuncRetOk), rows, *flagOneTx)
 	bw.Flush()
 	if err != nil {
-		log.Fatalf("exec %q: %v", *flagFunc, err)
+		return errors.Errorf("exec %q: %v", *flagFunc, err)
 	}
 	d := time.Since(start)
 	close(errch)
 	if len(errs) > 0 {
-		log.Fatal("ERRORS:\n\t" + strings.Join(errs, "\n\t"))
+		return errors.Errorf("ERRORS:\n\t" + strings.Join(errs, "\n\t"))
 	}
 	log.Printf("Processed %d rows in %s.", n, d)
+	return nil
 }
 
 // vim: set fileencoding=utf-8 noet:

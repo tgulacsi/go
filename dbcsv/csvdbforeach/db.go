@@ -199,7 +199,6 @@ func getQuery(db querier, fun string, fixParams [][2]string) (Statement, error) 
 	}
 	defer rows.Close()
 
-	log.Println(qry, params)
 	for rows.Next() {
 		var arg Arg
 		var length, precision, scale sql.NullInt64
@@ -250,13 +249,13 @@ ArgLoop:
 			switch arg.Type {
 			case "DATE":
 				var t time.Time
-				st.FixParams = append(st.FixParams, &t)
+				st.FixParams = append(st.FixParams, sql.Out{Dest:&t})
 			case "NUMBER":
 				var f float64
-				st.FixParams = append(st.FixParams, &f)
+				st.FixParams = append(st.FixParams, sql.Out{Dest:&f})
 			default:
 				var s string
-				st.FixParams = append(st.FixParams, &s)
+				st.FixParams = append(st.FixParams, sql.Out{Dest:&s})
 			}
 		} else if arg.Type == "DATE" {
 			st.Converters[j] = strToDate
@@ -279,13 +278,14 @@ type Arg struct {
 }
 
 func strToDate(s string) (interface{}, error) {
+	s = justNums(s, 14)
 	if s == "" {
 		return nil, nil
 	}
-	if 8 <= len(s) && len(s) <= 10 {
-		return time.ParseInLocation(dateFormat, justNums(s, 8), time.Local)
+	if len(s) < 14 {
+		return time.ParseInLocation(dateFormat, s[:8], time.Local)
 	}
-	return time.ParseInLocation(dateTimeFormat, justNums(s, 14), time.Local)
+	return time.ParseInLocation(dateTimeFormat, s, time.Local)
 }
 func justNums(s string, maxLen int) string {
 	var i int

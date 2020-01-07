@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode"
@@ -56,17 +55,9 @@ func DetectReaderType(r io.Reader, fileName string) (FileType, error) {
 		return Xls, nil
 	} else if bytes.Equal(b[:], []byte{0x50, 0x4b, 0x03, 0x04}) { //PKZip, so xlsx
 		return XlsX, nil
-	} else if bytes.Equal(b[:1], []byte{'"'}) { // CSV
-		return Csv, nil
-	}
-	switch filepath.Ext(fileName) {
-	case ".xls":
-		return Xls, nil
-	case ".xlsx":
-		return XlsX, nil
-	default:
-		return Csv, nil
-	}
+	} 
+	// CSV
+	return Csv, nil
 }
 
 type Config struct {
@@ -336,30 +327,31 @@ func ReadCSV(ctx context.Context, fn func(Row) error, r io.Reader, delim string,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	br := bufio.NewReader(r)
 	if delim == "" {
-		br := bufio.NewReader(r)
-		b, _ := br.Peek(1024)
-		r = br
-		b = bytes.Map(
-			func(r rune) rune {
-				if r == '"' || unicode.IsDigit(r) || unicode.IsLetter(r) {
-					return -1
-				}
-				return r
-			},
-			b,
-		)
-		for len(b) > 1 && b[0] == ' ' {
-			b = b[1:]
+		b, err := br.Peek(1024)
+		if err != nil && len(b) == 0 {
+			return err
 		}
-		s := []rune(string(b))
-		if len(s) > 4 {
-			s = s[:4]
+		seen := make(map[rune]struct{})
+		nonAlnum := make([]rune, 0, 4)
+		for _, r := range string(b) {
+			if r == '"' || unicode.IsDigit(r) || unicode.IsLetter(r) {
+				continue
+			}
+			if _, ok := seen[r]; ok {
+				continue
+			}
+			seen[r] = struct{}{}
+			nonAlnum = append(nonAlnum, r)
 		}
-		delim = string(s[:1])
-		log.Printf("Non-alphanum characters are %q, so delim is %q.", s, delim)
+		for len(nonAlnum) > 1 && nonAlnum[0] == ' ' {
+			nonAlnum = nonAlnum[1:]
+		}
+		delim = string(nonAlnum[:1])
+		log.Printf("Non-alphanum characters are %q, so delim is %q.", nonAlnum, delim)
 	}
-	cr := csv.NewReader(r)
+	cr := csv.NewReader(br)
 
 	cr.Comma = ([]rune(delim))[0]
 	cr.FieldsPerRecord = -1
@@ -374,7 +366,7 @@ func ReadCSV(ctx context.Context, fn func(Row) error, r io.Reader, delim string,
 			return err
 		}
 		n++
-		if n < skip {
+		if n <= skip {
 			continue
 		}
 		if columns != nil {
