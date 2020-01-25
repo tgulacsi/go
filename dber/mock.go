@@ -25,6 +25,7 @@ var (
 	ErrArgsMismatch        = errors.New("args mismatch")
 	ErrTxAlreadyRolledBack = errors.New("transaction already rolled back")
 	ErrTxAlreadyCommited   = errors.New("transaction already commited")
+	ErrNotImplemented      = errors.New("not implemented")
 )
 
 type Mock interface {
@@ -40,6 +41,10 @@ type Tx struct {
 	Expects []*expectQuery
 	pos     int
 	done    TxState
+}
+
+func (p *Tx) PrepareContext(_ context.Context, _ string) (*sql.Stmt, error) {
+	return nil, ErrNotImplemented
 }
 
 // ExpectQuery adds the query to the list of expected queries.

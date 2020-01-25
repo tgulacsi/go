@@ -27,12 +27,16 @@ type Txer interface {
 	Commit() error
 	Rollback() error
 	Execer
+	Preparer
 	Queryer
+}
+type Preparer interface {
+	PrepareContext(context.Context, string) (*sql.Stmt, error)
 }
 
 type Queryer interface {
 	QueryContext(context.Context, string, ...interface{}) (Rowser, error)
-	QueryRowContext(context.Context,string, ...interface{}) Scanner
+	QueryRowContext(context.Context, string, ...interface{}) Scanner
 }
 
 type Scanner interface {
@@ -95,6 +99,9 @@ func (tx SqlTxer) QueryRow(qry string, args ...interface{}) Scanner {
 }
 func (tx SqlTxer) QueryRowContext(ctx context.Context, qry string, args ...interface{}) Scanner {
 	return SqlScanner{tx.Tx.QueryRowContext(ctx, qry, args...)}
+}
+func (tx SqlTxer) PrepareContext(ctx context.Context, qry string) (*sql.Stmt, error) {
+	return tx.Tx.PrepareContext(ctx, qry)
 }
 
 // SqlRowser is a wrapper for *sql.Rows to implement Rowser.
