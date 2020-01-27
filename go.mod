@@ -2,7 +2,6 @@ module github.com/tgulacsi/go
 
 require (
 	cloud.google.com/go v0.45.1 // indirect
-	github.com/360EntSecGroup-Skylar/excelize/v2 v2.0.1
 	github.com/BurntSushi/toml v0.3.1
 	github.com/cznic/fileutil v0.0.0-20181122101858-4d67cfea8c87 // indirect
 	github.com/cznic/internal v0.0.0-20181122101858-3279554c546e // indirect
@@ -13,7 +12,8 @@ require (
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/go-kit/kit v0.9.0
-	github.com/godror/godror v0.9.1
+	github.com/go-logfmt/logfmt v0.4.0 // indirect
+	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/gogo/protobuf v1.3.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
@@ -21,7 +21,7 @@ require (
 	github.com/hhrutter/lzw v0.0.0-20190829144645-6f07a24e8650 // indirect
 	github.com/hhrutter/tiff v0.0.0-20190829141212-736cae8d0bc7 // indirect
 	github.com/jung-kurt/gofpdf v1.10.1
-	github.com/klauspost/compress v1.8.2
+	github.com/klauspost/compress v1.8.2 // indirect
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/klauspost/pgzip v1.2.1
 	github.com/kylelemons/godebug v1.1.0
