@@ -33,28 +33,41 @@ import (
 
 // ListenAndServe is the same as http.ListenAndServe, except it can listen on unix domain sockets.
 func ListenAndServe(ctx context.Context, addr string, hndl http.Handler) error {
-	addr = strings.TrimPrefix(addr, "http+")
-	if !strings.HasPrefix(addr, "unix:") {
-		return http.ListenAndServe(addr, hndl)
-	}
-	addrU := addr
-	addr = strings.TrimPrefix(addr[4:], "://")
-	addr = strings.TrimPrefix(addr, ":")
-	os.Remove(addr)
-	ln, err := net.Listen("unix", addr)
-	if err != nil {
-		return errors.Errorf("%s: %w", addrU, err)
-	}
-	defer ln.Close()
 	srv := http.Server{
-		Addr:              addrU,
 		Handler:           hndl,
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
+	}
+	addr = strings.TrimPrefix(addr, "http+")
+	var ln net.Listener
+	if !strings.HasPrefix(addr, "unix:") {
+		srv.Addr = addr
+	} else {
+		srv.Addr = addr
+		addrU := addr
+		addr = strings.TrimPrefix(addr[4:], "://")
+		addr = strings.TrimPrefix(addr, ":")
+		os.Remove(addr)
+		var err error
+		if ln, err = net.Listen("unix", addr); err != nil {
+			return errors.Errorf("%s: %w", addrU, err)
+		}
+		defer ln.Close()
 	}
 	go func() {
 		<-ctx.Done()
-		ln.Close()
+		if ln != nil {
+			ln.Close()
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		srv.Shutdown(ctx)
+		srv.Close()
 	}()
-	return srv.Serve(ln)
+	if ln != nil {
+		return srv.Serve(ln)
+	}
+	return srv.ListenAndServe()
 }

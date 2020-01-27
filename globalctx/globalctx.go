@@ -32,8 +32,8 @@ func Wrap(ctx context.Context) (context.Context, context.CancelFunc) {
 	ctx, cancel = context.WithCancel(ctx)
 	go func() {
 		<-sigCh
-		cancel()
 		signal.Stop(sigCh)
+		cancel()
 	}()
 	return ctx, cancel
 }
