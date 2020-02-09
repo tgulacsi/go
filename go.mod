@@ -9,6 +9,7 @@ require (
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/cznic/sortutil v0.0.0-20181122101858-f5f958428db8 // indirect
 	github.com/cznic/zappy v0.0.0-20181122101859-ca47d358d4b1 // indirect
+	github.com/dgraph-io/badger/v2 v2.0.1
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/go-kit/kit v0.9.0

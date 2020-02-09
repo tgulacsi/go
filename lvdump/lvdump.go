@@ -9,7 +9,7 @@ package lvdump
 import (
 	"bufio"
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -23,8 +23,7 @@ var Log = func(...interface{}) error { return nil }
 // A record is encoded as +klen,dlen:key->data followed by a newline.
 // Here klen is the number of bytes in key and dlen is the number of bytes in data.
 // The end of data is indicated by an extra newline.
-func Dump(src string) error {
-	defer os.Stdout.Close()
+func Dump(w io.Writer, src string) error {
 	//Log("msg","open src", "file", src)
 	db, err := leveldb.OpenFile(src, &opt.Options{ReadOnly: true})
 	if err != nil {
@@ -34,7 +33,7 @@ func Dump(src string) error {
 
 	it := db.NewIterator(nil, nil)
 	defer it.Release()
-	out := bufio.NewWriter(os.Stdout)
+	out := bufio.NewWriter(w)
 	defer out.Flush()
 	n := 0
 	for it.Next() {
@@ -46,5 +45,8 @@ func Dump(src string) error {
 		n++
 	}
 	Log("msg", "Finished.", "rows", n)
-	return out.WriteByte('\n')
+	if err := out.WriteByte('\n'); err != nil {
+		return err
+	}
+	return out.Flush()
 }
