@@ -36,9 +36,9 @@ func ListenAndServe(ctx context.Context, addr string, hndl http.Handler) error {
 	srv := http.Server{
 		Handler:           hndl,
 		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	addr = strings.TrimPrefix(addr, "http+")
 	var ln net.Listener
