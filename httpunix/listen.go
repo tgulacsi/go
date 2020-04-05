@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tamás Gulácsi.
+// Copyright (c) 2019, 2020 Tamás Gulácsi.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -33,13 +33,17 @@ import (
 
 // ListenAndServe is the same as http.ListenAndServe, except it can listen on unix domain sockets.
 func ListenAndServe(ctx context.Context, addr string, hndl http.Handler) error {
-	srv := http.Server{
+	return ListenAndServeSrv(ctx, addr, http.Server{
 		Handler:           hndl,
 		ReadHeaderTimeout: 15 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
-	}
+	})
+}
+
+// ListenAndServeSrv is the same as http.ListenAndServe, except it can listen on unix domain sockets.
+func ListenAndServeSrv(ctx context.Context, addr string, srv http.Server) error {
 	addr = strings.TrimPrefix(addr, "http+")
 	var ln net.Listener
 	if !strings.HasPrefix(addr, "unix:") {
