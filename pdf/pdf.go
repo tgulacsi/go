@@ -43,7 +43,13 @@ func MergeFiles(dest string, sources ...string) error {
 
 // Split the pdf - each page into different file
 func Split(ctx context.Context, destDir, fn string) error {
-	err := api.SplitFile(fn, destDir, 1, config)
+	var err error
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("PANIC: %w", r)
+		}
+	}()
+	err = api.SplitFile(fn, destDir, 1, config)
 	return err
 }
 
