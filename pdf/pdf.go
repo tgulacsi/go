@@ -37,13 +37,25 @@ func init() {
 
 // MergeFiles merges the given sources into dest.
 func MergeFiles(dest string, sources ...string) error {
-	err := api.MergeFile(sources, dest, config)
+	var err error
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("PANIC: %w", r)
+		}
+	}()
+	err = api.MergeFile(sources, dest, config)
 	return err
 }
 
 // Split the pdf - each page into different file
 func Split(ctx context.Context, destDir, fn string) error {
-	err := api.SplitFile(fn, destDir, 1, config)
+	var err error
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("PANIC: %w", r)
+		}
+	}()
+	err = api.SplitFile(fn, destDir, 1, config)
 	return err
 }
 
@@ -53,6 +65,11 @@ func PageNum(ctx context.Context, fn string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("PANIC: %w", r)
+		}
+	}()
 	pdf, err := api.ReadContext(fh, config)
 	fh.Close()
 	if err != nil {
@@ -62,5 +79,5 @@ func PageNum(ctx context.Context, fn string) (int, error) {
 		return pdf.PageCount, nil
 	}
 	err = pdfcpu.OptimizeXRefTable(pdf)
-	return pdf.PageCount, errors.Errorf("optimize: %w", err)
+	return pdf.PageCount, err
 }

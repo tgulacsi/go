@@ -2,7 +2,7 @@
 // See https://github.com/valyala/quicktemplate for details.
 
 //line content.xml.qtpl:1
-package odf
+package ods
 
 //line content.xml.qtpl:1
 import "strings"
