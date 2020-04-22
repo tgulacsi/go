@@ -19,6 +19,7 @@ package httpclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -67,6 +68,8 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 	}
 	if Log == nil {
 		rc.Logger = nil
+	} else {
+		rc.Logger = kitlogPrintf{Log: Log}
 	}
 	rc.RetryWaitMin = timeout / 2
 	rc.RetryWaitMax = interval
@@ -158,3 +161,23 @@ type GoBreaker struct {
 
 // Closed reports whether the circuit breaker is in opened state.
 func (b GoBreaker) Opened() bool { return b.CircuitBreaker.State() == gobreaker.StateOpen }
+
+type kitlogPrintf struct {
+	Log func(...interface{}) error
+}
+
+func (kp kitlogPrintf) Printf(pat string, args ...interface{}) {
+	kp.Log("msg", fmt.Sprintf(pat, args...))
+}
+func (kp kitlogPrintf) Error(pat string, args ...interface{}) {
+	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "error")
+}
+func (kp kitlogPrintf) Warn(pat string, args ...interface{}) {
+	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "warn")
+}
+func (kp kitlogPrintf) Info(pat string, args ...interface{}) {
+	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "info")
+}
+func (kp kitlogPrintf) Debug(pat string, args ...interface{}) {
+	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "debug")
+}
