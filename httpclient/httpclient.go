@@ -35,12 +35,12 @@ const (
 
 // New returns a *retryablehttp.Client, with the default http.Client, DefaultTimeout, DefaultInterval and DefaultFailureRatio.
 func New(name string) *retryablehttp.Client {
-	return NewWithClient(name, nil, DefaultTimeout, DefaultInterval, DefaultFailureRatio)
+	return NewWithClient(name, nil, DefaultTimeout, DefaultInterval, DefaultFailureRatio, nil)
 }
 
 // NewWithClient returns a *retryablehttp.Client based on the given *http.Client.
 // The accompanying circuit breaker is set with the given timeout and interval.
-func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration, failureRatio float64) *retryablehttp.Client {
+func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration, failureRatio float64, Log func(...interface{}) error) *retryablehttp.Client {
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
@@ -64,6 +64,9 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 	rc := retryablehttp.NewClient()
 	if cl != nil && cl != http.DefaultClient {
 		rc.HTTPClient = cl
+	}
+	if Log == nil {
+		rc.Logger = nil
 	}
 	rc.RetryWaitMin = timeout / 2
 	rc.RetryWaitMax = interval
