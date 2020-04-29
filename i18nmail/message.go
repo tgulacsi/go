@@ -37,25 +37,38 @@ import (
 
 // Layouts suitable for passing to time.Parse.
 // These are tried in order.
-var dateLayouts []string
+var dateLayouts = []string{
+	time.RFC3339, time.RFC1123Z, time.RFC1123,
+	time.RFC822Z, time.RFC822, "Monday, January 2, 2006 3:04 PM",
+	time.UnixDate, time.RubyDate, time.ANSIC, time.Stamp,
+}
 
 func init() {
 	// Generate layouts based on RFC 5322, section 3.3.
 
-	dows := [...]string{"", "Mon, "}   // day-of-week
-	days := [...]string{"2", "02"}     // day = 1*2DIGIT
-	years := [...]string{"2006", "06"} // year = 4*DIGIT / 2*DIGIT
-	seconds := [...]string{":05", ""}  // second
+	dows := [...]string{"", "Mon, ", "Monday, "} // day-of-week
+	days := [...]string{"2", "02"}               // day = 1*2DIGIT
+	years := [...]string{"2006", "06"}           // year = 4*DIGIT / 2*DIGIT
 	// "-0700 (MST)" is not in RFC 5322, but is common.
-	zones := [...]string{"-0700", "MST", "-0700 (MST)"} // zone = (("+" / "-") 4DIGIT) / "GMT" / ...
+	zones := [...]string{"-0700", "MST", "-0700 (MST)", ""} // zone = (("+" / "-") 4DIGIT) / "GMT" / ...
+	months := [...]string{"Jan", "January"}
+	hours := [...]string{"15:04", "3:04PM", "3:04 PM"}
+	seconds := [...]string{":05", ""} // second
 
+	t := time.Now()
 	for _, dow := range dows {
 		for _, day := range days {
 			for _, year := range years {
-				for _, second := range seconds {
-					for _, zone := range zones {
-						s := dow + day + " Jan " + year + " 15:04" + second + " " + zone
-						dateLayouts = append(dateLayouts, s)
+				for _, month := range months {
+					for _, hour := range hours {
+						for _, second := range seconds {
+							for _, zone := range zones {
+								s := dow + day + " " + month + " " + year + " " + hour + second + " " + zone
+								if _, err := time.Parse(s, t.Format(s)); err == nil {
+									dateLayouts = append(dateLayouts, s)
+								}
+							}
+						}
 					}
 				}
 			}
@@ -64,13 +77,14 @@ func init() {
 }
 
 func parseDate(date string) (time.Time, error) {
+	date = strings.TrimSpace(date)
 	for _, layout := range dateLayouts {
-		t, err := time.Parse(layout, date)
+		t, err := time.ParseInLocation(layout, date, time.Local)
 		if err == nil {
 			return t, nil
 		}
 	}
-	return time.Time{}, errors.New("mail: header could not be parsed")
+	return time.Time{}, errors.Errorf("%q: %w", date, errors.New("mail: header could not be parsed"))
 }
 
 // A Header represents the key-value pairs in a mail message header.
