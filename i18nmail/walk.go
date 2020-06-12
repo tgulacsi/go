@@ -318,7 +318,7 @@ func HashBytes(data []byte) string {
 	return base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
 
-var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 4096)) }}
+var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
 
 // ReadAndHashMessage reads message and hashes it by the way
 func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
