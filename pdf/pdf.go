@@ -1,5 +1,5 @@
 /*
-  Copyright 2019 Tamás Gulácsi
+  Copyright 2019, 2020 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ func MergeFiles(dest string, sources ...string) error {
 			err = errors.Errorf("PANIC: %w", r)
 		}
 	}()
-	err = api.MergeFile(sources, dest, config)
+	err = api.MergeAppendFile(sources, dest, config)
 	return err
 }
 
