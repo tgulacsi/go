@@ -47,6 +47,7 @@ func main() {
 func Main() error {
 	flagTimeout := flag.Duration("t", 3*time.Second, "timeout for stop")
 	flagProg := flag.String("prog", "firefox", "name of the program")
+	flagDepth := flag.Int("depth", 0, "depth of child tree")
 	flag.Parse()
 
 	ctx, cancel := globalctx.Wrap(context.Background())
@@ -73,7 +74,7 @@ func Main() error {
 	var ff int
 	defer func() {
 		if ff != 0 {
-			kill(ff, false)
+			kill(ff, false, *flagDepth+1)
 		}
 	}()
 	dec := json.NewDecoder(pr)
@@ -88,13 +89,13 @@ func Main() error {
 		}
 		if change.Container.AppID == *flagProg {
 			ff = change.Container.PID
-			kill(ff, false)
+			kill(ff, false, *flagDepth)
 			stopTimer()
 			continue
 		}
 		if timer == nil {
 			timer = time.AfterFunc(timeout, func() {
-				kill(ff, true)
+				kill(ff, true, *flagDepth)
 			})
 			continue
 		}
@@ -113,19 +114,19 @@ type Container struct {
 	PID   int    `json:"pid"`
 }
 
-func kill(pid int, stop bool) error {
+func kill(pid int, stop bool, depth int) error {
 	var firstErr error
 	if stop {
 		const sig = syscall.SIGSTOP
 		log.Println("STOP", pid)
 		firstErr = syscall.Kill(pid, sig)
-		if err := ckill(pid, sig, nil); err != nil && firstErr == nil {
+		if err := ckill(pid, sig, nil, depth); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	} else {
 		log.Println("CONT", pid)
 		const sig = syscall.SIGCONT
-		firstErr = ckill(pid, sig, nil)
+		firstErr = ckill(pid, sig, nil, depth)
 		if err := syscall.Kill(pid, sig); err != nil && firstErr != nil {
 			firstErr = err
 		}
@@ -133,7 +134,10 @@ func kill(pid int, stop bool) error {
 	return firstErr
 }
 
-func ckill(ppid int, sig syscall.Signal, c map[int][]int) error {
+func ckill(ppid int, sig syscall.Signal, c map[int][]int, depth int) error {
+	if depth == 0 {
+		return syscall.Kill(ppid, sig)
+	}
 	fis, _ := ioutil.ReadDir("/proc")
 	if c == nil {
 		c = make(map[int][]int, len(fis))
@@ -154,7 +158,7 @@ func ckill(ppid int, sig syscall.Signal, c map[int][]int) error {
 	}
 	var firstErr error
 	for _, pid := range c[ppid] {
-		if err := ckill(pid, sig, c); err != nil && firstErr == nil {
+		if err := ckill(pid, sig, c, depth-1); err != nil && firstErr == nil {
 			firstErr = err
 		}
 		if err := syscall.Kill(pid, sig); err != nil && firstErr == nil {
