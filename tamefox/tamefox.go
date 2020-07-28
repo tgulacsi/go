@@ -47,7 +47,7 @@ func main() {
 func Main() error {
 	flagTimeout := flag.Duration("t", 3*time.Second, "timeout for stop")
 	flagProg := flag.String("prog", "firefox", "name of the program")
-	flagDepth := flag.Int("depth", 0, "depth of child tree")
+	flagDepth := flag.Int("depth", 1, "depth of child tree")
 	flag.Parse()
 
 	ctx, cancel := globalctx.Wrap(context.Background())
@@ -93,6 +93,8 @@ func Main() error {
 			stopTimer()
 			continue
 		}
+		kill(change.Container.PID, false, 0)
+
 		if timer == nil {
 			timer = time.AfterFunc(timeout, func() {
 				kill(ff, true, *flagDepth)
