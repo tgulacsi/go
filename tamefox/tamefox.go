@@ -45,9 +45,9 @@ func main() {
 }
 
 func Main() error {
-	flagTimeout := flag.Duration("t", 3*time.Second, "timeout for stop")
+	flagTimeout := flag.Duration("t", 30*time.Second, "timeout for stop")
 	flagProg := flag.String("prog", "firefox", "name of the program")
-	flagDepth := flag.Int("depth", 1, "depth of child tree")
+	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
 	flag.Parse()
 
 	ctx, cancel := globalctx.Wrap(context.Background())
@@ -74,7 +74,7 @@ func Main() error {
 	var ff int
 	defer func() {
 		if ff != 0 {
-			kill(ff, false, *flagDepth+1)
+			kill(ff, false, 999)
 		}
 	}()
 	dec := json.NewDecoder(pr)
@@ -89,7 +89,7 @@ func Main() error {
 		}
 		if change.Container.AppID == *flagProg {
 			ff = change.Container.PID
-			kill(ff, false, *flagDepth)
+			kill(ff, false, 999)
 			stopTimer()
 			continue
 		}
@@ -97,7 +97,7 @@ func Main() error {
 
 		if timer == nil {
 			timer = time.AfterFunc(timeout, func() {
-				kill(ff, true, *flagDepth)
+				kill(ff, true, *flagStopDepth)
 			})
 			continue
 		}
@@ -168,21 +168,6 @@ func ckill(ppid int, sig syscall.Signal, c map[int][]int, depth int) error {
 		}
 	}
 	return firstErr
-}
-func pkill(pid int, sig syscall.Signal) error {
-	//exec.Command("pkill", "-STOP", "-P", strconv.Itoa(pid)).Run()
-	ppid, err := getPPid(pid)
-	log.Printf("PPID of %d is %d (%v)", pid, ppid, err)
-	if err != nil {
-		return err
-	}
-	if err = syscall.Kill(pid, sig); err != nil {
-		return err
-	}
-	if ppid == 1 {
-		return nil
-	}
-	return pkill(ppid, sig)
 }
 
 func getPPid(pid int) (int, error) {
