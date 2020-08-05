@@ -16,10 +16,9 @@ require (
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/go-kit/kit v0.9.0
-	github.com/go-logfmt/logfmt v0.5.0 // indirect
+	github.com/go-logfmt/logfmt v0.5.0
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
-	github.com/golang/protobuf v1.4.1 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.4
@@ -34,7 +33,7 @@ require (
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/opentracing/basictracer-go v1.0.0
-	github.com/opentracing/opentracing-go v1.1.0
+	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pdfcpu/pdfcpu v0.3.3
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rakyll/statik v0.1.6
@@ -45,12 +44,14 @@ require (
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/tgulacsi/statik v0.1.3
 	github.com/valyala/quicktemplate v1.4.1
+	go.opentelemetry.io/otel v0.10.0
+	go.opentelemetry.io/otel/exporters/stdout v0.10.0
+	go.opentelemetry.io/otel/sdk v0.10.0
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	golang.org/x/crypto v0.0.0-20200210222208-86ce3cb69678
 	golang.org/x/image v0.0.0-20200618115811-c13761719519 // indirect
 	golang.org/x/net v0.0.0-20200506145744-7e3656a0809f
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20200509044756-6aff5f38e54f // indirect
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543

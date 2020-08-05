@@ -3,11 +3,13 @@ package otel
 import (
 	"context"
 	"net/http"
+	"fmt"
 	"strings"
 
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/label"
 	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/exporters/stdout"
 	"go.opentelemetry.io/otel/instrumentation/httptrace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -60,17 +62,24 @@ func InitTraceProvider(ctx context.Context, name string, Log func(...interface{}
 	global.SetTraceProvider(tp)
 	return context.WithValue(ctx, ckTracer, global.Tracer(name)), nil
 }
+
+var Propagators = propagation.New(
+	propagation.WithExtractors(trace.DefaultHTTPPropagator()),
+	propagation.WithInjectors(trace.DefaultHTTPPropagator()),
+)
+var httptraceOpts = []httptrace.Option{httptrace.WithPropagators(Propagators)}
+
 func Middleware(hndl http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tracer, ok := r.Context().Value(ckTracer).(trace.Tracer)
 		if !ok || tracer == nil {
-			_, r := httptrace.W3C(r.Context(), r)
+			fmt.Println("NO TRACER IN CONTEXT")
 			hndl.ServeHTTP(w, r)
 			return
 		}
 		tracer.WithSpan(r.Context(), r.URL.Path, func(ctx context.Context) error {
-			_, r := httptrace.W3C(ctx, r)
-			hndl.ServeHTTP(w, r)
+			_, _, spanContext := httptrace.Extract(ctx, r, httptraceOpts...)
+			hndl.ServeHTTP(w, r.WithContext(trace.ContextWithRemoteSpanContext(ctx, spanContext)))
 			return nil
 		})
 	})
