@@ -48,6 +48,7 @@ func Main() error {
 	flagTimeout := flag.Duration("t", 30*time.Second, "timeout for stop")
 	flagProg := flag.String("prog", "firefox", "name of the program")
 	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
+	flagAC := flag.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
 	flag.Parse()
 
 	ctx, cancel := globalctx.Wrap(context.Background())
@@ -95,6 +96,17 @@ func Main() error {
 		}
 		kill(change.Container.PID, false, 0)
 
+		if *flagAC != "" {
+			b, err := ioutil.ReadFile(*flagAC)
+			if err != nil {
+				return err
+			}
+			b = bytes.TrimSpace(b)
+			if bytes.Equal(bytes.TrimSpace(b), []byte("1")) {
+				log.Println("on AC, skip STOP")
+				continue
+			}
+		}
 		if timer == nil {
 			timer = time.AfterFunc(timeout, func() {
 				kill(ff, true, *flagStopDepth)
