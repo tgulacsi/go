@@ -1,4 +1,4 @@
-// Copyright 2015 Tamás Gulácsi. All rights reserved.
+// Copyright 2015, 2020 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 package httperr
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
-
-	errors "golang.org/x/xerrors"
 )
 
 var _ = error(httpError{})
@@ -51,7 +51,7 @@ func New(err error, code int) *httpError {
 // Newf returns a new httpError with the given code,
 // and the message is created from msg and the args.
 func Newf(code int, msg string, args ...interface{}) *httpError {
-	return New(errors.Errorf(msg, args...), code)
+	return New(fmt.Errorf(msg, args...), code)
 }
 
 // vim: fileencoding=utf-8:

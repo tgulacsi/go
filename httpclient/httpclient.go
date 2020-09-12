@@ -19,13 +19,13 @@ package httpclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/sony/gobreaker"
-	errors "golang.org/x/xerrors"
 )
 
 const (

@@ -5,13 +5,13 @@ package ods
 import (
 	"archive/zip"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"sync"
 
 	qt "github.com/valyala/quicktemplate"
-	errors "golang.org/x/xerrors"
 
 	"github.com/rakyll/statik/fs"
 	_ "github.com/tgulacsi/go/ods/statik"
@@ -95,11 +95,11 @@ func NewWriter(w io.Writer) (*ODSWriter, error) {
 		}
 		b, err := fs.ReadFile(statikFS, path)
 		if err != nil {
-			return errors.Errorf("%s %s: %w", path, info, err)
+			return fmt.Errorf("%s %s: %w", path, info, err)
 		}
 		hdr, err := zip.FileInfoHeader(info)
 		if err != nil {
-			return errors.Errorf("%s: %w", path, err)
+			return fmt.Errorf("%s: %w", path, err)
 		}
 		hdr.Method = zip.Deflate
 		w, err := zw.CreateHeader(hdr)
@@ -110,7 +110,7 @@ func NewWriter(w io.Writer) (*ODSWriter, error) {
 		return err
 	}); err != nil {
 		zw.Close()
-		return nil, errors.Errorf("Walk: %w", err)
+		return nil, fmt.Errorf("walk: %w", err)
 	}
 
 	bw, err := zw.Create("content.xml")

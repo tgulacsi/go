@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -26,7 +27,6 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/mevv"
-	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -50,7 +50,7 @@ func Main() error {
 func director(dest string) func(r *http.Request) {
 	destURL, err := url.Parse(dest)
 	if err != nil {
-		panic(errors.Errorf("%s: %w", dest, err))
+		panic(fmt.Errorf("%s: %w", dest, err))
 	}
 
 	/*

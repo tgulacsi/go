@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -9,7 +10,6 @@ import (
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/htmlindex"
-	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -44,6 +44,6 @@ func get(name string) (encoding.Encoding, error) {
 	case "UTF8", "UTF-8":
 		return encoding.Nop, nil
 	default:
-		return encoding.Nop, errors.Errorf("%s: %w", name, err)
+		return encoding.Nop, fmt.Errorf("%s: %w", name, err)
 	}
 }

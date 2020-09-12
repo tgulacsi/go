@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Tamás Gulácsi
+Copyright 2017, 2020 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -36,7 +37,6 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	errors "golang.org/x/xerrors"
 )
 
 var ErrAuth = errors.New("authentication error")
@@ -230,7 +230,7 @@ func (V Version) GetPDF(
 	}
 	req, err := http.NewRequest("GET", meURL, nil)
 	if err != nil {
-		return nil, "", "", errors.Errorf("url=%q: %w", meURL, err)
+		return nil, "", "", fmt.Errorf("url=%q: %w", meURL, err)
 	}
 	Log("msg", "MEVV", "username", username, "password", strings.Repeat("*", len(password)))
 	req.SetBasicAuth(username, password)
@@ -238,14 +238,14 @@ func (V Version) GetPDF(
 	Log("msg", "Get", "url", req.URL, "headers", req.Header)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "", "", errors.Errorf("Do %#v: %w", req.URL.String(), err)
+		return nil, "", "", fmt.Errorf("do %#v: %w", req.URL.String(), err)
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, "", "", errors.Errorf("%s: %w", resp.Status, ErrAuth)
+			return nil, "", "", fmt.Errorf("%s: %w", resp.Status, ErrAuth)
 		}
-		return nil, "", "", errors.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
+		return nil, "", "", fmt.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -254,14 +254,14 @@ func (V Version) GetPDF(
 		if err := xml.NewDecoder(io.TeeReader(resp.Body, &buf)).Decode(&mr); err != nil {
 			_, _ = io.Copy(&buf, resp.Body)
 			resp.Body.Close()
-			return nil, "", "", errors.Errorf("parse %q: %w", buf.String(), err)
+			return nil, "", "", fmt.Errorf("parse %q: %w", buf.String(), err)
 		}
 		return nil, "", "", mr
 	}
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
 		buf, _ := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, "", "", errors.Errorf("998: %s", buf)
+		return nil, "", "", fmt.Errorf("998: %s", buf)
 	}
 	var fn string
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
@@ -309,7 +309,7 @@ func fmtBool(b bool) string {
 func ReadUserPassw(filename string) (string, string, error) {
 	fh, err := os.Open(filename)
 	if err != nil {
-		return "", "", errors.Errorf("open %q: %w", filename, err)
+		return "", "", fmt.Errorf("open %q: %w", filename, err)
 	}
 	defer fh.Close()
 	scanner := bufio.NewScanner(fh)

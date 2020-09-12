@@ -22,13 +22,12 @@ package httpunix
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
-
-	errors "golang.org/x/xerrors"
 )
 
 // ListenAndServe is the same as http.ListenAndServe, except it can listen on unix domain sockets.
@@ -56,7 +55,7 @@ func ListenAndServeSrv(ctx context.Context, addr string, srv http.Server) error 
 		os.Remove(addr)
 		var err error
 		if ln, err = net.Listen("unix", addr); err != nil {
-			return errors.Errorf("%s: %w", addrU, err)
+			return fmt.Errorf("%s: %w", addrU, err)
 		}
 		defer ln.Close()
 	}

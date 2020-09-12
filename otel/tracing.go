@@ -16,7 +16,7 @@ import (
 )
 
 func InitTraceProvider(ctx context.Context, name string, Log func(...interface{}) error) (context.Context, error) {
-	exporter := LogExporter{Log:Log}
+	exporter := LogExporter{Log: Log}
 	tp, err := sdktrace.NewProvider(
 		sdktrace.WithConfig(sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
 		sdktrace.WithSyncer(exporter),
@@ -33,9 +33,16 @@ var Propagators = propagation.New(
 	propagation.WithInjectors(trace.DefaultHTTPPropagator(), trace.B3{}),
 )
 
+func ExtractHTTP(ctx context.Context, headers http.Header) context.Context {
+	return propagation.ExtractHTTP(ctx, Propagators, headers)
+}
+func InjectHTTP(ctx context.Context, headers http.Header) {
+	propagation.InjectHTTP(ctx, Propagators, headers)
+}
+
 func Middleware(hndl http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := propagation.ExtractHTTP(r.Context(),Propagators, r.Header)
+		ctx := propagation.ExtractHTTP(r.Context(), Propagators, r.Header)
 		FromContext(ctx).WithSpan(ctx, r.URL.Path, func(ctx context.Context) error {
 			propagation.InjectHTTP(ctx, Propagators, w.Header())
 			hndl.ServeHTTP(w, r.WithContext(ctx))

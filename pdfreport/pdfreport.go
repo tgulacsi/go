@@ -16,6 +16,7 @@
 package pdfreport
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/jung-kurt/gofpdf"
-	errors "golang.org/x/xerrors"
 
 	_ "github.com/tgulacsi/go/pdfreport/statik"
 	"github.com/tgulacsi/statik/fs"
@@ -300,12 +300,12 @@ func newFontRepo(assetDir string) (map[fontName]fontLoader, error) {
 			}
 			fJson, err := getStatikFile(afn)
 			if err != nil {
-				return errors.Errorf("%s: %w", fn, err)
+				return fmt.Errorf("%s: %w", fn, err)
 			}
 			zfn := strings.TrimSuffix(afn, ".json") + ".z"
 			fZ, err := getStatikFile(zfn)
 			if err != nil {
-				return errors.Errorf("%s: %w", zfn, err)
+				return fmt.Errorf("%s: %w", zfn, err)
 			}
 			nm := strings.TrimSuffix(fn, ".json")
 			var f fontName

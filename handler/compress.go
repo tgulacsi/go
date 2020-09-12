@@ -1,4 +1,4 @@
-// Copyright 2013 The Gorilla Authors. All rights reserved.
+// Copyright 2013, 2020 The Gorilla Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,10 +6,12 @@ package handler
 
 import (
 	"compress/flate"
-	gzip "github.com/klauspost/pgzip"
+	"context"
 	"io"
 	"net/http"
 	"strings"
+
+	gzip "github.com/klauspost/pgzip"
 )
 
 type compressResponseWriter struct {
@@ -92,17 +94,12 @@ func CompressHandlerLevel(h http.Handler, level int) http.Handler {
 					f = nil
 				}
 
-				cn, cnok := w.(http.CloseNotifier)
-				if !cnok {
-					cn = nil
-				}
-
 				w = &compressResponseWriter{
 					Writer:         gw,
 					ResponseWriter: w,
 					Hijacker:       h,
 					Flusher:        f,
-					CloseNotifier:  cn,
+					CloseNotifier:  newContextCloseNotifier(r.Context()),
 				}
 
 				break L
@@ -123,17 +120,12 @@ func CompressHandlerLevel(h http.Handler, level int) http.Handler {
 					f = nil
 				}
 
-				cn, cnok := w.(http.CloseNotifier)
-				if !cnok {
-					cn = nil
-				}
-
 				w = &compressResponseWriter{
 					Writer:         fw,
 					ResponseWriter: w,
 					Hijacker:       h,
 					Flusher:        f,
-					CloseNotifier:  cn,
+					CloseNotifier:  newContextCloseNotifier(r.Context()),
 				}
 
 				break L
@@ -143,3 +135,18 @@ func CompressHandlerLevel(h http.Handler, level int) http.Handler {
 		h.ServeHTTP(w, r)
 	})
 }
+
+func newContextCloseNotifier(ctx context.Context) contextCloseNotifier {
+	ch := make(chan bool)
+	go func() {
+		for {
+			<-ctx.Done()
+			ch <- true
+		}
+	}()
+	return contextCloseNotifier{ch}
+}
+
+type contextCloseNotifier struct{ done <-chan bool }
+
+func (cn contextCloseNotifier) CloseNotify() <-chan bool { return cn.done }

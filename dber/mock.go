@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -15,7 +16,6 @@ import (
 	"unicode"
 
 	"github.com/kylelemons/godebug/diff"
-	errors "golang.org/x/xerrors"
 )
 
 var (
@@ -81,7 +81,7 @@ func (tx *Tx) Commit() error {
 	if tx.done == TxUndecided {
 		tx.done = TxCommited
 		if len(tx.Expects) > 0 {
-			return errors.Errorf("COMMIT left %d expectations: %v", len(tx.Expects), tx.Expects)
+			return fmt.Errorf("COMMIT left %d expectations: %v", len(tx.Expects), tx.Expects)
 		}
 	}
 	if tx.done == TxCommited {
@@ -193,17 +193,17 @@ func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expe
 	}
 	cu.pos++
 	if len(cu.Expects) == 0 {
-		return nil, errors.Errorf("%d. EXTRA query %q: %w", cu.pos, qry, ErrQueryMismatch)
+		return nil, fmt.Errorf("%d. EXTRA query %q: %w", cu.pos, qry, ErrQueryMismatch)
 	}
 	exp := cu.Expects[0]
 	cu.Expects = cu.Expects[1:]
 	Debug("pop expect qry=%q, remains %d.", exp.Qry, len(cu.Expects))
 	if !exp.Qry.MatchString(qry) {
-		return exp, errors.Errorf("%d. awaited %q, \ngot\n%q: %w", cu.pos, exp.Qry, qry, ErrQueryMismatch)
+		return exp, fmt.Errorf("%d. awaited %q, \ngot\n%q: %w", cu.pos, exp.Qry, qry, ErrQueryMismatch)
 	}
 	if len(args) != len(exp.Args) {
 		df := diff.Diff(verboseString(exp.Args), verboseString(args))
-		return exp, errors.Errorf("%d. got %d, want %d:\n%s: %w", cu.pos, len(args), len(exp.Args), df, ErrArgsMismatch)
+		return exp, fmt.Errorf("%d. got %d, want %d:\n%s: %w", cu.pos, len(args), len(exp.Args), df, ErrArgsMismatch)
 	}
 	// filter ExpectAny
 	expArgsF := make([]interface{}, 0, len(exp.Args))
@@ -218,7 +218,7 @@ func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expe
 	if !reflect.DeepEqual(argsF, expArgsF) {
 		df := diff.Diff(verboseString(expArgsF), verboseString(argsF))
 		if df != "" {
-			return exp, errors.Errorf("%d. %s: %w", cu.pos, df, ErrArgsMismatch)
+			return exp, fmt.Errorf("%d. %s: %w", cu.pos, df, ErrArgsMismatch)
 		}
 	}
 

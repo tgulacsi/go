@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors. All rights reserved.
+// Copyright 2011, 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -18,6 +18,7 @@ package i18nmail
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,7 +30,7 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/text"
-	errors "golang.org/x/xerrors"
+
 	//"golang.org/x/text/encoding/ianaindex"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
@@ -84,7 +85,7 @@ func parseDate(date string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, errors.Errorf("%q: %w", date, errors.New("mail: header could not be parsed"))
+	return time.Time{}, fmt.Errorf("%q: %w", date, errors.New("mail: header could not be parsed"))
 }
 
 // A Header represents the key-value pairs in a mail message header.
@@ -145,7 +146,7 @@ func ParseAddress(address string) (*Address, error) {
 			strings.Contains(address, "<") && strings.Contains(address, ">") {
 			maddr, err = AddressParser.Parse(address[strings.LastIndex(address, "<"):])
 		} else {
-			err = errors.Errorf("%s: %w", address, err)
+			err = fmt.Errorf("%s: %w", address, err)
 		}
 	}
 	if maddr == nil {

@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,8 +13,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-
-	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -28,7 +27,7 @@ func main() {
 		log.Println("Listening on " + *flagListen)
 		ln, err := net.Listen(listenType, listenAddr)
 		if err != nil {
-			log.Fatal(errors.Errorf("%s: %w", *flagListen, err))
+			log.Fatal(fmt.Errorf("%s: %w", *flagListen, err))
 		}
 		for {
 			conn, err := ln.Accept()
@@ -42,7 +41,7 @@ func main() {
 	}
 	lAddr, err := net.ResolveUDPAddr(listenType, listenAddr)
 	if err != nil {
-		log.Fatal(errors.Errorf("%s: %w", *flagListen, err))
+		log.Fatal(fmt.Errorf("%s: %w", *flagListen, err))
 	}
 	log.Println("Listening on "+listenType+":", lAddr)
 	for {
@@ -78,7 +77,7 @@ func connForwarder(typ, addr string) func(ctx context.Context, conn net.Conn) er
 		if up == nil {
 			var err error
 			if up, err = net.Dial(typ, addr); err != nil {
-				return errors.Errorf("%s:%s: %w", typ, addr, err)
+				return fmt.Errorf("%s:%s: %w", typ, addr, err)
 			}
 			conns.Store(key, up)
 		}

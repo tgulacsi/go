@@ -18,9 +18,8 @@ package pdf
 
 import (
 	"context"
+	"fmt"
 	"os"
-
-	errors "golang.org/x/xerrors"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
@@ -40,7 +39,7 @@ func MergeFiles(dest string, sources ...string) error {
 	var err error
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.Errorf("PANIC: %w", r)
+			err = fmt.Errorf("PANIC: %w", r)
 		}
 	}()
 	err = api.MergeAppendFile(sources, dest, config)
@@ -52,7 +51,7 @@ func Split(ctx context.Context, destDir, fn string) error {
 	var err error
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.Errorf("PANIC: %w", r)
+			err = fmt.Errorf("PANIC: %w", r)
 		}
 	}()
 	err = api.SplitFile(fn, destDir, 1, config)
@@ -67,13 +66,13 @@ func PageNum(ctx context.Context, fn string) (int, error) {
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			err = errors.Errorf("PANIC: %w", r)
+			err = fmt.Errorf("PANIC: %w", r)
 		}
 	}()
 	pdf, err := api.ReadContext(fh, config)
 	fh.Close()
 	if err != nil {
-		return 0, errors.Errorf("read: %w", err)
+		return 0, fmt.Errorf("read: %w", err)
 	}
 	if pdf.PageCount != 0 {
 		return pdf.PageCount, nil

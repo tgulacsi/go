@@ -17,6 +17,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -24,7 +25,6 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	errors "golang.org/x/xerrors"
 )
 
 func main() {
@@ -63,14 +63,14 @@ func Main() error {
 	for nm, r := range repos {
 		fh, err := os.Create(filepath.Join(*flagDestDir, nm))
 		if err != nil {
-			return errors.Errorf("%w", err)
+			return fmt.Errorf("%w", err)
 		}
 		if err = templates.Execute(fh, r); err != nil {
 			fh.Close()
 			return err
 		}
 		if err = fh.Close(); err != nil {
-			return errors.Errorf("%s: %w", fh.Name(), err)
+			return fmt.Errorf("%s: %w", fh.Name(), err)
 		}
 	}
 	return nil

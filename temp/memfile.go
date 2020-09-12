@@ -1,5 +1,5 @@
 /*
-Copyright 2013 the Camlistore authors.
+Copyright 2013, 2020 the Camlistore authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,14 +18,13 @@ package temp
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	errors "golang.org/x/xerrors"
 )
 
 // MaxInMemorySlurp is the threshold for in-memory or on-disk storage
@@ -61,7 +60,7 @@ func MakeReadSeekCloser(blobRef string, r io.Reader) (ReadSeekCloser, error) {
 	ms := NewMemorySlurper(blobRef).(*memorySlurper)
 	n, err := io.Copy(ms, r)
 	if err != nil {
-		return nil, errors.Errorf("copy from %v to %v: %w", r, ms, err)
+		return nil, fmt.Errorf("copy from %v to %v: %w", r, ms, err)
 	}
 
 	if ms.stat == nil {
@@ -115,7 +114,7 @@ func (ms *memorySlurper) prepareRead() error {
 	ms.reading = true
 	if ms.file != nil {
 		if _, err := ms.file.Seek(0, 0); err != nil {
-			return errors.Errorf("file=%v: %w", ms.file, err)
+			return fmt.Errorf("file=%v: %w", ms.file, err)
 		}
 	} else {
 		ms.mem = bytes.NewReader(ms.buf.Bytes())

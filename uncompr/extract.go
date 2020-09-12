@@ -1,4 +1,4 @@
-// Copyright 2017 Tamás Gulácsi. All rights reserved.
+// Copyright 2017, 2020 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -6,6 +6,7 @@ package uncompr
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"path/filepath"
 
 	"github.com/tgulacsi/go/temp"
-	errors "golang.org/x/xerrors"
 )
 
 // Lister can list the archive's contents.
@@ -99,22 +99,22 @@ func NewRarLister(r io.Reader) (Lister, error) {
 	fh, err := os.Create(filepath.Join(rl.dir, rarName))
 	if err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Errorf("create %s: %w", rarName, err)
+		return nil, fmt.Errorf("create %s: %w", rarName, err)
 	}
 	if _, err = io.Copy(fh, r); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Errorf("copy to %s: %w", fh.Name(), err)
+		return nil, fmt.Errorf("copy to %s: %w", fh.Name(), err)
 	}
 	if err = fh.Close(); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Errorf("close %s: %w", fh.Name(), err)
+		return nil, fmt.Errorf("close %s: %w", fh.Name(), err)
 	}
 
 	cmd := exec.Command("unrar", "e", "-ep", rarName)
 	cmd.Dir = tempdir
 	if err = cmd.Run(); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Errorf("%q @%q: %w", cmd.Args, cmd.Dir, err)
+		return nil, fmt.Errorf("%q @%q: %w", cmd.Args, cmd.Dir, err)
 	}
 	os.Remove(fh.Name())
 	if err = filepath.Walk(
@@ -127,7 +127,7 @@ func NewRarLister(r io.Reader) (Lister, error) {
 		},
 	); err != nil {
 		os.RemoveAll(tempdir)
-		return nil, errors.Errorf("walk %s: %w", tempdir, err)
+		return nil, fmt.Errorf("walk %s: %w", tempdir, err)
 	}
 
 	return rl, nil
@@ -159,7 +159,7 @@ type rarExtracter struct {
 func (re rarExtracter) Open() (io.ReadCloser, error) {
 	fh, err := os.Open(re.path)
 	if err != nil {
-		return nil, errors.Errorf("open %s: %w", re.path, err)
+		return nil, fmt.Errorf("open %s: %w", re.path, err)
 	}
 	return unlinkCloser{fh}, nil
 }
