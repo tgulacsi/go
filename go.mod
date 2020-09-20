@@ -34,7 +34,7 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/opentracing/basictracer-go v1.0.0
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/pdfcpu/pdfcpu v0.3.3
+	github.com/pdfcpu/pdfcpu v0.3.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rakyll/statik v0.1.6
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
@@ -44,9 +44,6 @@ require (
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/tgulacsi/statik v0.1.3
 	github.com/valyala/quicktemplate v1.4.1
-	go.opentelemetry.io/otel v0.10.0
-	go.opentelemetry.io/otel/exporters/stdout v0.10.0
-	go.opentelemetry.io/otel/sdk v0.10.0
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	golang.org/x/crypto v0.0.0-20200210222208-86ce3cb69678
 	golang.org/x/image v0.0.0-20200618115811-c13761719519 // indirect
@@ -54,7 +51,7 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
+	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 // indirect
 	perkeep.org v0.0.0-20191227205925-9a1336816afd
 )
 
