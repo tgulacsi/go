@@ -41,6 +41,9 @@ func New(name string) *retryablehttp.Client {
 
 // NewWithClient returns a *retryablehttp.Client based on the given *http.Client.
 // The accompanying circuit breaker is set with the given timeout and interval.
+//
+// If failureRatio is < 0, then no circuit breaker will be used,
+// if failureRatio   == 0, then DefaultFailureRation will be used.
 func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration, failureRatio float64, Log func(...interface{}) error) *retryablehttp.Client {
 	if timeout == 0 {
 		timeout = DefaultTimeout
@@ -48,7 +51,7 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 	if interval == 0 {
 		interval = DefaultInterval
 	}
-	if failureRatio <= 0 {
+	if failureRatio == 0 {
 		failureRatio = DefaultFailureRatio
 	}
 	cb := gobreaker.NewCircuitBreaker(gobreaker.Settings{
@@ -86,7 +89,7 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 		}
 		return false, err
 	}
-	if true {
+	if failureRatio > 0 {
 		cl := *rc.HTTPClient
 		cl.Transport = TransportWithBreaker{Tripper: cl.Transport, Breaker: GoBreaker{CircuitBreaker: cb}}
 		rc.HTTPClient = &cl
