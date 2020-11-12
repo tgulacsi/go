@@ -288,7 +288,8 @@ func getCT(
 	contentType = nct
 	te := strings.ToLower(mail.Header(header).Get("Content-Transfer-Encoding"))
 	switch te {
-	case "":
+	case "", "7bit", "8bit", "binary":
+		// https://stackoverflow.com/questions/25710599/content-transfer-encoding-7bit-or-8-bit
 	case "base64":
 		decoder = func(r io.Reader) io.Reader {
 			//return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}

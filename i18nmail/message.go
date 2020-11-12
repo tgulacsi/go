@@ -142,7 +142,11 @@ func ParseAddress(address string) (*Address, error) {
 	address = wsRepl.Replace(address)
 	maddr, err := AddressParser.Parse(address)
 	if err != nil {
-		if strings.HasSuffix(errors.Unwrap(err).Error(), "no angle-addr") &&
+		uErr := errors.Unwrap(err)
+		if uErr == nil {
+			uErr = err
+		}
+		if strings.HasSuffix(uErr.Error(), "no angle-addr") &&
 			strings.Contains(address, "<") && strings.Contains(address, ">") {
 			maddr, err = AddressParser.Parse(address[strings.LastIndex(address, "<"):])
 		} else {
