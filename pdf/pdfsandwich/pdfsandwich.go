@@ -35,7 +35,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var Version = "v1.7.0"
+var Version = "v0.1.7"
 
 // default binary names:
 var (
@@ -135,7 +135,7 @@ func ProcessOCR(ctx context.Context,
 		nThreads = 1
 	}
 	if nThreads > 1 {
-		logger.Printf("Parallel processing with %d threads started.\nProcessing page order may differ from original page order.\n", nThreads)
+		logger.Printf("Parallel processing with %d threads started. Processing page order may differ from original page order.\n", nThreads)
 	}
 
 	type todo struct {
@@ -191,19 +191,20 @@ func ProcessOCR(ctx context.Context,
 					logger.Printf("Processing page %d\n", currPage)
 				}
 				// get original height and width:
-				cmd := exec.CommandContext(ctx, identify, "-format", "%w\n%h\n", infile, fmt.Sprintf("[%d]", currPage-1))
+				cmd := exec.CommandContext(ctx, identify, "-format", "%w %h", fmt.Sprintf("%s[%d]", infile, currPage-1))
 				var buf bytes.Buffer
 				cmd.Stdout = &buf
 				cmd.Stderr = os.Stderr
 				if err := cmd.Run(); err != nil {
 					return fmt.Errorf("%v: %w", cmd.Args, err)
 				}
-				lines := bytes.SplitN(buf.Bytes(), []byte("\n"), 3)
-				origWidth, err := strconv.Atoi(string(lines[0]))
+				lines := bytes.SplitN(buf.Bytes(), []byte("\n"), 2)
+				parts := bytes.SplitN(lines[0], []byte(" "), 2)
+				origWidth, err := strconv.Atoi(string(parts[0]))
 				if err != nil {
 					logger.Printf("%+v", err)
 				}
-				origHeight, err := strconv.Atoi(string(lines[1]))
+				origHeight, err := strconv.Atoi(string(parts[1]))
 				if err != nil {
 					logger.Printf("%+v", err)
 				}
@@ -235,7 +236,7 @@ func ProcessOCR(ctx context.Context,
 				if !(newHeight == origHeight && newWidth == origWidth) {
 					page := strconv.Itoa(currPage)
 					if err := run(ctx, true, gs, "-q", "-dNOPAUSE", "-dBATCH", "-sDEVICE=pdfwrite", "-dFirstPage="+page, "-dLastPage="+page,
-						fmt.Sprintf("-dDEVICEWIDTHPOINTS=", newWidth), fmt.Sprintf("-dDEVICEHEIGHTPOINTS=%d", newHeight), "-dPDFFitPage", "-o", tmprescaled_infile, infile,
+						fmt.Sprintf("-dDEVICEWIDTHPOINTS=%d", newWidth), fmt.Sprintf("-dDEVICEHEIGHTPOINTS=%d", newHeight), "-dPDFFitPage", "-o", tmprescaled_infile, infile,
 					); err != nil {
 						return err
 					}
@@ -270,7 +271,7 @@ func ProcessOCR(ctx context.Context,
 				}
 
 				// convert preprocessing output file to tif in order to ensure correct resolution and size:
-				if err := run(ctx, true, convert, "-units", "PixelsPerInc", "-density", fmt.Sprintf("%dx%d", resolution, resolution), preprocOutput, tmptessinpfile); err != nil {
+				if err := run(ctx, true, convert, "-units", "PixelsPerInch", "-density", fmt.Sprintf("%dx%d", resolution, resolution), preprocOutput, tmptessinpfile); err != nil {
 					return err
 				}
 				tessinputfile := tmptessinpfile
@@ -322,7 +323,7 @@ func ProcessOCR(ctx context.Context,
 	}
 
 	pdfFiles := make([]string, 0, lastPage-firstPage+1)
-	for i := firstPage; i < lastPage; i++ {
+	for i := firstPage; i <= lastPage; i++ {
 		p := todo{Page: i}
 		var err error
 		if p.PDFName, err = makeTempFile(".pdf"); err != nil {
@@ -421,16 +422,15 @@ func Main() error {
 
 	fs.Parse(os.Args[1:])
 
-	if verbose {
-		logger = log.New(os.Stderr, "", log.LstdFlags)
-	}
+	logger = log.New(os.Stderr, "", log.LstdFlags)
 	ctx, cancel := globalctx.Wrap(context.Background())
 	defer cancel()
 	var tesseractLangs []string
 	{
-		b, err := exec.CommandContext(ctx, tesseract, "--list-langs").CombinedOutput()
+		cmd := exec.CommandContext(ctx, tesseract, "--list-langs")
+		b, err := cmd.CombinedOutput()
 		if err != nil {
-			return err
+			return fmt.Errorf("%v: %w", cmd.Args, err)
 		}
 		tesseractLangs = strings.Split(string(b), "\n")
 		var found bool
