@@ -1,4 +1,4 @@
-// +build !go1.16
+// +build go1.16
 
 /*
   Copyright 2020 Tamás Gulácsi
@@ -28,14 +28,5 @@ import (
 
 // Wrap returns a new context with cancel that is canceled on interrupts.
 func Wrap(ctx context.Context) (context.Context, context.CancelFunc) {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(ctx)
-	go func() {
-		<-sigCh
-		cancel()
-		signal.Stop(sigCh)
-	}()
-	return ctx, cancel
+	return signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 }
