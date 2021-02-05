@@ -41,6 +41,7 @@ func ReadAll(r io.Reader, threshold int) ([]byte, io.Closer, error) {
 	}
 	os.Remove(fh.Name())
 	if _, err = fh.Write(b); err != nil {
+		fh.Close()
 		return b, nilClose, err
 	}
 	if _, err = io.Copy(fh, r); err != nil {

@@ -176,7 +176,11 @@ func (ms *memorySlurper) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 		os.Remove(ms.file.Name())
 	}
-	return io.Copy(ms.file, r)
+	if n, err = io.Copy(ms.file, r); err != nil {
+		ms.file.Close()
+		ms.file = nil
+	}
+	return n, err
 }
 
 func (ms *memorySlurper) Write(p []byte) (n int, err error) {
@@ -199,10 +203,15 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 		os.Remove(ms.file.Name())
 		_, err = io.Copy(ms.file, ms.buf)
 		if err != nil {
+			ms.file.Close()
+			ms.file = nil
 			return
 		}
 		ms.buf = nil
-		n, err = ms.file.Write(p)
+		if n, err = ms.file.Write(p); err != nil {
+			ms.file.Close()
+			ms.file = nil
+		}
 		return
 	}
 

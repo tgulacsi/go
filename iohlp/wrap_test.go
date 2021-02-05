@@ -40,9 +40,9 @@ fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
 culpa qui officia deserunt mollit anim id est laborum.
 `},
 		{
-			"Tisztelt Kobe! Mai nap folyamán kaptam önöktől egy levelet 2015.12.03.-an történt egy baleset és a levélbe csatoltak még egy résztvevői nyiltakozatott és kérik hogy 5 napon belül jutasam vissza önökhöz de én már másnap voltam a tatabányai kirendeltségbe és egy ugyan ilyet már kitöltöttek velünk kérdésem az hogy mi lett azzal a papíral vagy ez a levél érkezett meg késve ? Válaszát előre is köszönöm! TISZTELETTEL: Tromposch Tamás ",
+			"Tisztelt Kobe! Mai nap folyamán kaptam önöktől egy levelet 2015.12.03.-an történt egy baleset és a levélbe csatoltak még egy résztvevői nyiltakozatott és kérik hogy 5 napon belül jutasam vissza önökhöz de én már másnap voltam a tatabányai kirendeltségbe és egy ugyan ilyet már kitöltöttek velünk kérdésem az hogy mi lett azzal a papíral vagy ez a levél érkezett meg késve ? Válaszát előre is köszönöm! TISZTELETTEL: Gipsz Jakab ",
 			40,
-			"Tisztelt Kobe! Mai nap folyamán kaptam önöktől egy levelet 2015.12.03.-an történt egy baleset és a levélbe csatoltak még egy résztvevői nyiltakozatott és kérik hogy 5 napon belül jutasam vissza önökhöz de én már másnap voltam a tatabányai kirendeltségbe és egy ugyan ilyet már kitöltöttek velünk kérdésem az hogy mi lett azzal a papíral vagy ez a levél érkezett meg késve ? Válaszát előre is köszönöm! TISZTELETTEL: Tromposch Tamás ",
+			"Tisztelt Kobe! Mai nap folyamán kaptam önöktől egy levelet 2015.12.03.-an történt egy baleset és a levélbe csatoltak még egy résztvevői nyiltakozatott és kérik hogy 5 napon belül jutasam vissza önökhöz de én már másnap voltam a tatabányai kirendeltségbe és egy ugyan ilyet már kitöltöttek velünk kérdésem az hogy mi lett azzal a papíral vagy ez a levél érkezett meg késve ? Válaszát előre is köszönöm! TISZTELETTEL: Gipsz Jakab ",
 		},
 	} {
 		b, err := ioutil.ReadAll(WrappingReader(strings.NewReader(tc.in), uint(tc.width)))
