@@ -155,6 +155,7 @@ type ReportParams struct {
 	HeaderLogoLeft, HeaderLogoRight Image
 	Title, Subject, Author, Creator string
 	Footer                          string
+	Landscape                       bool
 }
 type Image struct {
 	io.Reader
@@ -162,7 +163,11 @@ type Image struct {
 }
 
 func NewReport(params ReportParams) *Report {
-	pdf := &Report{Fpdf: gofpdf.New("P", "mm", "A4", ""), FontSize: 12}
+	orientation := "P"
+	if params.Landscape {
+		orientation = "L"
+	}
+	pdf := &Report{Fpdf: gofpdf.New(orientation, "mm", "A4", ""), FontSize: 12}
 	pdf.Ht = pdf.PointConvert(pdf.FontSize)
 	pdf.html = pdf.HTMLBasicNew()
 	pdf.Encode = pdf.UnicodeTranslatorFromDescriptor("cp1250")
