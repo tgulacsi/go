@@ -210,10 +210,14 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 }
 
 func (ms *memorySlurper) Cleanup() error {
-	if ms.file != nil {
-		if err := os.Remove(ms.file.Name()); err != nil && !strings.Contains(err.Error(), "exist") {
-			return err
-		}
+	f := ms.file
+	ms.file = nil
+	if f == nil {
+		return nil
+	}
+	f.Close()
+	if err := os.Remove(f.Name()); err != nil && !strings.Contains(err.Error(), "exist") {
+		return err
 	}
 	return nil
 }

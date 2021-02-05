@@ -108,7 +108,7 @@ func numberOfPages(ctx context.Context, filename string) (int, error) {
 			}, line)))
 		}
 	}
-	return 0, fmt.Errorf("Error: pdfinfo could not determine number of pages. Check the pdf input file.\n")
+	return 0, fmt.Errorf("pdfinfo could not determine number of pages, check the pdf input file")
 }
 
 // process OCR on pdf file infile and save the results to outfile:
@@ -168,10 +168,6 @@ func ProcessOCR(ctx context.Context,
 				if err != nil {
 					return err
 				}
-				tmpcolfigfile, err := makeTempFile("_col.png")
-				if err != nil {
-					return err
-				}
 				tmprescaled_infile, err := makeTempFile("_rescaled.pdf")
 				if err != nil {
 					return err
@@ -179,13 +175,6 @@ func ProcessOCR(ctx context.Context,
 				tmpunpaperfile, err := makeTempFile("_unpaper" + picExt)
 				if err != nil {
 					return err
-				}
-				if !debug {
-					defer func() {
-						for _, nm := range []string{tmpocrfile + ".pdf", tmprescaled_infile, tmptessinpfile, tmppicfile, tmpocrfile, tmpcolfigfile, tmpunpaperfile} {
-							os.Remove(nm)
-						}
-					}()
 				}
 				if !quiet {
 					logger.Printf("Processing page %d\n", currPage)
@@ -485,7 +474,7 @@ func Main() error {
 	}
 	for _, bin := range binaries {
 		if _, err := exec.LookPath(bin); err != nil {
-			return fmt.Errorf("could not find program %q. Make sure this program exists and can be found in your search path.\nUse command line options to specify a custom binary.", bin)
+			return fmt.Errorf("could not find program %q. Make sure this program exists and can be found in your search path, use command line options to specify a custom binary", bin)
 		}
 	}
 
@@ -556,13 +545,13 @@ func Main() error {
 	}
 	logger.Printf("Number of pages in inputfile: %d", npages)
 	if firstPage < 1 || firstPage > npages {
-		return fmt.Errorf("Value %d is invalid as first-page", firstPage)
+		return fmt.Errorf("value %d is invalid as first-page", firstPage)
 	}
 	if lastPage < 1 {
 		lastPage = npages
 	}
 	if lastPage < firstPage || lastPage > npages {
-		return fmt.Errorf("Value %d is invalid as last-page", lastPage)
+		return fmt.Errorf("value %d is invalid as last-page", lastPage)
 	}
 	if nThreads < 1 {
 		nThreads = runtime.NumCPU()
