@@ -56,6 +56,7 @@ func ReadRequestOneFile(r *http.Request) (body io.ReadCloser, contentType string
 		status, err = 405, errors.New("no files?")
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 
 Outer:
 	for _, fileHeaders := range r.MultipartForm.File {
@@ -84,6 +85,7 @@ func ReadRequestFiles(r *http.Request) (filenames []string, status int, err erro
 		status, err = 405, errors.New("no files?")
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 
 	filenames = make([]string, 0, len(r.MultipartForm.File))
 	var f multipart.File
