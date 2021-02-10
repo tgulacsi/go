@@ -108,7 +108,7 @@ func NewMemorySlurper(blobRef string) ReadWriteSeekCloser {
 }
 
 func (ms *memorySlurper) prepareRead() error {
-	if ms.reading {
+	if ms.reading && (ms.file != nil || ms.buf == nil || ms.mem != nil ){
 		return nil
 	}
 	ms.reading = true
@@ -116,10 +116,10 @@ func (ms *memorySlurper) prepareRead() error {
 		if _, err := ms.file.Seek(0, 0); err != nil {
 			return fmt.Errorf("file=%v: %w", ms.file, err)
 		}
-	} else {
-		ms.mem = bytes.NewReader(ms.buf.Bytes())
-		ms.buf = nil
-	}
+		return nil
+	} 
+	ms.mem = bytes.NewReader(ms.buf.Bytes())
+	ms.buf = nil
 	return nil
 }
 
@@ -220,7 +220,7 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 
 func (ms *memorySlurper) Cleanup() error {
 	f := ms.file
-	ms.file = nil
+	ms.file, ms.mem, ms.buf = nil, nil, nil
 	if f == nil {
 		return nil
 	}
