@@ -122,8 +122,8 @@ func main() {
 }
 
 type fileInfo struct {
-	Path string
 	os.FileInfo
+	Path string
 }
 
 func addFile(tw *tar.Writer, info fileInfo) error {

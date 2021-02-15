@@ -60,8 +60,8 @@ func ContentDisposition(dispType string, filename string) string {
 
 type Accept []KeyVal
 type KeyVal struct {
-	Key string
 	Val interface{}
+	Key string
 }
 
 // Match the given Accept header.

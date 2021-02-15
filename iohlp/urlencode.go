@@ -22,8 +22,8 @@ import (
 )
 
 type NamedReader struct {
-	Name string
 	io.Reader
+	Name string
 }
 
 // URLEncode encodes the Name:Reader pairs just as url.Values.Encode does.

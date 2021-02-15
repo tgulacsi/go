@@ -57,9 +57,9 @@ func TestReadALot(t *testing.T) {
 }
 
 type dummyReader struct {
+	scratch []byte
 	N       int64
 	i       uint8
-	scratch []byte
 }
 
 func (r *dummyReader) Read(p []byte) (int, error) {

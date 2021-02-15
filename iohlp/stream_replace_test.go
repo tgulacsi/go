@@ -46,12 +46,12 @@ func TestBytesReplacer(t *testing.T) {
 	var buf bytes.Buffer
 	pairs := make([][]byte, 0, 4)
 	for i, elt := range []struct {
-		pairs   []string
 		in, out string
+		pairs   []string
 	}{
-		{[]string{"a", "A"}, "bbb", "bbb"},
-		{[]string{"b", "B"}, "bbb", "BBB"},
-		{[]string{"b", "ac"}, "abc", "aacc"},
+		{pairs: []string{"a", "A"}, in: "bbb", out: "bbb"},
+		{pairs: []string{"b", "B"}, in: "bbb", out: "BBB"},
+		{pairs: []string{"b", "ac"}, in: "abc", out: "aacc"},
 	} {
 		pairs = pairs[:len(elt.pairs)]
 		for j, p := range elt.pairs {

@@ -37,8 +37,8 @@ func ReleaseWriter(W *qt.Writer) { qtMu.Lock(); qt.ReleaseWriter(W); qtMu.Unlock
 type Table struct {
 	Name     string
 	Style    string
-	ColCount int
 	Heading  Row
+	ColCount int
 }
 
 // Row with style.
@@ -50,8 +50,8 @@ type Row struct {
 // Cell with style, type and value.
 type Cell struct {
 	Style string
-	Type  ValueType
 	Value string
+	Type  ValueType
 }
 
 // ValueType is the cell's value's type.

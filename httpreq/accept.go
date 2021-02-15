@@ -99,9 +99,9 @@ func parseMediaRange(mRange string) (mr mediaRange, err error) {
 }
 
 type mediaRange struct {
+	params      map[string]string
 	typ, subtyp string
 	q           float32
-	params      map[string]string
 }
 
 // fit returns the best fitting mediaRange from to the parsed mediaRanges

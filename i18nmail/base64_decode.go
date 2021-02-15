@@ -65,9 +65,9 @@ func (r *filterReader) Read(p []byte) (int, error) {
 
 type paddingReader struct {
 	io.Reader
-	Pad    byte
-	Modulo int
 	length int64
+	Modulo int
+	Pad    byte
 	atEOF  bool
 }
 

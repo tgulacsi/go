@@ -25,10 +25,10 @@ import (
 func TestISO8859_1(t *testing.T) {
 	enc := ISO8859_1
 	for i, elt := range []struct {
-		encoded []byte
 		decoded string
+		encoded []byte
 	}{
-		{[]byte("\xe1rv\xedz"), "árvíz"},
+		{"árvíz", []byte("\xe1rv\xedz")},
 	} {
 		b, err := ioutil.ReadAll(NewReader(bytes.NewReader(elt.encoded), enc))
 		if err != nil {

@@ -38,16 +38,16 @@ var (
 )
 
 type Interactive struct {
+	inProgress     map[string]struct{} // location set in progress
 	Set            func(id string, loc Location) error
 	Title          string
-	MapCenter      Location
-	Location       Location
 	DefaultAddress string
 	BaseURL        string
-	NoDirect       bool
+	MapCenter      Location
+	Location       Location
 
 	inProgressMu sync.Mutex
-	inProgress   map[string]struct{} // location set in progress
+	NoDirect     bool
 }
 type staticParams struct {
 	Address, Title             string

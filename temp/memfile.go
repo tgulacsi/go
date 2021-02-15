@@ -81,13 +81,13 @@ func NewReadSeeker(r io.Reader) (ReadSeekCloser, error) {
 // memorySlurper slurps up a blob to memory (or spilling to disk if
 // over MaxInMemorySlurp) and deletes the file on Close
 type memorySlurper struct {
-	maxInMemorySlurp int
-	blobRef          string // only used for tempfile's prefix
+	stat             os.FileInfo
 	buf              *bytes.Buffer
 	mem              *bytes.Reader
 	file             *os.File // nil until allocated
-	reading          bool     // transitions at most once from false -> true
-	stat             os.FileInfo
+	blobRef          string   // only used for tempfile's prefix
+	maxInMemorySlurp int
+	reading          bool // transitions at most once from false -> true
 }
 
 // ReadWriteSeekCloser is an io.Writer + io.Reader + io.Seeker + io.Closer.
@@ -108,7 +108,7 @@ func NewMemorySlurper(blobRef string) ReadWriteSeekCloser {
 }
 
 func (ms *memorySlurper) prepareRead() error {
-	if ms.reading && (ms.file != nil || ms.buf == nil || ms.mem != nil ){
+	if ms.reading && (ms.file != nil || ms.buf == nil || ms.mem != nil) {
 		return nil
 	}
 	ms.reading = true
@@ -117,7 +117,7 @@ func (ms *memorySlurper) prepareRead() error {
 			return fmt.Errorf("file=%v: %w", ms.file, err)
 		}
 		return nil
-	} 
+	}
 	ms.mem = bytes.NewReader(ms.buf.Bytes())
 	ms.buf = nil
 	return nil
@@ -240,10 +240,10 @@ func (ms *memorySlurper) Stat() (os.FileInfo, error) {
 }
 
 type dummyFileInfo struct {
+	mtime time.Time
 	name  string
 	size  int64
 	mode  os.FileMode
-	mtime time.Time
 	isDir bool
 }
 

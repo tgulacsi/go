@@ -38,13 +38,12 @@ import (
 
 type Report struct {
 	*gofpdf.Fpdf
-	html          gofpdf.HTMLBasicType
 	Encode        func(string) string
+	fontLoaders   map[fontName]fontLoader
+	Sans, Mono    string
+	html          gofpdf.HTMLBasicType
 	FontSize, Ht  float64
 	Bottom, Width float64
-	Sans, Mono    string
-
-	fontLoaders map[fontName]fontLoader
 }
 
 func (pdf *Report) Println(text string) error {
@@ -116,8 +115,8 @@ func (pdf *Report) NewTable(names []string, sizes []int, headingSize, bodySize f
 
 type Table struct {
 	report             *Report
-	Ht                 float64
 	widths             []float64
+	Ht                 float64
 	bodySize, origSize float64
 }
 

@@ -27,8 +27,8 @@ func ConcurrentReader(r io.Reader) io.Reader {
 }
 
 type concurrentReader struct {
-	mu sync.Mutex
 	r  io.Reader
+	mu sync.Mutex
 }
 
 func (cr *concurrentReader) Read(p []byte) (int, error) {

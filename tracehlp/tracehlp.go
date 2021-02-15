@@ -32,9 +32,9 @@ func NewLoggerTracer(processName string, Log func(keyvals ...interface{}) error)
 
 // LoggerRecorder implements the basictracer.Recorder interface.
 type LoggerRecorder struct {
-	processName string
 	tags        map[string]string
 	Log         func(keyvals ...interface{}) error
+	processName string
 }
 
 // NewLoggerRecorder returns a LoggerRecorder for the given `processName`.

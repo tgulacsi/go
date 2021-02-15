@@ -116,6 +116,6 @@ func readDirNames(dirname string) (<-chan dirNames, error) {
 }
 
 type dirNames struct {
-	names []string
 	err   error
+	names []string
 }

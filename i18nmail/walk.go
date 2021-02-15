@@ -76,16 +76,16 @@ const HashKeyName = "X-HashOfFullMessage"
 
 // MailPart is part of a mail or multipart message.
 type MailPart struct {
-	// ContenType for the part.
-	ContentType string
+	// Body of the part.
+	Body io.Reader
 	// MediaType is the parsed media type.
 	MediaType map[string]string
 	// Header of the mail part.
 	Header textproto.MIMEHeader
-	// Body of the part.
-	Body io.Reader
 	// Parent of this part.
 	Parent *MailPart
+	// ContenType for the part.
+	ContentType string
 	// Level is the depth level.
 	Level int
 	// Seq is a sequence number

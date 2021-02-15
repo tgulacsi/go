@@ -18,6 +18,7 @@ package stream
 import (
 	"bytes"
 	"io"
+
 	//"log"
 	"unicode"
 
@@ -30,8 +31,8 @@ func NewTrimSpace(w io.Writer) io.WriteCloser {
 }
 
 type trimSpacesTransform struct {
-	middle       bool
 	buf, scratch []byte
+	middle       bool
 }
 
 func (ts *trimSpacesTransform) Reset() { ts.middle, ts.buf = false, ts.buf[:0] }

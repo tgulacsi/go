@@ -69,10 +69,10 @@ func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
 }
 
 type soapClient struct {
+	bufpool bp.Pool
 	*http.Client
 	URL            string
 	SOAPActionBase string
-	bufpool        bp.Pool
 }
 
 var bufpool = bp.New(1024)

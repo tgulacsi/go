@@ -26,8 +26,8 @@ var Log = func(...interface{}) error { return nil }
 type Handler func(w http.ResponseWriter, r *http.Request) error
 
 type StatusError struct {
-	Code int
 	Err  error
+	Code int
 }
 
 func (se StatusError) Error() string {

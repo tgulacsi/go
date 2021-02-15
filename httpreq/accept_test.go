@@ -29,9 +29,9 @@ func TestParseMediaRange(t *testing.T) {
 		media   string
 		awaited mediaRange
 	}{
-		{"application/xbel+xml", mediaRange{typ: "application", subtyp: "xbel+xml", q: 1}},
-		{"text/xml", mediaRange{typ: "text", subtyp: "xml", q: 1}},
-		{"application/xml;q=0.5", mediaRange{typ: "application", subtyp: "xml", q: 0.5}},
+		{media: "application/xbel+xml", awaited: mediaRange{typ: "application", subtyp: "xbel+xml", q: 1}},
+		{media: "text/xml", awaited: mediaRange{typ: "text", subtyp: "xml", q: 1}},
+		{media: "application/xml;q=0.5", awaited: mediaRange{typ: "application", subtyp: "xml", q: 0.5}},
 	} {
 		if mr, err = parseMediaRange(s.media); err != nil {
 			t.Errorf("%d. media=%q ERROR %s", i, s.media, err)

@@ -54,17 +54,17 @@ var Log = func(...interface{}) error { return nil }
 
 // Options are the space/time coordinates and the required details.
 type Options struct {
-	Address                          string
-	Lat, Lng                         float64
 	Since, Till                      time.Time
 	At                               time.Time
-	Interval                         int
+	Address                          string
 	ContractID                       string
+	Host                             string
+	Lat, Lng                         float64
+	Interval                         int
 	NeedThunders, NeedIce, NeedWinds bool
 	NeedRains, NeedRainsIntensity    bool
 	ExtendedLightning                bool
 	WithStatistics                   bool
-	Host                             string
 }
 
 var client = &http.Client{Transport: InsecureTransport}

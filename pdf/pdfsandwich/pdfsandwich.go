@@ -139,8 +139,8 @@ func ProcessOCR(ctx context.Context,
 	}
 
 	type todo struct {
-		Page    int
 		PDFName string
+		Page    int
 	}
 
 	pages := make(chan todo, nThreads)

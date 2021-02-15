@@ -50,15 +50,16 @@ const Scheme = "http+unix"
 // Transport is a http.RoundTripper that connects to Unix domain
 // sockets.
 type Transport struct {
+	// map a URL "hostname" to a UNIX domain socket path
+	loc     map[string]string
+	path    map[string]string // reverse of loc
+	scratch []byte
+
 	DialTimeout           time.Duration
 	RequestTimeout        time.Duration
 	ResponseHeaderTimeout time.Duration
 
 	mu sync.RWMutex
-	// map a URL "hostname" to a UNIX domain socket path
-	loc     map[string]string
-	path    map[string]string // reverse of loc
-	scratch []byte
 }
 
 // RegisterLocation registers an URL location and maps it to the given
