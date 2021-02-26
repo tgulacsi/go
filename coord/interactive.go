@@ -17,6 +17,7 @@ limitations under the License.
 package coord
 
 import (
+	"embed"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,9 +26,6 @@ import (
 	"strings"
 	"sync"
 	"text/template" // yes, no need for context-aware escapes
-
-	"github.com/rakyll/statik/fs"
-	_ "github.com/tgulacsi/go/coord/statik"
 )
 
 var (
@@ -130,15 +128,12 @@ func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//go:generate statik -f -m -src assets
+//go:embed assets
+var statikFS embed.FS
 var tmpl *template.Template
 
 func init() {
-	statikFS, err := fs.New()
-	if err != nil {
-		panic(err)
-	}
-	b, err := fs.ReadFile(statikFS, "/gmaps.html")
+	b, err := statikFS.ReadFile("/gmaps.html")
 	if err != nil {
 		panic(err)
 	}

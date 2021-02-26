@@ -28,7 +28,6 @@ require (
 	github.com/klauspost/compress v1.10.0 // indirect
 	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/pgzip v1.2.1
-	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515 // indirect
 	github.com/kylelemons/godebug v1.1.0
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
@@ -36,13 +35,11 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pdfcpu/pdfcpu v0.3.6
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/rakyll/statik v0.1.6
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/sloonz/go-qprintable v0.0.0-20160203160305-775b3a4592d5
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
 	github.com/sony/gobreaker v0.4.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/tgulacsi/statik v0.1.3
 	github.com/valyala/quicktemplate v1.4.1
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	golang.org/x/crypto v0.0.0-20200210222208-86ce3cb69678
@@ -54,4 +51,4 @@ require (
 	perkeep.org v0.0.0-20191227205925-9a1336816afd
 )
 
-go 1.13
+go 1.16

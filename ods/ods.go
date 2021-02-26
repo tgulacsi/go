@@ -4,21 +4,20 @@ package ods
 
 import (
 	"archive/zip"
+	"embed"
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net/http"
-	"os"
+	"io/fs"
 	"sync"
 
 	qt "github.com/valyala/quicktemplate"
-
-	"github.com/rakyll/statik/fs"
-	_ "github.com/tgulacsi/go/ods/statik"
 )
 
-//go:generate statik -f -src assets
 //go:generate qtc
+
+//go:embed assets
+var statikFS embed.FS
 
 var qtMu sync.Mutex
 
@@ -77,19 +76,10 @@ const (
 	StringType = ValueType('s')
 )
 
-var statikFS http.FileSystem
-
-func init() {
-	var err error
-	if statikFS, err = fs.New(); err != nil {
-		panic(err)
-	}
-}
-
 // NewWriter returns a content writer and a zip closer for an ods file.
 func NewWriter(w io.Writer) (*ODSWriter, error) {
 	zw := zip.NewWriter(w)
-	if err := fs.Walk(statikFS, "/", func(path string, info os.FileInfo, err error) error {
+	if err := fs.WalkDir(statikFS, "/", func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -97,7 +87,11 @@ func NewWriter(w io.Writer) (*ODSWriter, error) {
 		if err != nil {
 			return fmt.Errorf("%s %s: %w", path, info, err)
 		}
-		hdr, err := zip.FileInfoHeader(info)
+		osFI, err := info.Info()
+		if err != nil {
+			return err
+		}
+		hdr, err := zip.FileInfoHeader(osFI)
 		if err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}

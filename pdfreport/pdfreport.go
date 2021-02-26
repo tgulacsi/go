@@ -16,25 +16,23 @@
 package pdfreport
 
 import (
+	"embed"
 	"fmt"
 	"io"
-	"net/http"
-	"os"
+	"io/fs"
 	"path"
 	"strings"
 
 	"github.com/jung-kurt/gofpdf"
-
-	_ "github.com/tgulacsi/go/pdfreport/statik"
-	"github.com/tgulacsi/statik/fs"
 )
 
 //go:generate sh -c "set -x; if [ -e $GOPATH/src/go.googlesource.com/image ]; then cd $GOPATH/src/go.googlesource.com/image && git pull; else mkdir -p $GOPATH/src/go.googlesource.com && cd $GOPATH/src/go.googlesource.com && git clone https://go.googlesource.com/image; fi"
 //go:generate go build -o ./makefont github.com/jung-kurt/gofpdf/makefont
 //go:generate mkdir -p assets/font
 //go:generate sh -c "./makefont --embed --enc=$GOPATH/src/github.com/jung-kurt/gofpdf/font/cp1250.map --dst=./assets/font $GOPATH/src/go.googlesource.com/image/font/gofont/ttfs/*.ttf"
-//go:generate go get github.com/tgulacsi/statik
-//go:generate statik -f -src=assets
+
+//go:embed assets
+var statikFS embed.FS
 
 type Report struct {
 	*gofpdf.Fpdf
@@ -273,28 +271,22 @@ func (pdf *Report) Write(p []byte) (int, error) {
 	return len(p), pdf.Error()
 }
 
-var statikFS http.FileSystem
-
 func init() {
 	var err error
-	statikFS, err = fs.New()
-	if err != nil {
-		panic(err)
-	}
 	if fonts, err = newFontRepo("/font"); err != nil {
 		panic(err)
 	}
 }
 
 func getStatikFile(name string) ([]byte, error) {
-	return fs.ReadFile(statikFS, name)
+	return statikFS.ReadFile(name)
 }
 
 func newFontRepo(assetDir string) (map[fontName]fontLoader, error) {
 	repo := make(map[fontName]fontLoader)
-	err := fs.Walk(statikFS,
+	err := fs.WalkDir(statikFS,
 		assetDir,
-		func(afn string, fi os.FileInfo, err error) error {
+		func(afn string, fi fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
