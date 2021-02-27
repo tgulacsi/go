@@ -17,23 +17,19 @@ limitations under the License.
 package iohlp
 
 import (
-	"io"
 	"os"
 )
 
 // MaxInt is the maximum value an int can contain.
 const MaxInt = int64(int(^uint(0) >> 1))
 
-// Log is used for logging.
-var Log = func(keyvals ...interface{}) error { return nil }
-
 // MmapFile returns the mmap of the given path.
-func MmapFile(fn string) ([]byte, io.Closer, error) {
+func MmapFile(fn string) ([]byte, error) {
 	f, err := os.Open(fn)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	p, closer, err := Mmap(f)
+	p, err := Mmap(f)
 	f.Close()
-	return p, closer, err
+	return p, err
 }

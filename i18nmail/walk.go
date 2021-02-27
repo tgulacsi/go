@@ -153,30 +153,26 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 }
 
 // Walk over the parts of the email, calling todo on every part.
-// The part.Body given to todo is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
 func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
-	b, closer, e := iohlp.ReadAll(part.Body, 1<<20)
-	br := struct {
-		io.ReadSeeker
-		io.Closer
-	}{bytes.NewReader(b), closer}
+	b, e := iohlp.ReadAll(part.Body, 1<<20)
 	//Infof("part.Body: %[1]T %+[1]v", part.Body)
 	if e != nil {
 		return e
 	}
-	defer func() { _ = br.Close() }()
+	part.Body = bytes.NewReader(b)
+	if len(b) == 0 {
+		infof("empty body!")
+		return nil
+	}
 
-	msg, hsh, e := ReadAndHashMessage(br)
+	msg, hsh, e := ReadAndHashMessage(bytes.NewReader(b))
 	if e != nil {
-		if p, _ := br.Seek(0, 2); p == 0 {
-			infof("empty body!")
-			return nil
+		n := len(b)
+		if n > 2048 {
+			n = 2048
 		}
-		br.Seek(0, 0)
-		b := make([]byte, 4096)
-		n, _ := io.ReadAtLeast(br, b, 2048)
 		infof("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
 		return fmt.Errorf("WalkMail: %w", e)
 	}

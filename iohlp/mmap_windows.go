@@ -19,13 +19,14 @@ limitations under the License.
 package iohlp
 
 import (
+	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
 )
 
 // Mmap returns a mmap of the given file - just a copy of it.
-func Mmap(f *os.File) ([]byte, io.Closer, error) {
-	p, err := ioutil.ReadAll(f)
-	return p, ioutil.NopCloser(nil), err
+func Mmap(f *os.File) ([]byte, error) {
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, f)
+	return buf.Bytes(), err
 }

@@ -20,48 +20,38 @@ package iohlp
 
 import (
 	"errors"
-	"io"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"syscall"
 )
 
-// Mmap the file for read, return the bytes, an io.Closer and the error.
+// Mmap the file for read, return the bytes and the error.
 // Will read the data directly if Mmap fails.
-func Mmap(f *os.File) ([]byte, io.Closer, error) {
-	closer := ioutil.NopCloser(nil)
+func Mmap(f *os.File) ([]byte, error) {
 	fi, err := f.Stat()
 	if err != nil {
-		return nil, closer, err
+		return nil, err
 	}
 	if fi.Size() > MaxInt {
-		return nil, closer, errors.New("file too big to Mmap")
+		return nil, errors.New("file too big to Mmap")
 	}
 	if fi.Size() == 0 {
-		return []byte{}, ioutil.NopCloser(nil), nil
+		return []byte{}, nil
 	}
 	p, err := syscall.Mmap(int(f.Fd()), 0, int(fi.Size()),
 		syscall.PROT_READ,
 		syscall.MAP_PRIVATE|syscall.MAP_DENYWRITE|syscall.MAP_POPULATE)
 	if err != nil {
-		Log("msg", "Mmap", "f", f, "size", fi.Size(), "error", err)
 		p, _ = ioutil.ReadAll(f)
-		return p, closer, err
+		return p, err
 	}
-	//Log("msg","Mmap", "f", f, "len(p)", len(p))
 
-	return p, &mmapCloser{p}, nil
-}
+	runtime.SetFinalizer(&p, func(p *[]byte) {
+		if p != nil {
+			syscall.Munmap(*p)
+		}
+	})
 
-type mmapCloser struct {
-	p []byte
-}
-
-func (mc *mmapCloser) Close() error {
-	if mc.p == nil {
-		return nil
-	}
-	err := syscall.Munmap(mc.p)
-	mc.p = nil
-	return err
+	return p, nil
 }

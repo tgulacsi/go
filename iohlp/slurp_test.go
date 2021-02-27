@@ -21,18 +21,22 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReadAll(t *testing.T) {
 	const s = "abraca dabra"
-	b, closer, err := ReadAll(strings.NewReader(s), 3)
+	b, err := ReadAll(strings.NewReader(s), 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closer.Close()
 	if string(b) != s {
 		t.Errorf("got %q, wanted %q", string(b), s)
 	}
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond)
+	runtime.GC()
+	t.Log("GC didn't panic")
 }
 
 func TestReadALot(t *testing.T) {
@@ -41,15 +45,13 @@ func TestReadALot(t *testing.T) {
 	var m1, m2 runtime.MemStats
 	runtime.ReadMemStats(&m1)
 	{
-		b, closer, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
+		b, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer closer.Close()
 		t.Logf("Read %d bytes", len(b))
 		runtime.ReadMemStats(&m2)
 		t.Logf("One big read consumed\t%d bytes", m2.Sys-m1.Sys)
-		closer.Close()
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&m2)
