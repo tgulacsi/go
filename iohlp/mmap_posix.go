@@ -26,6 +26,9 @@ import (
 	"syscall"
 )
 
+// MaxInt is the maximum value an int can contain.
+const MaxInt = int64(int(^uint(0) >> 1))
+
 // Mmap the file for read, return the bytes and the error.
 // Will read the data directly if Mmap fails.
 func Mmap(f *os.File) ([]byte, error) {
