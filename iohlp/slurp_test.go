@@ -25,13 +25,13 @@ import (
 )
 
 func TestReadAll(t *testing.T) {
-	const s = "abraca dabra"
-	b, err := ReadAll(strings.NewReader(s), 3)
+	const want = "abraca dabra"
+	got, err := ReadAllString(strings.NewReader(want), 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(b) != s {
-		t.Errorf("got %q, wanted %q", string(b), s)
+	if got != want {
+		t.Errorf("got %q, wanted %q", got, want)
 	}
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond)

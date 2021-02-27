@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"unsafe"
 )
 
 // ReadAll reads the reader and returns the byte slice.
@@ -51,4 +52,10 @@ func ReadAll(r io.Reader, threshold int) ([]byte, error) {
 	b, err := Mmap(fh)
 	fh.Close()
 	return b, err
+}
+
+// ReadAllString is like ReadAll, but returns a string.
+func ReadAllString(r io.Reader, threshold int) (string, error) {
+	b, err := ReadAll(r, threshold)
+	return *((*string)(unsafe.Pointer(&b))), err
 }
