@@ -28,10 +28,12 @@ import (
 //
 // If the read length is below the threshold, then the bytes are read into memory;
 // otherwise, a temp file is created, and mmap-ed.
-func ReadAll(r io.Reader, threshold int) ([]byte, func(), error) {
+//
+// After calling release, the returned byte, and ANY SUBSLICE OF IT won't be usable!
+func ReadAll(r io.Reader, threshold int) (p []byte, release func(), err error) {
 	lr := io.LimitedReader{R: r, N: int64(threshold) + 1}
 	var buf bytes.Buffer
-	_, err := io.Copy(&buf, &lr)
+	_, err = io.Copy(&buf, &lr)
 	if err != nil || buf.Len() <= threshold {
 		return buf.Bytes(), nil, err
 	}
@@ -56,7 +58,9 @@ func ReadAll(r io.Reader, threshold int) ([]byte, func(), error) {
 }
 
 // ReadAllString is like ReadAll, but returns a string.
-func ReadAllString(r io.Reader, threshold int) (string, func(), error) {
+//
+// After calling release, the string and ANY SUBSLICE OF IT won't be usable!
+func ReadAllString(r io.Reader, threshold int) (s string, release func(), err error) {
 	b, stp, err := ReadAll(r, threshold)
 	return *((*string)(unsafe.Pointer(&b))), stp, err
 }

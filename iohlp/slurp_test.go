@@ -30,14 +30,18 @@ func TestReadAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stp != nil { defer stp() }
 	if got != want {
 		t.Errorf("got %q, wanted %q", got, want)
 	}
 	runtime.GC()
+	g := got[1:2]
+	got = ""
+	t.Log("GC didn't panic", g)
+	if stp != nil {
+		stp()
+	}
 	time.Sleep(100 * time.Millisecond)
 	runtime.GC()
-	t.Log("GC didn't panic")
 }
 
 func TestReadALot(t *testing.T) {
@@ -53,7 +57,12 @@ func TestReadALot(t *testing.T) {
 		t.Logf("Read %d bytes", len(b))
 		runtime.ReadMemStats(&m2)
 		t.Logf("One big read consumed\t%d bytes", m2.Sys-m1.Sys)
-		if stp != nil { stp() }
+		sb := b[1:2]
+		b = nil
+		t.Logf("sb: %q", sb)
+		if stp != nil {
+			stp()
+		}
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&m2)
