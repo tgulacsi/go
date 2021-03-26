@@ -21,46 +21,39 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"unsafe"
 )
 
-// ReadAll reads the reader and returns the byte slice.
+// MakeSectionReader reads the reader and returns the byte slice.
 //
 // If the read length is below the threshold, then the bytes are read into memory;
 // otherwise, a temp file is created, and mmap-ed.
-//
-// After calling release, the returned byte, and ANY SUBSLICE OF IT won't be usable!
-func ReadAll(r io.Reader, threshold int) (p []byte, release func(), err error) {
+func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
+	if rat, ok := r.(*io.SectionReader); ok {
+		return rat, nil
+	}
 	lr := io.LimitedReader{R: r, N: int64(threshold) + 1}
 	var buf bytes.Buffer
-	_, err = io.Copy(&buf, &lr)
+	_, err := io.Copy(&buf, &lr)
+	bsr := io.NewSectionReader(bytes.NewReader(buf.Bytes()), 0, int64(buf.Len()))
 	if err != nil || buf.Len() <= threshold {
-		return buf.Bytes(), nil, err
+		return bsr, err
 	}
 	fh, err := ioutil.TempFile("", "iohlp-readall-")
 	if err != nil {
-		return buf.Bytes(), nil, err
+		return bsr, err
 	}
 	defer os.Remove(fh.Name())
 	defer fh.Close()
 	if _, err = fh.Write(buf.Bytes()); err != nil {
-		return buf.Bytes(), nil, err
+		return bsr, err
 	}
 	buf.Truncate(0)
 	if _, err = io.Copy(fh, r); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	b, stp, err := Mmap(fh)
+	rat, err := Mmap(fh)
 	if closeErr := fh.Close(); closeErr != nil && err == nil {
 		err = closeErr
 	}
-	return b, stp, err
-}
-
-// ReadAllString is like ReadAll, but returns a string.
-//
-// After calling release, the string and ANY SUBSLICE OF IT won't be usable!
-func ReadAllString(r io.Reader, threshold int) (s string, release func(), err error) {
-	b, stp, err := ReadAll(r, threshold)
-	return *((*string)(unsafe.Pointer(&b))), stp, err
+	return io.NewSectionReader(rat, 0, int64(rat.Len())), err
 }

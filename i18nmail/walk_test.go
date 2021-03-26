@@ -5,8 +5,6 @@
 package i18nmail
 
 import (
-	"context"
-	"flag"
 	"io"
 	"io/ioutil"
 	"net/mail"
@@ -14,8 +12,6 @@ import (
 	"strings"
 	"testing"
 )
-
-var flagOnly = flag.String("only", "", "only this case")
 
 func TestMailAddress(t *testing.T) {
 	for i, str := range [][3]string{
@@ -46,28 +42,29 @@ func TestWalk(t *testing.T) {
 		Debugf, Infof = nil, nil
 	}()
 	b := make([]byte, 1024)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	for tcName, tc := range walkTestCases {
-		if *flagOnly != "" && tcName != *flagOnly {
-			continue
-		}
-		if err := Walk(ctx, MailPart{Body: strings.NewReader(tc)},
-			func(mp MailPart) error {
-				n, err := mp.Body.Read(b[:cap(b)])
-				if _, nextErr := io.Copy(ioutil.Discard, mp.Body); nextErr != nil && err == nil {
-					err = nextErr
-				}
-				if err != nil || n == 0 {
-					t.Errorf("%q %d/%d. read body of: %v", tcName, mp.Level, mp.Seq, err)
-				}
-				t.Logf("\n--- %q %d/%d. part ---\n%q %#v\n%s\n%q...", tcName, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header, b[:n])
-				return nil
-			},
-			false,
-		); err != nil {
-			t.Errorf("%q. walk: %v", tcName, err)
-		}
+		tcName := tcName
+		t.Run(tcName, func(t *testing.T) {
+			if err := Walk(MailPart{Body: io.NewSectionReader(strings.NewReader(tc), 0, int64(len(tc)))},
+				func(mp MailPart) error {
+					n, err := mp.Body.Read(b[:cap(b)])
+					if err != nil {
+						panic(err)
+					}
+					if _, nextErr := io.Copy(ioutil.Discard, mp.Body); nextErr != nil && err == nil {
+						err = nextErr
+					}
+					if err != nil || n == 0 {
+						t.Errorf("%q %d/%d. read body of: %v", tcName, mp.Level, mp.Seq, err)
+					}
+					t.Logf("\n--- %q %d/%d. part ---\n%q %#v\n%s\n%q...", tcName, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header, b[:n])
+					return nil
+				},
+				false,
+			); err != nil {
+				t.Errorf("%q. walk: %v", tcName, err)
+			}
+		})
 	}
 }
 

@@ -24,35 +24,45 @@ import (
 	"time"
 )
 
-func TestReadAll(t *testing.T) {
+func TestMakeSectionReader(t *testing.T) {
 	const want = "abraca dabra"
-	got, stp, err := ReadAllString(strings.NewReader(want), 3)
+	rat, err := MakeSectionReader(strings.NewReader(want), 3)
 	if err != nil {
 		t.Fatal(err)
 	}
+	gotB := make([]byte, len(want))
+	if n, err := rat.ReadAt(gotB, 0); err != nil {
+		t.Fatal(err)
+	} else if n != len(want) {
+		t.Errorf("got %d, wanted %d", n, len(want))
+	}
+	got := string(gotB)
 	if got != want {
 		t.Errorf("got %q, wanted %q", got, want)
 	}
 	runtime.GC()
 	g := got[1:2]
-	got = ""
+	got, gotB = "", nil
 	t.Log("GC didn't panic", g)
-	if stp != nil {
-		stp()
-	}
 	time.Sleep(100 * time.Millisecond)
 	runtime.GC()
 }
 
 func TestReadALot(t *testing.T) {
-	const N = 128
+	const N = 128 << 20
 
 	var m1, m2 runtime.MemStats
 	runtime.ReadMemStats(&m1)
 	{
-		b, stp, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
+		rat, err := MakeSectionReader(&dummyReader{N: N}, 1<<20)
 		if err != nil {
 			t.Fatal(err)
+		}
+		b := make([]byte, N)
+		if n, err := rat.ReadAt(b, 0); err != nil {
+			t.Fatal(err)
+		} else if n != cap(b) {
+			t.Errorf("wanted %d, read %d", cap(b), n)
 		}
 		t.Logf("Read %d bytes", len(b))
 		runtime.ReadMemStats(&m2)
@@ -60,9 +70,6 @@ func TestReadALot(t *testing.T) {
 		sb := b[1:2]
 		b = nil
 		t.Logf("sb: %q", sb)
-		if stp != nil {
-			stp()
-		}
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&m2)

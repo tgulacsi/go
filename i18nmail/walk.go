@@ -7,7 +7,6 @@ package i18nmail
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
@@ -27,7 +26,10 @@ import (
 )
 
 // MaxWalkDepth is the maximum depth Walk will descend.
-const MaxWalkDepth = 32
+const (
+	MaxWalkDepth  = 32
+	bodyThreshold = 1 << 20
+)
 
 var (
 	// Debugf prints debug logs. Nil walue prints nothing.
@@ -78,7 +80,7 @@ const HashKeyName = "X-HashOfFullMessage"
 // MailPart is part of a mail or multipart message.
 type MailPart struct {
 	// Body of the part.
-	Body io.Reader
+	Body *io.SectionReader
 	// MediaType is the parsed media type.
 	MediaType map[string]string
 	// Header of the mail part.
@@ -110,11 +112,19 @@ func (mp *MailPart) Spawn() MailPart {
 // DecoderFunc is a type of a decoder (io.Reader wrapper)
 type DecoderFunc func(io.Reader) io.Reader
 
+// MakeSectionReader reads the reader and returns the byte slice.
+//
+// If the read length is below the threshold, then the bytes are read into memory;
+// otherwise, a temp file is created, and mmap-ed.
+func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
+	return iohlp.MakeSectionReader(r, threshold)
+}
+
 // WalkMessage walks over the parts of the email, calling todo on every part.
 // The part.Body given to todo is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMessage(ctx context.Context, msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
+func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
 	if decoder != nil {
@@ -131,22 +141,28 @@ func WalkMessage(ctx context.Context, msg *mail.Message, todo TodoFunc, dontDesc
 	if parent != nil {
 		level = parent.Level
 	}
-	child := MailPart{ContentType: ct, MediaType: params,
+	child := MailPart{
+		ContentType: ct, MediaType: params,
 		Header: textproto.MIMEHeader(msg.Header),
-		Body:   msg.Body,
 		Parent: parent,
 		Level:  level + 1,
-		Seq:    nextSeqInt()}
+		Seq:    nextSeqInt(),
+	}
 	if hsh := msg.Header.Get("X-Hash"); hsh != "" && child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
+	child.Body, e = MakeSectionReader(msg.Body, bodyThreshold)
+	if e != nil {
+		return e
+	}
 	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
 	if strings.HasPrefix(ct, "multipart/") {
-		if e = WalkMultipart(ctx, child, todo, dontDescend); e != nil {
+		if e = WalkMultipart(child, todo, dontDescend); e != nil {
 			return fmt.Errorf("multipart: %w", e)
 		}
 		return nil
 	}
+	child.Body.Seek(0, 0)
 	if e = todo(child); e != nil {
 		return e
 	}
@@ -156,46 +172,38 @@ func WalkMessage(ctx context.Context, msg *mail.Message, todo TodoFunc, dontDesc
 // Walk over the parts of the email, calling todo on every part.
 //
 // By default this is recursive, except dontDescend is true.
-func Walk(ctx context.Context, part MailPart, todo TodoFunc, dontDescend bool) error {
-	b, stp, e := iohlp.ReadAll(part.Body, 1<<20)
-	if stp != nil {
-		go func () {
-			<-ctx.Done()
-			stp()
-		}()
+func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
+	h := sha1.New()
+	if _, err := io.Copy(h, part.Body); err != nil {
+		return err
 	}
-	//b, e := ioutil.ReadAll(part.Body)
-	//Infof("part.Body: %[1]T %+[1]v", part.Body)
-	if e != nil {
-		return e
-	}
-	part.Body = bytes.NewReader(b)
-	if len(b) == 0 {
-		infof("empty body!")
-		return nil
-	}
-
-	msg, hsh, e := ReadAndHashMessage(bytes.NewReader(b))
-	if e != nil {
-		n := len(b)
-		if n > 2048 {
-			n = 2048
-		}
-		infof("ReadAndHashMessage: %v\n%s", e, string(b[:n]))
-		return fmt.Errorf("WalkMail: %w", e)
+	part.Body.Seek(0, 0)
+	msg, err := mail.ReadMessage(io.MultiReader(
+		part.Body,
+		bytes.NewReader([]byte("\r\n\r\n")),
+	))
+	hsh := base64.URLEncoding.EncodeToString(h.Sum(nil))
+	if err != nil {
+		b := make([]byte, 2048)
+		n, _ := part.Body.ReadAt(b, 0)
+		infof("ReadAndHashMessage: %v\n%s", err, string(b[:n]))
+		return fmt.Errorf("WalkMail: %w", err)
 	}
 	if hsh != "" {
 		msg.Header["X-Hash"] = []string{hsh}
 	}
-	return WalkMessage(ctx, msg, todo, dontDescend, &part)
+	// force a new SectionReader
+	part.Body = io.NewSectionReader(part.Body, 0, part.Body.Size())
+	return WalkMessage(msg, todo, dontDescend, &part)
 }
 
 // WalkMultipart walks a multipart/ MIME parts, calls todo on every part
 // mp.Body is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMultipart(ctx context.Context, mp MailPart, todo TodoFunc, dontDescend bool) error {
+func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 	parts := multipart.NewReader(io.MultiReader(mp.Body, strings.NewReader("\r\n")), mp.MediaType["boundary"])
+	mp.Body = io.NewSectionReader(mp.Body, 0, mp.Body.Size())
 	part, e := parts.NextPart()
 	var (
 		decoder DecoderFunc
@@ -214,30 +222,36 @@ func WalkMultipart(ctx context.Context, mp MailPart, todo TodoFunc, dontDescend 
 			body = part
 		}
 		child := MailPart{ContentType: ct, MediaType: params,
-			Body:   body,
 			Header: part.Header,
 			Parent: &mp,
 			Level:  mp.Level + 1,
 			Seq:    nextSeqInt()}
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		if !dontDescend && strings.HasPrefix(ct, "multipart/") {
-			if e = WalkMultipart(ctx, child, todo, dontDescend); e != nil {
-				br := bufio.NewReader(body)
-				child.Body = br
-				data, _ := br.Peek(1024)
-				if len(data) == 0 { // EOF
+		if child.Body, e = MakeSectionReader(body, bodyThreshold); e != nil {
+			return e
+		}
+		if !dontDescend &&
+			(strings.HasPrefix(ct, "message/") || strings.HasPrefix(ct, "multipart/")) {
+			sr, err := MakeSectionReader(body, bodyThreshold)
+			if err != nil {
+				return err
+			}
+			child.Body = sr
+			if strings.HasPrefix(ct, "multipart/") {
+				e = WalkMultipart(child, todo, dontDescend)
+			} else {
+				e = Walk(child, todo, dontDescend)
+			}
+			if e != nil {
+				data := make([]byte, 1024)
+				if n, err := sr.ReadAt(data, 0); err == io.EOF && n == 0 {
 					e = nil
 					break
+				} else {
+					return fmt.Errorf("descending data=%s: %w", data[:n], e)
 				}
-				return fmt.Errorf("descending data=%s: %w", data, e)
 			}
-		} else if !dontDescend && strings.HasPrefix(ct, "message/") {
-			if e = Walk(ctx, child, todo, dontDescend); e != nil {
-				br := bufio.NewReader(body)
-				child.Body = br
-				data, _ := br.Peek(1024)
-				return fmt.Errorf("descending data=%s: %w", data, e)
-			}
+			child.Body.Seek(0, 0)
 		} else {
 			fn := part.FileName()
 			if fn != "" {
@@ -323,24 +337,6 @@ func HashBytes(data []byte) string {
 }
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
-
-// ReadAndHashMessage reads message and hashes it by the way
-func ReadAndHashMessage(r io.Reader) (*mail.Message, string, error) {
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufPool.Put(buf)
-	h := sha1.New()
-	m, e := mail.ReadMessage(io.MultiReader(
-		io.TeeReader(r, buf),
-		bytes.NewReader([]byte("\r\n\r\n")),
-	))
-	if e != nil && m == nil {
-		infof("ERROR ReadMessage: %v", e)
-		return nil, "", fmt.Errorf("%s: %w", buf.String(), e)
-	}
-	h.Write(bytes.TrimSpace(buf.Bytes()))
-	return m, base64.URLEncoding.EncodeToString(h.Sum(nil)), nil
-}
 
 func safeFn(fn string, maskPercent bool) string {
 	fn = url.QueryEscape(

@@ -43,6 +43,7 @@ require (
 	github.com/valyala/quicktemplate v1.4.1
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	golang.org/x/crypto v0.0.0-20200210222208-86ce3cb69678
+	golang.org/x/exp v0.0.0-20200207192155-f17229e696bd
 	golang.org/x/net v0.0.0-20200506145744-7e3656a0809f
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20210227040730-b0d1d43c014d // indirect

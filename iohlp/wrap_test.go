@@ -57,17 +57,20 @@ TISZTELETTEL: Gipsz Jakab
 `,
 		},
 	} {
-		b, stp, err := ReadAll(WrappingReader(strings.NewReader(tc.in), uint(tc.width)), 1024)
+		rat, err := MakeSectionReader(WrappingReader(strings.NewReader(tc.in), uint(tc.width)), 1024)
 		if err != nil {
 			t.Errorf("%d: %v", i, err)
 			continue
 		}
+		b := make([]byte, len(tc.await))
+		if n, err := rat.ReadAt(b, 0); err != nil {
+			t.Fatalf("%d: %v", i, err)
+		} else if n != cap(b) {
+			t.Errorf("%d. read %d, wanted %d", i, n, cap(b))
+		}
 		got := string(b)
 		if got != tc.await {
 			t.Errorf("%d. got\n%q,\n\tawaited\n%q.", i, got, tc.await)
-		}
-		if stp != nil {
-			stp()
 		}
 	}
 }
