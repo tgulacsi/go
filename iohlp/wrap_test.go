@@ -57,7 +57,7 @@ TISZTELETTEL: Gipsz Jakab
 `,
 		},
 	} {
-		b, err := ReadAll(WrappingReader(strings.NewReader(tc.in), uint(tc.width)), 1024)
+		b, stp, err := ReadAll(WrappingReader(strings.NewReader(tc.in), uint(tc.width)), 1024)
 		if err != nil {
 			t.Errorf("%d: %v", i, err)
 			continue
@@ -65,6 +65,9 @@ TISZTELETTEL: Gipsz Jakab
 		got := string(b)
 		if got != tc.await {
 			t.Errorf("%d. got\n%q,\n\tawaited\n%q.", i, got, tc.await)
+		}
+		if stp != nil {
+			stp()
 		}
 	}
 }

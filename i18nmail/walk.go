@@ -7,6 +7,7 @@ package i18nmail
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
@@ -113,7 +114,7 @@ type DecoderFunc func(io.Reader) io.Reader
 // The part.Body given to todo is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
+func WalkMessage(ctx context.Context, msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
 	msg.Header = DecodeHeaders(msg.Header)
 	ct, params, decoder, e := getCT(msg.Header)
 	if decoder != nil {
@@ -141,7 +142,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 	}
 	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
 	if strings.HasPrefix(ct, "multipart/") {
-		if e = WalkMultipart(child, todo, dontDescend); e != nil {
+		if e = WalkMultipart(ctx, child, todo, dontDescend); e != nil {
 			return fmt.Errorf("multipart: %w", e)
 		}
 		return nil
@@ -155,8 +156,14 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 // Walk over the parts of the email, calling todo on every part.
 //
 // By default this is recursive, except dontDescend is true.
-func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
-	b, e := iohlp.ReadAll(part.Body, 1<<20)
+func Walk(ctx context.Context, part MailPart, todo TodoFunc, dontDescend bool) error {
+	b, stp, e := iohlp.ReadAll(part.Body, 1<<20)
+	if stp != nil {
+		go func () {
+			<-ctx.Done()
+			stp()
+		}()
+	}
 	//b, e := ioutil.ReadAll(part.Body)
 	//Infof("part.Body: %[1]T %+[1]v", part.Body)
 	if e != nil {
@@ -180,14 +187,14 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if hsh != "" {
 		msg.Header["X-Hash"] = []string{hsh}
 	}
-	return WalkMessage(msg, todo, dontDescend, &part)
+	return WalkMessage(ctx, msg, todo, dontDescend, &part)
 }
 
 // WalkMultipart walks a multipart/ MIME parts, calls todo on every part
 // mp.Body is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
+func WalkMultipart(ctx context.Context, mp MailPart, todo TodoFunc, dontDescend bool) error {
 	parts := multipart.NewReader(io.MultiReader(mp.Body, strings.NewReader("\r\n")), mp.MediaType["boundary"])
 	part, e := parts.NextPart()
 	var (
@@ -214,7 +221,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			Seq:    nextSeqInt()}
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
 		if !dontDescend && strings.HasPrefix(ct, "multipart/") {
-			if e = WalkMultipart(child, todo, dontDescend); e != nil {
+			if e = WalkMultipart(ctx, child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				child.Body = br
 				data, _ := br.Peek(1024)
@@ -225,7 +232,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 				return fmt.Errorf("descending data=%s: %w", data, e)
 			}
 		} else if !dontDescend && strings.HasPrefix(ct, "message/") {
-			if e = Walk(child, todo, dontDescend); e != nil {
+			if e = Walk(ctx, child, todo, dontDescend); e != nil {
 				br := bufio.NewReader(body)
 				child.Body = br
 				data, _ := br.Peek(1024)

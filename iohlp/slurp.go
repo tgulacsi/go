@@ -28,35 +28,35 @@ import (
 //
 // If the read length is below the threshold, then the bytes are read into memory;
 // otherwise, a temp file is created, and mmap-ed.
-func ReadAll(r io.Reader, threshold int) ([]byte, error) {
+func ReadAll(r io.Reader, threshold int) ([]byte, func(), error) {
 	lr := io.LimitedReader{R: r, N: int64(threshold) + 1}
 	var buf bytes.Buffer
 	_, err := io.Copy(&buf, &lr)
 	if err != nil || buf.Len() <= threshold {
-		return buf.Bytes(), err
+		return buf.Bytes(), nil, err
 	}
 	fh, err := ioutil.TempFile("", "iohlp-readall-")
 	if err != nil {
-		return buf.Bytes(), err
+		return buf.Bytes(), nil, err
 	}
 	defer os.Remove(fh.Name())
 	defer fh.Close()
 	if _, err = fh.Write(buf.Bytes()); err != nil {
-		return buf.Bytes(), err
+		return buf.Bytes(), nil, err
 	}
 	buf.Truncate(0)
 	if _, err = io.Copy(fh, r); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	b, err := Mmap(fh)
+	b, stp, err := Mmap(fh)
 	if closeErr := fh.Close(); closeErr != nil && err == nil {
 		err = closeErr
 	}
-	return b, err
+	return b, stp, err
 }
 
 // ReadAllString is like ReadAll, but returns a string.
-func ReadAllString(r io.Reader, threshold int) (string, error) {
-	b, err := ReadAll(r, threshold)
-	return *((*string)(unsafe.Pointer(&b))), err
+func ReadAllString(r io.Reader, threshold int) (string, func(), error) {
+	b, stp, err := ReadAll(r, threshold)
+	return *((*string)(unsafe.Pointer(&b))), stp, err
 }

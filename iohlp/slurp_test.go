@@ -26,10 +26,11 @@ import (
 
 func TestReadAll(t *testing.T) {
 	const want = "abraca dabra"
-	got, err := ReadAllString(strings.NewReader(want), 3)
+	got, stp, err := ReadAllString(strings.NewReader(want), 3)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if stp != nil { defer stp() }
 	if got != want {
 		t.Errorf("got %q, wanted %q", got, want)
 	}
@@ -45,13 +46,14 @@ func TestReadALot(t *testing.T) {
 	var m1, m2 runtime.MemStats
 	runtime.ReadMemStats(&m1)
 	{
-		b, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
+		b, stp, err := ReadAll(&dummyReader{N: N << 20}, 1<<20)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("Read %d bytes", len(b))
 		runtime.ReadMemStats(&m2)
 		t.Logf("One big read consumed\t%d bytes", m2.Sys-m1.Sys)
+		if stp != nil { stp() }
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&m2)

@@ -5,6 +5,7 @@
 package i18nmail
 
 import (
+	"context"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -45,11 +46,13 @@ func TestWalk(t *testing.T) {
 		Debugf, Infof = nil, nil
 	}()
 	b := make([]byte, 1024)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	for tcName, tc := range walkTestCases {
 		if *flagOnly != "" && tcName != *flagOnly {
 			continue
 		}
-		if err := Walk(MailPart{Body: strings.NewReader(tc)},
+		if err := Walk(ctx, MailPart{Body: strings.NewReader(tc)},
 			func(mp MailPart) error {
 				n, err := mp.Body.Read(b[:cap(b)])
 				if _, nextErr := io.Copy(ioutil.Discard, mp.Body); nextErr != nil && err == nil {
