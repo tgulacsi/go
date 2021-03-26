@@ -157,6 +157,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 // By default this is recursive, except dontDescend is true.
 func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	b, e := iohlp.ReadAll(part.Body, 1<<20)
+	//b, e := ioutil.ReadAll(part.Body)
 	//Infof("part.Body: %[1]T %+[1]v", part.Body)
 	if e != nil {
 		return e
@@ -179,7 +180,6 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if hsh != "" {
 		msg.Header["X-Hash"] = []string{hsh}
 	}
-	part.Spawn()
 	return WalkMessage(msg, todo, dontDescend, &part)
 }
 

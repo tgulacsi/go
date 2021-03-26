@@ -17,7 +17,11 @@ limitations under the License.
 package iohlp
 
 import (
+	"log"
 	"os"
+	"runtime"
+
+	"github.com/edsrzf/mmap-go"
 )
 
 // MmapFile returns the mmap of the given path.
@@ -26,7 +30,22 @@ func MmapFile(fn string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := Mmap(f)
-	f.Close()
-	return p, err
+	defer f.Close()
+	return Mmap(f)
+}
+
+func Mmap(f *os.File) ([]byte, error) {
+	p, err := mmap.Map(f, mmap.RDONLY, 0)
+	if err != nil {
+		return p, err
+	}
+	log.Printf("MMAP mmaped %p", &p)
+	runtime.SetFinalizer(&p, func(pp *mmap.MMap) {
+		log.Printf("MMAP Finalizer of %p", pp)
+		if pp != nil {
+			err := pp.Unmap()
+			log.Printf("MMAP unmap %p: %v", pp, err)
+		}
+	})
+	return p, nil
 }

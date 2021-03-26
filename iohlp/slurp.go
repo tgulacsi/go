@@ -39,18 +39,19 @@ func ReadAll(r io.Reader, threshold int) ([]byte, error) {
 	if err != nil {
 		return buf.Bytes(), err
 	}
-	os.Remove(fh.Name())
+	defer os.Remove(fh.Name())
+	defer fh.Close()
 	if _, err = fh.Write(buf.Bytes()); err != nil {
-		fh.Close()
 		return buf.Bytes(), err
 	}
 	buf.Truncate(0)
 	if _, err = io.Copy(fh, r); err != nil {
-		fh.Close()
 		return nil, err
 	}
 	b, err := Mmap(fh)
-	fh.Close()
+	if closeErr := fh.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
 	return b, err
 }
 
