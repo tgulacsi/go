@@ -57,6 +57,9 @@ type ReaderAt struct {
 	fh   uintptr
 }
 
+// windows code DOES use fh
+var _ = ReaderAt{}.fh
+
 // Close closes the reader.
 func (r *ReaderAt) Close() error {
 	if r.data == nil {

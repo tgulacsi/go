@@ -31,8 +31,20 @@ import (
 //go:generate mkdir -p assets/font
 //go:generate sh -c "./makefont --embed --enc=$GOPATH/src/github.com/jung-kurt/gofpdf/font/cp1250.map --dst=./assets/font $GOPATH/src/go.googlesource.com/image/font/gofont/ttfs/*.ttf"
 
-//go:embed assets
-var statikFS embed.FS
+//go:embed assets/font
+var _statikFS embed.FS
+var statikFS fs.FS
+
+func init() {
+	var err error
+	if statikFS, err = fs.Sub(_statikFS, "assets"); err != nil {
+		panic(err)
+	}
+
+	if fonts, err = newFontRepo("font"); err != nil {
+		panic(err)
+	}
+}
 
 type Report struct {
 	*gofpdf.Fpdf
@@ -271,15 +283,8 @@ func (pdf *Report) Write(p []byte) (int, error) {
 	return len(p), pdf.Error()
 }
 
-func init() {
-	var err error
-	if fonts, err = newFontRepo("/font"); err != nil {
-		panic(err)
-	}
-}
-
 func getStatikFile(name string) ([]byte, error) {
-	return statikFS.ReadFile(name)
+	return fs.ReadFile(statikFS, name)
 }
 
 func newFontRepo(assetDir string) (map[fontName]fontLoader, error) {
