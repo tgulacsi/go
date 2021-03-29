@@ -1,5 +1,9 @@
 // +build posix linux !windows
 
+// Copyright 2021 Tamás Gulácsi. All rights reserved.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package iohlp
 
 import (
