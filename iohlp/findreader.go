@@ -38,20 +38,22 @@ func FindReaderSize(r io.Reader, needle []byte, bufSize int) (int, error) {
 		if n == 0 && err == io.EOF {
 			return -1, nil
 		}
+		//fmt.Println(off, start, n)
 		if i := bytes.Index(buf[:start+n], needle); i >= 0 {
+			//fmt.Printf("buf=%q\n", buf[i:i+len(needle)])
 			return off + i, nil
 		}
 		if err != nil {
 			return -1, err
 		}
 		// copy the end to the start
-		copy(buf[0:], buf[start+n-needleLen-1:start+n])
-		if start == 0 {
-			off += n - needleLen - 1
+		copy(buf[0:], buf[start+n-needleLen+1:start+n])
+		if off == 0 {
+			off = n - needleLen + 1
+			start = needleLen - 1
 		} else {
 			off += n
 		}
-		start = needleLen - 1
+		//fmt.Printf("buf=%q n=%d needle=%d off=%d\n", buf[:start], n, len(needle), off)
 	}
-	return -1, nil
 }
