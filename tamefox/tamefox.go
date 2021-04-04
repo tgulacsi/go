@@ -9,6 +9,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"syscall"
@@ -40,6 +41,7 @@ swaymsg -m -t subscribe '["window"]' | \
 */
 func main() {
 	if err := Main(); err != nil {
+		log.SetOutput(os.Stderr)
 		log.Fatalf("%+v", err)
 	}
 }
@@ -49,7 +51,12 @@ func Main() error {
 	flagProg := flag.String("prog", "firefox", "name of the program")
 	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
 	flagAC := flag.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
+	flagVerbose := flag.Bool("v", false, "verbose logging")
 	flag.Parse()
+
+	if !*flagVerbose {
+		log.SetOutput(ioutil.Discard)
+	}
 
 	ctx, cancel := globalctx.Wrap(context.Background())
 	defer cancel()
