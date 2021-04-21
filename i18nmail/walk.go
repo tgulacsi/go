@@ -18,7 +18,6 @@ import (
 	"net/textproto"
 	"net/url"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/sloonz/go-qprintable"
@@ -126,13 +125,13 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 // By default this is recursive, except dontDescend is true.
 func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
 	msg.Header = DecodeHeaders(msg.Header)
-	ct, params, decoder, e := getCT(msg.Header)
+	ct, params, decoder, err := getCT(msg.Header)
 	if decoder != nil {
 		msg.Body = decoder(msg.Body)
 	}
 	debugf("Walk message headers=%q", msg.Header)
-	if e != nil {
-		return fmt.Errorf("WalkMail: %w", e)
+	if err != nil {
+		return fmt.Errorf("WalkMail: %w", err)
 	}
 	if ct == "" {
 		ct = "message/rfc822"
@@ -148,25 +147,23 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 		Level:  level + 1,
 		Seq:    nextSeqInt(),
 	}
+	//fmt.Println("WM", child.Seq, "ct", child.ContentType)
 	if hsh := msg.Header.Get("X-Hash"); hsh != "" && child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
-	child.Body, e = MakeSectionReader(msg.Body, bodyThreshold)
-	if e != nil {
-		return e
+	child.Body, err = MakeSectionReader(msg.Body, bodyThreshold)
+	if err != nil {
+		return err
 	}
 	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
 	if strings.HasPrefix(ct, "multipart/") {
-		if e = WalkMultipart(child, todo, dontDescend); e != nil {
-			return fmt.Errorf("multipart: %w", e)
+		if err = WalkMultipart(child, todo, dontDescend); err != nil {
+			return fmt.Errorf("multipart: %w", err)
 		}
 		return nil
 	}
 	child.Body.Seek(0, 0)
-	if e = todo(child); e != nil {
-		return e
-	}
-	return nil
+	return todo(child)
 }
 
 // Walk over the parts of the email, calling todo on every part.
@@ -202,53 +199,56 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 //
 // By default this is recursive, except dontDescend is true.
 func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
-	parts := multipart.NewReader(io.MultiReader(mp.Body, strings.NewReader("\r\n")), mp.MediaType["boundary"])
+	parts := multipart.NewReader(
+		io.MultiReader(mp.Body, strings.NewReader("\r\n")),
+		mp.MediaType["boundary"])
 	mp.Body = io.NewSectionReader(mp.Body, 0, mp.Body.Size())
-	part, e := parts.NextPart()
-	var (
-		decoder DecoderFunc
-		body    io.Reader
-		params  map[string]string
-		ct      string
-	)
-	for i := 1; e == nil; i++ {
-		part.Header = DecodeHeaders(part.Header)
-		if ct, params, decoder, e = getCT(part.Header); e != nil {
-			return fmt.Errorf("%d.getCT(%v): %w", i, part.Header, e)
+	//fmt.Println("-", mp.Seq, mp.ContentType)
+	var err error
+	var i int
+	for {
+		var part *multipart.Part
+		if part, err = parts.NextPart(); err != nil {
+			break
 		}
+		i++
+		part.Header = DecodeHeaders(part.Header)
+		var ct string
+		ct, params, decoder, ctErr := getCT(part.Header)
+		if ctErr != nil {
+			return fmt.Errorf("%d.getCT(%v): %w", i, part.Header, ctErr)
+		}
+		body := io.Reader(part)
 		if decoder != nil {
 			body = decoder(part)
-		} else {
-			body = part
 		}
-		child := MailPart{ContentType: ct, MediaType: params,
+		child := MailPart{
+			ContentType: ct, MediaType: params,
 			Header: part.Header,
 			Parent: &mp,
 			Level:  mp.Level + 1,
-			Seq:    nextSeqInt()}
-		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		if child.Body, e = MakeSectionReader(body, bodyThreshold); e != nil {
-			return e
+			Seq:    nextSeqInt(),
 		}
-		if !dontDescend &&
-			(strings.HasPrefix(ct, "message/") || strings.HasPrefix(ct, "multipart/")) {
-			sr, err := MakeSectionReader(body, bodyThreshold)
-			if err != nil {
-				return err
-			}
-			child.Body = sr
-			if strings.HasPrefix(ct, "multipart/") {
-				e = WalkMultipart(child, todo, dontDescend)
+		//fmt.Println(i, child.Seq, child.Header.Get("Content-Type"))
+		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
+		if child.Body, err = MakeSectionReader(body, bodyThreshold); err != nil {
+			return err
+		}
+		if isMultipart := strings.HasPrefix(ct, "multipart/"); !dontDescend &&
+			(isMultipart ||
+				strings.HasPrefix(ct, "message/")) {
+			if isMultipart {
+				err = WalkMultipart(child, todo, dontDescend)
 			} else {
-				e = Walk(child, todo, dontDescend)
+				err = Walk(child, todo, dontDescend)
 			}
-			if e != nil {
+			if err != nil {
 				data := make([]byte, 1024)
-				if n, err := sr.ReadAt(data, 0); err == io.EOF && n == 0 {
-					e = nil
-					break
+				if n, readErr := child.Body.ReadAt(data, 0); readErr == io.EOF && n == 0 {
+					err = nil
 				} else {
-					return fmt.Errorf("descending data=%s: %w", data[:n], e)
+					err = fmt.Errorf("descending data=%s: %w", data[:n], readErr)
+					break
 				}
 			}
 			child.Body.Seek(0, 0)
@@ -262,20 +262,18 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 				fn = fmt.Sprintf("%d.%d%s", child.Level, child.Seq, append(ext, ".dat")[0])
 			}
 			child.Header.Add("X-FileName", safeFn(fn, true))
-			if e = todo(child); e != nil {
-				return fmt.Errorf("todo(%q): %w", fn, e)
+			if err = todo(child); err != nil {
+				return fmt.Errorf("todo(%q): %w", fn, err)
 			}
 		}
-
-		part, e = parts.NextPart()
 	}
 	var eS string
-	if e != nil {
-		eS = e.Error()
-	}
-	if e != nil && e != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
-		infof("ERROR reading parts: %v", e)
-		return fmt.Errorf("reading parts: %w", e)
+	if err != nil {
+		eS = err.Error()
+		if err != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
+			infof("ERROR reading parts: %v", err)
+			return fmt.Errorf("reading parts: %w", err)
+		}
 	}
 	return nil
 }
@@ -335,8 +333,6 @@ func HashBytes(data []byte) string {
 	_, _ = h.Write(data)
 	return base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
-
-var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 4096)) }}
 
 func safeFn(fn string, maskPercent bool) string {
 	fn = url.QueryEscape(
