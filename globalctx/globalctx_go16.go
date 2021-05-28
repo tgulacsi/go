@@ -23,9 +23,10 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 // Wrap returns a new context with cancel that is canceled on interrupts.
 func Wrap(ctx context.Context) (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(ctx, os.Interrupt)
+	return signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 }
