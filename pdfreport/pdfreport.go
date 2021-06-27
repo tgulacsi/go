@@ -1,4 +1,4 @@
-// Copyright 2018 Tamás Gulácsi
+// Copyright 2018, 2021 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -273,7 +273,7 @@ func (pdf *Report) Write(p []byte) (int, error) {
 
 func init() {
 	var err error
-	if fonts, err = newFontRepo("/font"); err != nil {
+	if fonts, err = newFontRepo("font"); err != nil {
 		panic(err)
 	}
 }
@@ -285,7 +285,7 @@ func getStatikFile(name string) ([]byte, error) {
 func newFontRepo(assetDir string) (map[fontName]fontLoader, error) {
 	repo := make(map[fontName]fontLoader)
 	err := fs.WalkDir(statikFS,
-		assetDir,
+		path.Join("./assets", assetDir),
 		func(afn string, fi fs.DirEntry, err error) error {
 			if err != nil {
 				return err
