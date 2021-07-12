@@ -30,7 +30,7 @@ func TestMakeSectionReader(t *testing.T) {
 	}
 	runtime.GC()
 	g := got[1:2]
-	got, gotB = "", nil
+	//got, gotB = "", nil
 	t.Log("GC didn't panic", g)
 	time.Sleep(100 * time.Millisecond)
 	runtime.GC()

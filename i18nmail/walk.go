@@ -247,7 +247,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 				if n, readErr := child.Body.ReadAt(data, 0); readErr == io.EOF && n == 0 {
 					err = nil
 				} else {
-					err = fmt.Errorf("descending data=%s: %w", data[:n], readErr)
+					err = fmt.Errorf("descending data=%s: %w", data[:n], err)
 					break
 				}
 			}
