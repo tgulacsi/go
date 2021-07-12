@@ -199,11 +199,22 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 //
 // By default this is recursive, except dontDescend is true.
 func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
+	boundary := mp.MediaType["boundary"]
+	if boundary == "" {
+		ct, params, _, ctErr := getCT(mp.Header)
+		if ctErr != nil {
+			return fmt.Errorf("getCT(%v): %w", mp.Header, ctErr)
+		}
+		if boundary = params["boundary"]; boundary != "" {
+			mp.ContentType = ct
+			mp.MediaType = params
+		}
+	}
 	parts := multipart.NewReader(
 		io.MultiReader(mp.Body, strings.NewReader("\r\n")),
-		mp.MediaType["boundary"])
+		boundary)
 	mp.Body = io.NewSectionReader(mp.Body, 0, mp.Body.Size())
-	//fmt.Println("-", mp.Seq, mp.ContentType)
+	infof("WalkMultipart seq=%d ct=%q media=%q", mp.Seq, mp.ContentType, mp.MediaType)
 	var err error
 	var i int
 	for {
@@ -235,7 +246,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			return err
 		}
 		if isMultipart := strings.HasPrefix(ct, "multipart/"); !dontDescend &&
-			(isMultipart ||
+			(isMultipart && child.MediaType["boundary"] != "" ||
 				strings.HasPrefix(ct, "message/")) {
 			if isMultipart {
 				err = WalkMultipart(child, todo, dontDescend)
@@ -272,7 +283,9 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		eS = err.Error()
 		if err != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
 			infof("ERROR reading parts: %v", err)
-			return fmt.Errorf("reading parts: %w", err)
+			var a [16 << 10]byte
+			n, _ := mp.Body.ReadAt(a[:], 0)
+			return fmt.Errorf("reading parts [media=%v body=%q]: %w", mp.MediaType, string(a[:n]), err)
 		}
 	}
 	return nil
@@ -291,11 +304,13 @@ func getCT(
 		return r
 	}
 	contentType = mail.Header(header).Get("Content-Type")
+	//infof("getCT ct=%q", contentType)
 	if contentType == "" {
 		return
 	}
 	var nct string
 	nct, params, err = mime.ParseMediaType(contentType)
+	//infof("getCT mediaType=%v; %v (%+v)", nct, params, err)
 	if err != nil {
 		err = fmt.Errorf("cannot parse Content-Type %s: %w", contentType, err)
 		return
