@@ -1,3 +1,4 @@
+//go:build posix || linux || !windows
 // +build posix linux !windows
 
 // Copyright 2021 Tamás Gulácsi. All rights reserved.

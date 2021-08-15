@@ -1,4 +1,4 @@
-// Copyright 2020 Tamás Gulácsi. All rights reserved.
+// Copyright 2020, 2021 Tamás Gulácsi. All rights reserved.
 
 package main
 
