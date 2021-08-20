@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/mevv"
+	"github.com/tgulacsi/go/httpinsecure"
 )
 
 func main() {
@@ -41,7 +42,7 @@ func Main() error {
 
 	hndl := &httputil.ReverseProxy{
 		Director:  director(mevv.V2.URL()),
-		Transport: mevv.InsecureTransport,
+		Transport: httpinsecure.InsecureTransport,
 	}
 	log.Println("Start listening on", *flagHTTP)
 	return http.ListenAndServe(*flagHTTP, hndl)
