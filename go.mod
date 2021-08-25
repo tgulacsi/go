@@ -14,10 +14,7 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2103.1
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
-	github.com/edsrzf/mmap-go v1.0.0
 	github.com/go-kit/kit v0.10.0
-	github.com/go-logfmt/logfmt v0.5.0
-	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -26,11 +23,8 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.0
-	github.com/hhrutter/lzw v0.0.0-20190829144645-6f07a24e8650 // indirect
-	github.com/hhrutter/tiff v0.0.0-20190829141212-736cae8d0bc7 // indirect
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/klauspost/compress v1.13.4 // indirect
-	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/pgzip v1.2.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
@@ -38,7 +32,6 @@ require (
 	github.com/opentracing/basictracer-go v1.0.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pdfcpu/pdfcpu v0.3.6
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
