@@ -87,7 +87,7 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 	// to properly close any response body before returning.
 	rc.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
 		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
-			return true, nil
+			return false, err
 		}
 		retry, err := retryablehttp.ErrorPropagatedRetryPolicy(ctx, resp, err)
 		if !retry || err == nil {
