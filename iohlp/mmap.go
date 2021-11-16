@@ -59,6 +59,7 @@ type ReaderAt struct {
 
 // Close closes the reader.
 func (r *ReaderAt) Close() error {
+    _ = r.fh  // windows needs fh
 	if r.data == nil {
 		return nil
 	}

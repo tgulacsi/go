@@ -1,4 +1,4 @@
-// Copyright 2015, 2020 Tamás Gulácsi. All rights reserved.
+// Copyright 2015, 2021 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -11,18 +11,20 @@ import (
 	"net/http"
 )
 
-var _ = error(httpError{})
+var _ = error(&httpError{})
 
 type httpError struct {
 	error
 	code int
 }
 
+func (he *httpError) Unwrap() error  { return he.error }
+
 // Code returns the error's accompanied StatusCode.
-func (he httpError) StatusCode() int {
+func (he *httpError) StatusCode() int {
 	return he.code
 }
-func (he httpError) Cause() error {
+func (he *httpError) Cause() error {
 	return he.error
 }
 
