@@ -54,11 +54,12 @@ func Mmap(f *os.File) (*ReaderAt, error) {
 // Copied from https://github.com/golang/exp/blob/85be41e4509f/mmap/mmap_unix.go#L115
 type ReaderAt struct {
 	data []byte
+	fh   uintptr
 }
 
 // Close closes the reader.
 func (r *ReaderAt) Close() error {
-    _ = r.fh  // windows needs fh
+	_ = r.fh // windows needs fh
 	if r.data == nil {
 		return nil
 	}
@@ -79,6 +80,7 @@ func (r *ReaderAt) At(i int) byte {
 
 // ReadAt implements the io.ReaderAt interface.
 func (r *ReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	_ = r.fh // Windows needs fh
 	if r.data == nil {
 		return 0, errors.New("mmap: closed")
 	}

@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tgulacsi/go/mevv"
 	"github.com/tgulacsi/go/httpinsecure"
+	"github.com/tgulacsi/go/mevv"
 )
 
 func main() {

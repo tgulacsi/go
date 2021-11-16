@@ -18,7 +18,7 @@ type httpError struct {
 	code int
 }
 
-func (he *httpError) Unwrap() error  { return he.error }
+func (he *httpError) Unwrap() error { return he.error }
 
 // Code returns the error's accompanied StatusCode.
 func (he *httpError) StatusCode() int {
