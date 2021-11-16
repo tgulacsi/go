@@ -1,3 +1,4 @@
+//go:build !go1.16
 // +build !go1.16
 
 /*
@@ -24,18 +25,25 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 // Wrap returns a new context with cancel that is canceled on interrupts.
+//
+// It watches SIGINT, SIGHUP and SIGTERM, resets the signal handler and resends the signal after 1s.
 func Wrap(ctx context.Context) (context.Context, context.CancelFunc) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(ctx)
 	go func() {
-		<-sigCh
+		sig := <-sigCh
 		cancel()
 		signal.Stop(sigCh)
+		if p, _ := os.FindProcess(os.Getpid()); p != nil {
+			time.Sleep(time.Second)
+			_ = p.Signal(sig)
+		}
 	}()
 	return ctx, cancel
 }

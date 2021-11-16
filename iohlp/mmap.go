@@ -54,7 +54,6 @@ func Mmap(f *os.File) (*ReaderAt, error) {
 // Copied from https://github.com/golang/exp/blob/85be41e4509f/mmap/mmap_unix.go#L115
 type ReaderAt struct {
 	data []byte
-	fh   uintptr
 }
 
 // Close closes the reader.

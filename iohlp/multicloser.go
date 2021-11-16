@@ -25,7 +25,7 @@ func (mc *multiCloser) Append(c ...io.Closer) {
 }
 
 // Insert inserts new closers at the beginning (to be called first).
-func (mc multiCloser) Insert(c ...io.Closer) {
+func (mc *multiCloser) Insert(c ...io.Closer) {
 	mc.closers = append(append(make([]io.Closer, 0, len(c)+len(mc.closers)), c...), mc.closers...)
 }
 

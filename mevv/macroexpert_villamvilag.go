@@ -21,14 +21,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -36,7 +34,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/http2"
+	"github.com/tgulacsi/go/httpinsecure"
 )
 
 var ErrAuth = errors.New("authentication error")
@@ -67,25 +65,7 @@ type Options struct {
 	WithStatistics                   bool
 }
 
-var client = &http.Client{Transport: InsecureTransport}
-
-var InsecureTransport = &http.Transport{
-	Proxy:           http.ProxyFromEnvironment,
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gas
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-		DualStack: true,
-	}).DialContext,
-	MaxIdleConns:          100,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 1 * time.Second,
-}
-
-func init() {
-	http2.ConfigureTransport(InsecureTransport)
-}
+var client = &http.Client{Transport: httpinsecure.InsecureTransport}
 
 type Version string
 

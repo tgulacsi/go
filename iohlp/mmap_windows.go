@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Copyright 2015, 2021 Tamás Gulácsi. All rights reserved.
@@ -22,14 +23,14 @@ func (r *ReaderAt) mmap(fd uintptr, size int) error {
 	handle, err := windows.CreateFileMapping(
 		windows.Handle(fd), &sa, windows.PAGE_READONLY,
 		0, 0, nil)
-	if  err != nil {
+	if err != nil {
 		return err
 	}
 	r.fh = uintptr(handle)
 	addr, err := windows.MapViewOfFile(
 		windows.Handle(handle), windows.FILE_MAP_READ,
 		0, 0, 0)
-		if err != nil {
+	if err != nil {
 		windows.CloseHandle(handle)
 		return err
 	}

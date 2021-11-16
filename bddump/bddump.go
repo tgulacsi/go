@@ -12,7 +12,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 )
 
 // Log is used for logging.

@@ -1,3 +1,4 @@
+//go:build go1.16
 // +build go1.16
 
 /*
@@ -28,5 +29,5 @@ import (
 
 // Wrap returns a new context with cancel that is canceled on interrupts.
 func Wrap(ctx context.Context) (context.Context, context.CancelFunc) {
-	return signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	return signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 }
