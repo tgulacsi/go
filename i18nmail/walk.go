@@ -1,4 +1,4 @@
-// Copyright 2013, 2020 Tamás Gulácsi. All rights reserved.
+// Copyright 2013, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -17,6 +17,7 @@ import (
 	"net/mail"
 	"net/textproto"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 
@@ -303,7 +304,8 @@ func getCT(
 	decoder = func(r io.Reader) io.Reader {
 		return r
 	}
-	contentType = mail.Header(header).Get("Content-Type")
+	hdr := mail.Header(header)
+	contentType = hdr.Get("Content-Type")
 	//infof("getCT ct=%q", contentType)
 	if contentType == "" {
 		return
@@ -312,11 +314,40 @@ func getCT(
 	nct, params, err = mime.ParseMediaType(contentType)
 	//infof("getCT mediaType=%v; %v (%+v)", nct, params, err)
 	if err != nil {
-		err = fmt.Errorf("cannot parse Content-Type %s: %w", contentType, err)
-		return
+		// Guess from filename's extension
+		cd := hdr.Get("Content-Disposition")
+		var ok bool
+		if cd != "" {
+			cd, cdParams, _ := mime.ParseMediaType(cd)
+			if params == nil {
+				params = cdParams
+			} else {
+				for k, v := range cdParams {
+					if _, occupied := params[k]; !occupied {
+						params[k] = v
+					}
+				}
+			}
+			if cd != "" {
+				if ext := filepath.Ext(cdParams["filename"]); ext != "" {
+					if nct = mime.TypeByExtension(ext); nct == "" {
+						nct = "application/octet-stream"
+					}
+				}
+				ok = true
+			}
+		}
+		if !ok {
+			err = fmt.Errorf("cannot parse Content-Type %s: %w", contentType, err)
+			return
+		}
+		err = nil
+		if nct == "" {
+			nct = "application/octet-stream"
+		}
 	}
 	contentType = nct
-	te := strings.ToLower(mail.Header(header).Get("Content-Transfer-Encoding"))
+	te := strings.ToLower(hdr.Get("Content-Transfer-Encoding"))
 	switch te {
 	case "", "7bit", "8bit", "binary":
 		// https://stackoverflow.com/questions/25710599/content-transfer-encoding-7bit-or-8-bit
