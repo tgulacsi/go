@@ -33,6 +33,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pdfcpu/pdfcpu v0.3.6
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
+	github.com/rogpeppe/retry v0.1.0 // indirect
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
 	github.com/sony/gobreaker v0.4.1

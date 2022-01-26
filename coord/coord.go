@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Tamás Gulácsi
+Copyright 2019, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,13 +23,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/rogpeppe/retry"
 	"golang.org/x/time/rate"
-
-	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
 const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?key={{.APIKey}}&sensors=false&address={{.Address}}`
@@ -38,7 +39,6 @@ var (
 	ErrNotFound       = errors.New("not found")
 	ErrTooManyResults = errors.New("too many results")
 
-	httpClient     = retryablehttp.NewClient()
 	gmapsRateLimit = rate.NewLimiter(1, 1)
 
 	// APIKey is the API_KEY served too Google Maps services.
@@ -52,6 +52,13 @@ type Location struct {
 	Lng     float64 `json:"lng"`
 }
 
+var retryStrategy = retry.Strategy{
+	Delay:       100 * time.Millisecond,
+	MaxDelay:    5 * time.Second,
+	MaxDuration: 30 * time.Second,
+	Factor:      2,
+}
+
 func Get(ctx context.Context, address string) (Location, error) {
 	var loc Location
 	select {
@@ -62,40 +69,45 @@ func Get(ctx context.Context, address string) (Location, error) {
 	aURL := gmapsURL
 	aURL = strings.Replace(aURL, "{{.Address}}", url.QueryEscape(address), 1)
 	aURL = strings.Replace(aURL, "{{.APIKey}}", url.QueryEscape(APIKey), 1)
-	req, err := retryablehttp.NewRequest("GET", aURL, nil)
 
-	if err != nil {
-		return loc, fmt.Errorf("%s: %w", aURL, err)
-	}
-	req.Request = req.Request.WithContext(ctx)
+	var firstErr error
 	var data mapsResponse
-	for i := 0; i < 10; i++ {
-		if err = gmapsRateLimit.Wait(ctx); err != nil {
+	for iter := retryStrategy.Start(); ; {
+		if err := gmapsRateLimit.Wait(ctx); err != nil {
 			return loc, err
 		}
-		resp, err := httpClient.Do(req)
-		var sc string
-		if resp != nil {
-			sc = resp.Status
-		}
-		httpClient.Logger.(retryablehttp.Logger).Printf("GET %s: %s/%v", aURL, sc, err)
+		req, err := http.NewRequest("GET", aURL, nil)
 		if err != nil {
 			return loc, fmt.Errorf("%s: %w", aURL, err)
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode > 299 {
-			return loc, fmt.Errorf("%s: %w", aURL, errors.New(resp.Status))
-		}
+		if err = func() error {
+			resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+			if err != nil {
+				return fmt.Errorf("%s: %w", aURL, err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode > 299 {
+				return fmt.Errorf("%s: %w", aURL, errors.New(resp.Status))
+			}
 
-		if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
-			return loc, fmt.Errorf("decode: %w", err)
-		}
-		httpClient.Logger.(retryablehttp.Logger).Printf("status=%q", data.Status)
-		if data.Status != "OVER_QUERY_LIMIT" {
-			gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
+			if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
+				return fmt.Errorf("decode: %w", err)
+			}
+			if data.Status != "OVER_QUERY_LIMIT" {
+				gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
+			} else {
+				gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() / 2)
+			}
+			return nil
+		}(); err == nil {
 			break
 		}
-		gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() / 2)
+		if firstErr == nil {
+			firstErr = err
+		}
+		if !iter.Next(ctx.Done()) {
+			return loc, firstErr
+		}
 	}
 
 	switch data.Status {
