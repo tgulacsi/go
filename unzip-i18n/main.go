@@ -1,4 +1,4 @@
-// Copyright 2016 Tamás Gulácsi
+// Copyright 2016, 2021 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/text"
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/encoding/htmlindex"
 )
 
@@ -39,7 +38,6 @@ func main() {
 func Main() error {
 	flagList := flag.Bool("l", false, "just list the files")
 	flagEnc := flag.String("encoding", "cp850", "encoding")
-	flagConcurrency := flag.Int("P", 8, "concurrency")
 	flagDestDir := flag.String("C", ".", "destination directory")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
@@ -76,9 +74,6 @@ func Main() error {
 	}
 	d := enc.NewDecoder()
 	seenDir := make(map[string]struct{})
-	var grp errgroup.Group
-	limit := make(chan struct{}, *flagConcurrency)
-	var token struct{}
 	for _, f := range zr.File {
 		name := f.Name
 		if f.NonUTF8 {
@@ -104,28 +99,33 @@ func Main() error {
 			return err
 		}
 		name = filepath.Join(*flagDestDir, name)
-		dn := filepath.Dir(name)
+		mode := f.Mode()
+		dn := name
+		if !mode.IsDir() {
+			dn = filepath.Dir(name)
+		}
 		if _, ok := seenDir[dn]; !ok {
 			seenDir[dn] = struct{}{}
 			os.MkdirAll(dn, 0755)
 		}
-		grp.Go(func() error {
-			limit <- token
-			defer func() { <-limit }()
-			dest, err := os.Create(name)
-			if err != nil {
-				rc.Close()
-				log.Printf("create %q: %v", name, err)
-				return err
-			}
-			_, err = io.Copy(dest, rc)
+		if mode.IsDir() {
+			continue
+		}
+		dest, err := os.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+		if err != nil {
 			rc.Close()
-			if closeErr := dest.Close(); closeErr != nil && err == nil {
-				log.Printf("Close %q: %v", dest.Name(), err)
-				err = closeErr
-			}
+			log.Printf("create %q (%v): %v", name, mode, err)
 			return err
-		})
+		}
+		_, err = io.Copy(dest, rc)
+		rc.Close()
+		if closeErr := dest.Close(); closeErr != nil && err == nil {
+			log.Printf("Close %q: %v", dest.Name(), err)
+			err = closeErr
+		}
+		if err != nil {
+			return err
+		}
 	}
-	return grp.Wait()
+	return nil
 }
