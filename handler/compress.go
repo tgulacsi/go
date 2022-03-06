@@ -1,65 +1,26 @@
-// Copyright 2013, 2020 The Gorilla Authors. All rights reserved.
+// Copyright 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package handler
 
 import (
-	"compress/flate"
-	"context"
-	"io"
 	"net/http"
-	"strings"
+	"sync"
 
-	gzip "github.com/klauspost/pgzip"
+	"github.com/klauspost/compress/gzhttp"
+	"github.com/klauspost/compress/gzip"
 )
 
-type compressResponseWriter struct {
-	io.Writer
-	http.ResponseWriter
-	http.Hijacker
-	http.Flusher
-	http.CloseNotifier
-}
-
-func (w *compressResponseWriter) WriteHeader(c int) {
-	w.ResponseWriter.Header().Del("Content-Length")
-	w.ResponseWriter.WriteHeader(c)
-}
-
-func (w *compressResponseWriter) Header() http.Header {
-	return w.ResponseWriter.Header()
-}
-
-func (w *compressResponseWriter) Write(b []byte) (int, error) {
-	h := w.ResponseWriter.Header()
-	if h.Get("Content-Type") == "" {
-		h.Set("Content-Type", http.DetectContentType(b))
-	}
-	h.Del("Content-Length")
-
-	return w.Writer.Write(b)
-}
-
-type flusher interface {
-	Flush() error
-}
-
-func (w *compressResponseWriter) Flush() {
-	// Flush compressed data if compressor supports it.
-	if f, ok := w.Writer.(flusher); ok {
-		f.Flush()
-	}
-	// Flush HTTP response.
-	if w.Flusher != nil {
-		w.Flusher.Flush()
-	}
-}
+var (
+	wrappersMu sync.Mutex
+	wrappers   map[int]func(http.Handler) http.HandlerFunc
+)
 
 // CompressHandler gzip compresses HTTP responses for clients that support it
 // via the 'Accept-Encoding' header.
 func CompressHandler(h http.Handler) http.Handler {
-	return CompressHandlerLevel(h, gzip.DefaultCompression)
+	return CompressHandlerLevel(h, gzip.BestSpeed)
 }
 
 // CompressHandlerLevel gzip compresses HTTP responses with specified compression level
@@ -69,84 +30,19 @@ func CompressHandler(h http.Handler) http.Handler {
 // or any integer value between gzip.BestSpeed and gzip.BestCompression inclusive.
 // gzip.DefaultCompression is used in case of invalid compression level.
 func CompressHandlerLevel(h http.Handler, level int) http.Handler {
-	if level < gzip.DefaultCompression || level > gzip.BestCompression {
-		level = gzip.DefaultCompression
+	wrappersMu.Lock()
+	if wrappers == nil {
+		wrappers = make(map[int]func(http.Handler) http.HandlerFunc)
 	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	L:
-		for _, enc := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
-			switch strings.TrimSpace(enc) {
-			case "gzip":
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Header().Add("Vary", "Accept-Encoding")
-
-				gw, _ := gzip.NewWriterLevel(w, level)
-				defer gw.Close()
-
-				h, hok := w.(http.Hijacker)
-				if !hok { /* w is not Hijacker... oh well... */
-					h = nil
-				}
-
-				f, fok := w.(http.Flusher)
-				if !fok {
-					f = nil
-				}
-
-				w = &compressResponseWriter{
-					Writer:         gw,
-					ResponseWriter: w,
-					Hijacker:       h,
-					Flusher:        f,
-					CloseNotifier:  newContextCloseNotifier(r.Context()),
-				}
-
-				break L
-			case "deflate":
-				w.Header().Set("Content-Encoding", "deflate")
-				w.Header().Add("Vary", "Accept-Encoding")
-
-				fw, _ := flate.NewWriter(w, level)
-				defer fw.Close()
-
-				h, hok := w.(http.Hijacker)
-				if !hok { /* w is not Hijacker... oh well... */
-					h = nil
-				}
-
-				f, fok := w.(http.Flusher)
-				if !fok {
-					f = nil
-				}
-
-				w = &compressResponseWriter{
-					Writer:         fw,
-					ResponseWriter: w,
-					Hijacker:       h,
-					Flusher:        f,
-					CloseNotifier:  newContextCloseNotifier(r.Context()),
-				}
-
-				break L
-			}
+	wrapper, ok := wrappers[level]
+	if !ok {
+		var err error
+		if wrapper, err = gzhttp.NewWrapper(gzhttp.MinSize(1024), gzhttp.CompressionLevel(level)); err != nil {
+			panic(err)
 		}
+		wrappers[level] = wrapper
+	}
+	wrappersMu.Unlock()
 
-		h.ServeHTTP(w, r)
-	})
+	return wrapper(h)
 }
-
-func newContextCloseNotifier(ctx context.Context) contextCloseNotifier {
-	ch := make(chan bool)
-	go func() {
-		for {
-			<-ctx.Done()
-			ch <- true
-		}
-	}()
-	return contextCloseNotifier{ch}
-}
-
-type contextCloseNotifier struct{ done <-chan bool }
-
-func (cn contextCloseNotifier) CloseNotify() <-chan bool { return cn.done }

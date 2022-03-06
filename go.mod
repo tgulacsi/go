@@ -24,7 +24,7 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/klauspost/compress v1.13.4 // indirect
+	github.com/klauspost/compress v1.15.0 // indirect
 	github.com/klauspost/pgzip v1.2.1
 	github.com/kylelemons/godebug v1.1.0
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
