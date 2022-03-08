@@ -1,4 +1,4 @@
-// Copyright 2020 Tamás Gulácsi. All rights reserved.
+// Copyright 2020, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/outcaste-io/badger/v3"
 )
 
 // Log is used for logging.

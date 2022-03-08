@@ -24,16 +24,16 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/klauspost/compress v1.15.0 // indirect
-	github.com/klauspost/pgzip v1.2.1
+	github.com/klauspost/compress v1.15.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/opentracing/basictracer-go v1.0.0
 	github.com/opentracing/opentracing-go v1.2.0
+	github.com/outcaste-io/badger/v3 v3.2202.0 // indirect
 	github.com/pdfcpu/pdfcpu v0.3.6
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
-	github.com/rogpeppe/retry v0.1.0 // indirect
+	github.com/rogpeppe/retry v0.1.0
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
 	github.com/sony/gobreaker v0.4.1
