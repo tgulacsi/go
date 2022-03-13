@@ -7,11 +7,11 @@ package zipfs
 
 import (
 	"archive/zip"
+	"bytes"
 	"embed"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"path"
 	"strings"
 	"time"
@@ -19,6 +19,7 @@ import (
 
 var _ embed.FS
 
+// ZipFS wraps a zip.Reader as an fs.FS.
 type ZipFS struct {
 	z *zip.Reader
 	m map[string]int
@@ -28,11 +29,33 @@ var _ = fs.GlobFS(ZipFS{})
 var _ = fs.StatFS(ZipFS{})
 var _ = fs.ReadDirFS(ZipFS{})
 
+// SectionReader is the interface returned by io.NewSectionReader.
 type SectionReader interface {
 	io.ReaderAt
 	Size() int64
 }
 
+// BytesSectionReader wraps the []byte slice as a SectionReader.
+func BytesSectionReader(p []byte) *io.SectionReader {
+	return io.NewSectionReader(bytes.NewReader(p), 0, int64(len(p)))
+}
+
+// MustNewZipFS calls ZipFS and panics on error.
+//
+// Example usage:
+// //go:generate zip -9r assets.zip assets/
+// //go:embed assets.zip
+// var assetsZIP []byte
+// var assetsFS = zipfs.MustNewZipFS(BytesSectionReader(assetsZIP))
+func MustNewZipFS(sr SectionReader) ZipFS {
+	zf, err := NewZipFS(sr)
+	if err != nil {
+		panic(err)
+	}
+	return zf
+}
+
+// NewZipFS provides the given zip file as an fs.FS.
 func NewZipFS(sr SectionReader) (ZipFS, error) {
 	z, err := zip.NewReader(sr, sr.Size())
 	if err != nil {
@@ -40,12 +63,12 @@ func NewZipFS(sr SectionReader) (ZipFS, error) {
 	}
 	m := make(map[string]int, len(z.File))
 	for i, F := range z.File {
-		log.Println(F.Name)
 		m[F.Name] = i
 	}
 	return ZipFS{z: z, m: m}, nil
 }
 
+// Open the named file.
 func (zf ZipFS) Open(name string) (fs.File, error) {
 	name = path.Clean(name)
 	if i, ok := zf.m[name]; ok {
@@ -74,6 +97,7 @@ func (zf ZipFS) Open(name string) (fs.File, error) {
 	return nil, fs.ErrNotExist
 }
 
+// Glob returns all the files matching the pattern.
 func (zf ZipFS) Glob(pattern string) ([]string, error) {
 	des := make([]string, 0, len(zf.z.File))
 	for _, f := range zf.z.File {
@@ -86,6 +110,7 @@ func (zf ZipFS) Glob(pattern string) ([]string, error) {
 	return des, nil
 }
 
+// ReadDir reads the named directory.
 func (zf ZipFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	des := make([]fs.DirEntry, 0, len(zf.z.File))
 	name = path.Clean(name) + "/"
@@ -97,6 +122,7 @@ func (zf ZipFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	return des, nil
 }
 
+// Stat the named file.
 func (zf ZipFS) Stat(name string) (fs.FileInfo, error) {
 	name = path.Clean(name)
 	if i, ok := zf.m[name]; ok {
@@ -146,7 +172,6 @@ func (zd *zipDir) ReadDir(n int) ([]fs.DirEntry, error) {
 		des[i] = dirEntry{File: f}
 	}
 	zd.files = zd.files[len(des):]
-	log.Println(len(zd.files), len(des))
 	if len(zd.files) == 0 {
 		return des, io.EOF
 	}
