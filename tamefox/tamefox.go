@@ -1,4 +1,4 @@
-// Copyright 2020, 2021 Tamás Gulácsi. All rights reserved.
+// Copyright 2020, 2022 Tamás Gulácsi. All rights reserved.
 
 package main
 
@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -46,8 +47,10 @@ func main() {
 	}
 }
 
+var self = os.Getpid()
+
 func Main() error {
-	flagTimeout := flag.Duration("t", 30*time.Second, "timeout for stop")
+	flagTimeout := flag.Duration("t", 10*time.Second, "timeout for stop")
 	flagProg := flag.String("prog", "firefox", "name of the program")
 	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
 	flagAC := flag.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
@@ -95,7 +98,7 @@ func Main() error {
 		if change.Change != "focus" {
 			continue
 		}
-		if change.Container.AppID == *flagProg {
+		if strings.EqualFold(change.Container.AppID, *flagProg) {
 			ff = change.Container.PID
 			kill(ff, false, 999)
 			stopTimer()
@@ -136,6 +139,9 @@ type Container struct {
 }
 
 func kill(pid int, stop bool, depth int) error {
+	if pid == 0 || pid == self {
+		return nil
+	}
 	var firstErr error
 	if stop {
 		const sig = syscall.SIGSTOP
@@ -164,11 +170,11 @@ func ckill(ppid int, sig syscall.Signal, c map[int][]int, depth int) error {
 		c = make(map[int][]int, len(fis))
 		for _, fi := range fis {
 			pid, err := strconv.Atoi(fi.Name())
-			if err != nil {
+			if err != nil || pid == 0 {
 				continue
 			}
 			ppid, err := getPPid(pid)
-			if ppid == 1 {
+			if ppid == 1 || ppid == 0 {
 				continue
 			}
 			if err != nil {
@@ -181,6 +187,9 @@ func ckill(ppid int, sig syscall.Signal, c map[int][]int, depth int) error {
 	for _, pid := range c[ppid] {
 		if err := ckill(pid, sig, c, depth-1); err != nil && firstErr == nil {
 			firstErr = err
+		}
+		if pid == 0 || pid == self {
+			continue
 		}
 		if err := syscall.Kill(pid, sig); err != nil && firstErr == nil {
 			firstErr = err
