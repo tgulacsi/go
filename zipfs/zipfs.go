@@ -64,34 +64,37 @@ func NewZipFS(sr SectionReader) (ZipFS, error) {
 	}
 	m := make(map[string]int, len(z.File))
 	for i, F := range z.File {
+		off, j := 0, strings.IndexByte(F.Name, '/')
+		for j >= 0 {
+			m[F.Name[:off+j]] = -1
+			off += j + 1
+			j = strings.IndexByte(F.Name[off:], '/')
+		}
 		m[F.Name] = i
 	}
 	return ZipFS{z: z, m: m}, nil
 }
 
 // Open the named file.
-func (zf ZipFS) Open(name string) (fs.File, error) {
+func (zf ZipFS) Open(name string) (file fs.File, err error) {
+	defer func() { log.Printf("Open(%q): %v, %+v", name, file, err) }()
+	var isDir bool
 	if i, ok := zf.m[name]; ok {
-		f := zf.z.File[i]
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
+		isDir = i == -1
+		if !isDir {
+			f := zf.z.File[i]
+			rc, err := f.Open()
+			if err != nil {
+				return nil, err
+			}
+			log.Println(name, f.FileInfo().Mode())
+			return zipFile{ReadCloser: rc, fi: f.FileInfo()}, nil
 		}
-		log.Println(name, f.FileInfo().Mode())
-		return zipFile{ReadCloser: rc, fi: f.FileInfo()}, nil
 	}
 	// Maybe it's a directory
 	var dn string
-	var ok bool
 	var rootFi fs.FileInfo
-	if ok = name == "." || name == "./"; !ok {
-		var i int
-		if i, ok = zf.m[name+"/"]; ok {
-			dn = name + "/"
-		}
-		rootFi = zf.z.File[i].FileInfo()
-	}
-	if !ok {
+	if isDir = isDir || name == "." || name == "./"; !isDir {
 		return nil, fs.ErrNotExist
 	}
 	files := make([]dirEntry, 0, len(zf.z.File))
@@ -187,7 +190,7 @@ func (zd *zipDir) Name() string {
 func (zd *zipDir) Read(_ []byte) (int, error) { return 0, fs.ErrInvalid }
 func (zd *zipDir) Close() error               { zd.files = nil; return nil }
 func (zd *zipDir) Stat() (fs.FileInfo, error) {
-	log.Printf("zd.Stat(%q): %v", zd.Name(), zd.fi.Mode())
+	log.Printf("zd.Stat(%q): %v", zd.Name(), zd.fi)
 	return zd.fi, nil
 }
 func (zd *zipDir) ReadDir(n int) (des []fs.DirEntry, err error) {
