@@ -24,7 +24,7 @@ func TestZipFS(t *testing.T) {
 		t.Skip(err)
 	}
 	zf := newZipFromFS(t, os.DirFS(filepath.Join(filepath.Dir(wd), "coord")))
-	if err := fs.WalkDir(zf, "", func(path string, de fs.DirEntry, err error) error {
+	if err := fs.WalkDir(zf, ".", func(path string, de fs.DirEntry, err error) error {
 		t.Log("path:", path, "dirEntry:", de, "error:", err)
 		if err != nil {
 			t.Errorf("%q: %+v", path, err)
@@ -66,7 +66,7 @@ func buildZipFromFS(tb testing.TB, src fs.FS) (SectionReader, error) {
 	archive := zip.NewWriter(&buf)
 	defer archive.Close()
 
-	err := hackpadfs.WalkDir(src, ".", copyZipWalk(tb, src, archive))
+	err := fs.WalkDir(src, ".", copyZipWalk(tb, src, archive))
 	if err != nil {
 		err = fmt.Errorf("building zip from FS walk: %w", err)
 	} else {
