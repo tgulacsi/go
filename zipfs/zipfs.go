@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"path"
 	"strings"
 	"time"
@@ -70,31 +71,46 @@ func NewZipFS(sr SectionReader) (ZipFS, error) {
 
 // Open the named file.
 func (zf ZipFS) Open(name string) (fs.File, error) {
-	name = path.Clean(name)
 	if i, ok := zf.m[name]; ok {
 		f := zf.z.File[i]
 		rc, err := f.Open()
 		if err != nil {
 			return nil, err
 		}
-		return zipFile{ReadCloser: rc, fh: f.FileInfo()}, nil
+		log.Println(name, f.FileInfo().Mode())
+		return zipFile{ReadCloser: rc, fi: f.FileInfo()}, nil
 	}
 	// Maybe it's a directory
-	if i, ok := zf.m[name+"/"]; ok {
-		dn := name + "/"
-		files := make([]*zip.File, 0, len(zf.z.File))
-		for _, f := range zf.z.File {
-			if strings.HasPrefix(f.Name, dn) {
-				files = append(files, f)
+	var dn string
+	var ok bool
+	var rootFi fs.FileInfo
+	if ok = name == "." || name == "./"; !ok {
+		var i int
+		if i, ok = zf.m[name+"/"]; ok {
+			dn = name + "/"
+		}
+		rootFi = zf.z.File[i].FileInfo()
+	}
+	if !ok {
+		return nil, fs.ErrNotExist
+	}
+	files := make([]dirEntry, 0, len(zf.z.File))
+	seen := make(map[string]struct{})
+	for _, f := range zf.z.File {
+		if dn != "" && !strings.HasPrefix(f.Name, dn) {
+			continue
+		}
+		de := dirEntry{File: f, name: strings.TrimPrefix(f.Name, dn)}
+		if i := strings.IndexByte(de.name, '/'); i >= 0 {
+			dir := de.name[:i]
+			if _, ok := seen[dir]; !ok {
+				seen[dir] = struct{}{}
+				files = append(files, dirEntry{File: f, name: dir})
 			}
 		}
-		return &zipDir{files: files, fi: zf.z.File[i].FileInfo()}, nil
+		files = append(files, de)
 	}
-	// Maybe it's the root
-	if name == "" || name == "." || name == "/" {
-		return &zipDir{files: zf.z.File, fi: nil}, nil
-	}
-	return nil, fs.ErrNotExist
+	return &zipDir{files: files, fi: rootFi}, nil
 }
 
 // Glob returns all the files matching the pattern.
@@ -113,26 +129,29 @@ func (zf ZipFS) Glob(pattern string) ([]string, error) {
 // ReadDir reads the named directory.
 func (zf ZipFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	des := make([]fs.DirEntry, 0, len(zf.z.File))
-	name = path.Clean(name) + "/"
+	name += "/"
 	for _, f := range zf.z.File {
-		if name == "" || name == "/" || name == "." || strings.HasPrefix(f.Name, name) {
-			des = append(des, dirEntry{File: f})
+		if name == "" || name == "/" || name == "." || name == "./" || strings.HasPrefix(f.Name, name) {
+			des = append(des, dirEntry{File: f, name: strings.TrimPrefix(f.Name, name)})
 		}
 	}
+	log.Printf("ReadDir(%q): %+v", name, des)
 	return des, nil
 }
 
 // Stat the named file.
 func (zf ZipFS) Stat(name string) (fs.FileInfo, error) {
-	name = path.Clean(name)
 	if i, ok := zf.m[name]; ok {
+		log.Printf("zf.Stat(%q): %v", name, zf.z.File[i].FileInfo().Mode())
 		return zf.z.File[i].FileInfo(), nil
 	}
 	// Maybe it's a directory
 	if i, ok := zf.m[name+"/"]; ok {
+		log.Printf("zf.Stat(%q): %v", name, zf.z.File[i].FileInfo().Mode())
 		return zf.z.File[i].FileInfo(), nil
 	}
-	if name == "" || name == "/" || name == "." {
+	if name == "" || name == "." {
+		log.Printf("zf.Stat(%q): %v", name, dummyFileInfo{})
 		return dummyFileInfo{}, nil
 	}
 	return nil, fmt.Errorf("zip root dir: %w", fs.ErrNotExist)
@@ -140,58 +159,83 @@ func (zf ZipFS) Stat(name string) (fs.FileInfo, error) {
 
 type zipFile struct {
 	io.ReadCloser
-	fh fs.FileInfo
+	fi fs.FileInfo
 }
 
 var _ = fs.File(zipFile{})
 
-func (zf zipFile) Stat() (fs.FileInfo, error) { return zf.fh, nil }
+func (zf zipFile) Name() string { log.Println("zf.Name:", zf); return zf.fi.Name() }
+func (zf zipFile) Stat() (fs.FileInfo, error) {
+	log.Printf("zf.Stat(%q): %v", zf.Name(), zf.fi.Mode())
+	return zf.fi, nil
+}
 
 type zipDir struct {
 	fi    fs.FileInfo
-	files []*zip.File
+	files []dirEntry
 }
 
 var _ = fs.ReadDirFile((*zipDir)(nil))
 
+func (zd *zipDir) Name() string {
+	log.Println("zd.Name:", zd)
+	if zd.fi == nil {
+		return "."
+	}
+	return zd.fi.Name()
+}
 func (zd *zipDir) Read(_ []byte) (int, error) { return 0, fs.ErrInvalid }
 func (zd *zipDir) Close() error               { zd.files = nil; return nil }
-func (zd *zipDir) Stat() (fs.FileInfo, error) { return zd.fi, nil }
-func (zd *zipDir) ReadDir(n int) ([]fs.DirEntry, error) {
+func (zd *zipDir) Stat() (fs.FileInfo, error) {
+	log.Printf("zd.Stat(%q): %v", zd.Name(), zd.fi.Mode())
+	return zd.fi, nil
+}
+func (zd *zipDir) ReadDir(n int) (des []fs.DirEntry, err error) {
+	defer func(n int) { log.Printf("ReadDir[%q](%d): %v, %+v", zd.Name(), n, des, err) }(n)
 	if len(zd.files) == 0 {
-		return nil, io.EOF
+		return nil, nil
 	}
 
-	var des []fs.DirEntry
 	if n <= 0 || len(zd.files) <= n {
-		des = make([]fs.DirEntry, len(zd.files))
-	} else {
-		des = make([]fs.DirEntry, n)
+		n = len(zd.files)
 	}
-	for i, f := range zd.files {
-		des[i] = dirEntry{File: f}
+	var advance int
+	for _, f := range zd.files {
+		advance++
+		if strings.IndexByte(f.name, '/') >= 0 {
+			continue
+		}
+		if des == nil {
+			des = make([]fs.DirEntry, 0, n)
+		}
+		des = append(des, f)
 	}
-	zd.files = zd.files[len(des):]
-	if len(zd.files) == 0 {
-		return des, io.EOF
-	}
+	zd.files = zd.files[advance:]
 	return des, nil
 }
 
-type dirEntry struct{ *zip.File }
+type dirEntry struct {
+	name string
+	*zip.File
+}
 
 func (de dirEntry) IsDir() bool {
 	return len(de.File.Name) > 0 && de.File.Name[len(de.File.Name)-1] == '/'
 }
-func (de dirEntry) Info() (fs.FileInfo, error) { return de.File.FileInfo(), nil }
-func (de dirEntry) Name() string               { return strings.TrimSuffix(de.File.Name, "/") }
-func (de dirEntry) Type() fs.FileMode          { return de.File.Mode() }
+func (de dirEntry) Info() (fs.FileInfo, error) {
+	log.Printf("de.Info(%q): %v", de.name, de.File.FileInfo().Mode())
+	return de.File.FileInfo(), nil
+}
+func (de dirEntry) Name() string {
+	return strings.TrimSuffix(de.name, "/")
+}
+func (de dirEntry) Type() fs.FileMode { return de.File.Mode() }
 
 type dummyFileInfo struct{}
 
 var _ = fs.FileInfo(dummyFileInfo{})
 
-func (dummyFileInfo) Name() string       { return "/" }
+func (dummyFileInfo) Name() string       { return "." }
 func (dummyFileInfo) Size() int64        { return 0 }
 func (dummyFileInfo) Mode() fs.FileMode  { return fs.ModeDir | 0555 }
 func (dummyFileInfo) ModTime() time.Time { return time.Time{} }
