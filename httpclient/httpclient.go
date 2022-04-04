@@ -1,5 +1,5 @@
 /*
-  Copyright 2019 Tamás Gulácsi
+  Copyright 2019, 2022 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/sony/gobreaker"
 )
@@ -38,7 +39,7 @@ const (
 
 // New returns a *retryablehttp.Client, with the default http.Client, DefaultTimeout, DefaultInterval and DefaultFailureRatio.
 func New(name string) *retryablehttp.Client {
-	return NewWithClient(name, nil, DefaultTimeout, DefaultInterval, DefaultFailureRatio, nil)
+	return NewWithClient(name, nil, DefaultTimeout, DefaultInterval, DefaultFailureRatio, logr.Discard())
 }
 
 // NewWithClient returns a *retryablehttp.Client based on the given *http.Client.
@@ -46,7 +47,7 @@ func New(name string) *retryablehttp.Client {
 //
 // If failureRatio is < 0, then no circuit breaker will be used,
 // if failureRatio   == 0, then DefaultFailureRation will be used.
-func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration, failureRatio float64, Log func(...interface{}) error) *retryablehttp.Client {
+func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration, failureRatio float64, logger logr.Logger) *retryablehttp.Client {
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
@@ -71,10 +72,9 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 	if cl != nil && cl != http.DefaultClient {
 		rc.HTTPClient = cl
 	}
-	if Log == nil {
-		rc.Logger = nil
-	} else {
-		rc.Logger = kitlogPrintf{Log: Log}
+	rc.Logger = nil
+	if logger.Enabled() {
+		rc.Logger = logrPrintf{logger}
 	}
 	rc.RetryWaitMin = timeout / 2
 	rc.RetryWaitMax = interval
@@ -193,4 +193,22 @@ func (kp kitlogPrintf) Info(pat string, args ...interface{}) {
 }
 func (kp kitlogPrintf) Debug(pat string, args ...interface{}) {
 	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "debug")
+}
+
+type logrPrintf struct{ logr.Logger }
+
+func (lr logrPrintf) Printf(pat string, args ...interface{}) {
+	lr.Info(fmt.Sprintf(pat, args...))
+}
+func (lr logrPrintf) Error(pat string, args ...interface{}) {
+	lr.Info(fmt.Sprintf(pat, args...), "level", "error")
+}
+func (lr logrPrintf) Warn(pat string, args ...interface{}) {
+	lr.Info(fmt.Sprintf(pat, args...), "level", "warn")
+}
+func (lr logrPrintf) Info(pat string, args ...interface{}) {
+	lr.Info(fmt.Sprintf(pat, args...), "level", "info")
+}
+func (lr logrPrintf) Debug(pat string, args ...interface{}) {
+	lr.Info(fmt.Sprintf(pat, args...), "level", "debug")
 }
