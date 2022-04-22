@@ -175,40 +175,20 @@ type GoBreaker struct {
 // Closed reports whether the circuit breaker is in opened state.
 func (b GoBreaker) Opened() bool { return b.CircuitBreaker.State() == gobreaker.StateOpen }
 
-type kitlogPrintf struct {
-	Log func(...interface{}) error
-}
-
-func (kp kitlogPrintf) Printf(pat string, args ...interface{}) {
-	kp.Log("msg", fmt.Sprintf(pat, args...))
-}
-func (kp kitlogPrintf) Error(pat string, args ...interface{}) {
-	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "error")
-}
-func (kp kitlogPrintf) Warn(pat string, args ...interface{}) {
-	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "warn")
-}
-func (kp kitlogPrintf) Info(pat string, args ...interface{}) {
-	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "info")
-}
-func (kp kitlogPrintf) Debug(pat string, args ...interface{}) {
-	kp.Log("msg", fmt.Sprintf(pat, args...), "lvl", "debug")
-}
-
 type logrPrintf struct{ logr.Logger }
 
 func (lr logrPrintf) Printf(pat string, args ...interface{}) {
-	lr.Info(fmt.Sprintf(pat, args...))
+	lr.Logger.Info(fmt.Sprintf(pat, args...))
 }
 func (lr logrPrintf) Error(pat string, args ...interface{}) {
-	lr.Info(fmt.Sprintf(pat, args...), "level", "error")
+	lr.Logger.Info(fmt.Sprintf(pat, args...), "level", "error")
 }
 func (lr logrPrintf) Warn(pat string, args ...interface{}) {
-	lr.Info(fmt.Sprintf(pat, args...), "level", "warn")
+	lr.Logger.Info(fmt.Sprintf(pat, args...), "level", "warn")
 }
 func (lr logrPrintf) Info(pat string, args ...interface{}) {
-	lr.Info(fmt.Sprintf(pat, args...), "level", "info")
+	lr.Logger.Info(fmt.Sprintf(pat, args...), "level", "info")
 }
 func (lr logrPrintf) Debug(pat string, args ...interface{}) {
-	lr.Info(fmt.Sprintf(pat, args...), "level", "debug")
+	lr.Logger.Info(fmt.Sprintf(pat, args...), "level", "debug")
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017, 2020 Tamás Gulácsi
+Copyright 2017, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/tgulacsi/go/httpinsecure"
 )
 
@@ -46,9 +47,6 @@ const (
 
 	TestHost = "40.68.241.196"
 )
-
-// Log is used for logging.
-var Log = func(...interface{}) error { return nil }
 
 // Options are the space/time coordinates and the required details.
 type Options struct {
@@ -121,6 +119,7 @@ func (V Version) GetPDF(
 	username, password string,
 	opt Options,
 ) (rc io.ReadCloser, fileName, mimeType string, err error) {
+	logger := logr.FromContextOrDiscard(ctx)
 	params := url.Values(map[string][]string{
 		"address":  {opt.Address},
 		"lat":      {fmt.Sprintf("%.5f", opt.Lat)},
@@ -212,10 +211,10 @@ func (V Version) GetPDF(
 	if err != nil {
 		return nil, "", "", fmt.Errorf("url=%q: %w", meURL, err)
 	}
-	Log("msg", "MEVV", "username", username, "password", strings.Repeat("*", len(password)))
+	logger.Info("MEVV", "username", username, "password", strings.Repeat("*", len(password)))
 	req.SetBasicAuth(username, password)
 	req = req.WithContext(ctx)
-	Log("msg", "Get", "url", req.URL, "headers", req.Header)
+	logger.Info("Get", "url", req.URL, "headers", req.Header)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("do %#v: %w", req.URL.String(), err)

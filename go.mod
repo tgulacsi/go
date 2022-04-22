@@ -11,18 +11,18 @@ require (
 	github.com/cznic/sortutil v0.0.0-20181122101858-f5f958428db8 // indirect
 	github.com/cznic/zappy v0.0.0-20181122101859-ca47d358d4b1 // indirect
 	github.com/dgraph-io/badger/v2 v2.0.3
-	github.com/dgraph-io/badger/v3 v3.2103.1
+	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/go-kit/kit v0.10.0
-	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/go-logr/logr v1.2.3
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v2.0.0+incompatible // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
-	github.com/hack-pad/hackpadfs v0.1.2 // indirect
+	github.com/hack-pad/hackpadfs v0.1.2
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/jung-kurt/gofpdf v1.16.2
@@ -32,7 +32,7 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/opentracing/basictracer-go v1.0.0
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/outcaste-io/badger/v3 v3.2202.0 // indirect
+	github.com/outcaste-io/badger/v3 v3.2202.0
 	github.com/pdfcpu/pdfcpu v0.3.6
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/rogpeppe/retry v0.1.0

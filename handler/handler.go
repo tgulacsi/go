@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2015, 2022 Tamás Gulácsi
 
 licensed under the apache license, version 2.0 (the "license");
 you may not use this file except in compliance with the license.
@@ -19,9 +19,9 @@ package handler
 
 import (
 	"net/http"
-)
 
-var Log = func(...interface{}) error { return nil }
+	"github.com/go-logr/logr"
+)
 
 type Handler func(w http.ResponseWriter, r *http.Request) error
 
@@ -44,6 +44,7 @@ type statuser interface {
 
 type ErrHandler struct {
 	Handler
+	logr.Logger
 }
 
 // ServeHTTP allows our Handler type to satisfy http.Handler.
@@ -52,16 +53,20 @@ func (h ErrHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		return
 	}
+	logger, err := logr.FromContext(r.Context())
+	if err != nil {
+		logger = h.Logger
+	}
 	if se, ok := err.(statuser); ok {
 		// We can retrieve the status here and write out a specific
 		// HTTP status code.
-		Log("msg", "HTTP error", "status", se.Status(), "error", err)
+		logger.Error(err, "HTTP error", "status", se.Status())
 		http.Error(w, err.Error(), se.Status())
 		return
 	}
 	// Any error types we don't specifically look out for default
 	// to serving a HTTP 500
-	Log("msg", "HTTP", "error", err)
+	logger.Error(err, "HTTP")
 	http.Error(w, http.StatusText(http.StatusInternalServerError),
 		http.StatusInternalServerError)
 }
