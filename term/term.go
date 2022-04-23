@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Tamás Gulácsi
+Copyright 2017, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,14 +21,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-kit/kit/log/term"
 	"github.com/tgulacsi/go/iohlp"
+	"golang.org/x/term"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/htmlindex"
 )
 
 // IsTTY contains whether the stdout is a terminal.
-var IsTTY = term.IsTerminal(os.Stdout)
+var IsTTY = term.IsTerminal(int(os.Stdout.Fd()))
 
 // GetTTYEncoding returns the TTY encoding, or UTF-8 if not found.
 func GetTTYEncoding() encoding.Encoding {
