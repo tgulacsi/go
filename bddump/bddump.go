@@ -12,11 +12,13 @@ import (
 	"io"
 	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/outcaste-io/badger/v3"
 )
 
-// Log is used for logging.
-var Log = func(...interface{}) error { return nil }
+var logger = logr.Discard()
+
+func SetLogger(lgr logr.Logger) { logger = lgr }
 
 // Dump records.
 //
@@ -25,7 +27,7 @@ var Log = func(...interface{}) error { return nil }
 // The end of data is indicated by an extra newline.
 func Dump(w io.Writer, src string) error {
 	defer os.Stdout.Close()
-	//Log("msg","open src", "file", src)
+	//logger.V(1).Info("open src", "file", src)
 	db, err := badger.Open(badger.DefaultOptions(src).WithReadOnly(true))
 	if err != nil {
 		return err
@@ -57,7 +59,7 @@ func Dump(w io.Writer, src string) error {
 			}
 			n++
 		}
-		Log("msg", "Finished.", "rows", n)
+		logger.Info("Finished.", "rows", n)
 		return out.WriteByte('\n')
 	}); err != nil {
 		return err

@@ -16,6 +16,7 @@ require (
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/go-kit/kit v0.10.0
 	github.com/go-logr/logr v1.2.3
+	github.com/go-logr/zerologr v1.2.1
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -36,6 +37,7 @@ require (
 	github.com/pdfcpu/pdfcpu v0.3.6
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/rogpeppe/retry v0.1.0
+	github.com/rs/zerolog v1.26.1
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
 	github.com/sony/gobreaker v0.4.1
@@ -43,12 +45,12 @@ require (
 	github.com/valyala/quicktemplate v1.4.1
 	go.opencensus.io v0.23.0 // indirect
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e
 	golang.org/x/exp v0.0.0-20210819164307-503510c5c1ec
 	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
-	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210819135213-f52c844e1c1c
-	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171 // indirect
+	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/protobuf v1.27.1 // indirect
