@@ -30,10 +30,13 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/temp"
+
+	"github.com/go-logr/logr"
 )
 
-// Log is discarded by default
-var Log = func(...interface{}) error { return nil }
+var logger = logr.Discard()
+
+func SetLogger(lgr logr.Logger) { logger = lgr }
 
 // ReadRequestOneFile reads the first file from the request (if multipart/),
 // or returns the body if not
@@ -136,11 +139,11 @@ func SendFile(w http.ResponseWriter, filename, contentType string) error {
 	}
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", size))
 	w.WriteHeader(200)
-	Log("msg", "SendFile", "filename", filename, "length", size, "header", w.Header())
+	logger.Info("SendFile", "filename", filename, "length", size, "header", w.Header())
 	fh.Seek(0, 0)
 	if _, err = io.CopyN(w, fh, size); err != nil {
 		err = fmt.Errorf("error sending file %q: %s", filename, err)
-		Log("msg", "SendFile", "filename", filename, "error", err)
+		logger.Error(err, "SendFile", "filename", filename)
 	}
 	return err
 }

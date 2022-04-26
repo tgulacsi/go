@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/go-logr/logr"
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/iohlp"
 )
@@ -32,11 +33,7 @@ const (
 )
 
 var (
-	// Debugf prints debug logs. Nil walue prints nothing.
-	Debugf func(string, ...interface{})
-
-	// Infof prints informative logs. Nil walue prints nothing.
-	Infof func(string, ...interface{})
+	logger = logr.Discard()
 
 	// CheckEncoding is true if we should check Base64 encodings
 	CheckEncoding = true
@@ -48,21 +45,10 @@ var (
 	ErrStopWalk = errors.New("stop the walk")
 )
 
+func SetLogger(lgr logr.Logger) { logger = lgr }
+
 // TodoFunc is the type of the function called by Walk and WalkMultipart.
 type TodoFunc func(mp MailPart) error
-
-func debugf(pattern string, args ...interface{}) {
-	if Debugf == nil {
-		return
-	}
-	Debugf(pattern, args...)
-}
-func infof(pattern string, args ...interface{}) {
-	if Infof == nil {
-		return
-	}
-	Infof(pattern, args...)
-}
 
 // sequence is a global sequence for numbering mail parts.
 var sequence uint64
@@ -130,7 +116,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 	if decoder != nil {
 		msg.Body = decoder(msg.Body)
 	}
-	debugf("Walk message headers=%q", msg.Header)
+	logger.V(1).Info("Walk message", "headers", msg.Header)
 	if err != nil {
 		return fmt.Errorf("WalkMail: %w", err)
 	}
@@ -184,7 +170,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if err != nil {
 		b := make([]byte, 2048)
 		n, _ := part.Body.ReadAt(b, 0)
-		infof("ReadAndHashMessage: %v\n%s", err, string(b[:n]))
+		logger.Error(err, "ReadAndHashMessage", "message", string(b[:n]))
 		return fmt.Errorf("WalkMail: %w", err)
 	}
 	if hsh != "" {
@@ -215,7 +201,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		io.MultiReader(mp.Body, strings.NewReader("\r\n")),
 		boundary)
 	mp.Body = io.NewSectionReader(mp.Body, 0, mp.Body.Size())
-	infof("WalkMultipart seq=%d ct=%q media=%q", mp.Seq, mp.ContentType, mp.MediaType)
+	logger.Info("WalkMultipart", "seq", mp.Seq, "ct", mp.ContentType, "media", mp.MediaType)
 	var err error
 	var i int
 	for {
@@ -283,7 +269,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 	if err != nil {
 		eS = err.Error()
 		if err != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
-			infof("ERROR reading parts: %v", err)
+			logger.Error(err, "reading parts")
 			var a [16 << 10]byte
 			n, _ := mp.Body.ReadAt(a[:], 0)
 			return fmt.Errorf("reading parts [media=%v body=%q]: %w", mp.MediaType, string(a[:n]), err)
@@ -368,7 +354,7 @@ func getCT(
 			return qprintable.NewDecoder(enc, br)
 		}
 	default:
-		infof("unknown transfer-encoding %q", te)
+		logger.Info("unknown", "transfer-encoding", te)
 	}
 	return
 }

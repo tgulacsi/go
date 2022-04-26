@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/go-logr/logr/testr"
 )
 
 func TestMailAddress(t *testing.T) {
@@ -37,10 +39,7 @@ func TestMailAddress(t *testing.T) {
 	}
 }
 func TestWalk(t *testing.T) {
-	Debugf, Infof = t.Logf, t.Logf
-	defer func() {
-		Debugf, Infof = nil, nil
-	}()
+	logger = testr.New(t)
 	b := make([]byte, 1024)
 	for tcName, tc := range walkTestCases {
 		tcName := tcName
