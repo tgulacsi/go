@@ -41,18 +41,19 @@ require (
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
 	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304 // indirect
 	github.com/sony/gobreaker v0.4.1
+	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/valyala/quicktemplate v1.4.1
+	github.com/valyala/quicktemplate v1.7.0
 	go.opencensus.io v0.23.0 // indirect
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e
-	golang.org/x/exp v0.0.0-20210819164307-503510c5c1ec
-	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
+	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d
+	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20210819135213-f52c844e1c1c
+	golang.org/x/sys v0.0.0-20220702020025-31831981b65f
 	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171
 	golang.org/x/text v0.3.7
-	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
 	google.golang.org/protobuf v1.27.1 // indirect
 	perkeep.org v0.0.0-20191227205925-9a1336816afd
 )
