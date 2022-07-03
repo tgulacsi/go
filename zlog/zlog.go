@@ -15,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
+	"golang.org/x/term"
 )
 
 var _ = zerolog.LevelWriter((*levelWriter)(nil))
@@ -122,4 +123,14 @@ func SetOutput(lgr logr.Logger, w io.Writer) {
 		zl := underlier.GetUnderlying()
 		*zl = zl.Output(w)
 	}
+}
+
+// MaybeConsoleWriter returns a zerolog.ConsoleWriter if w is a terminal, and w unchanged otherwise.
+func MaybeConsoleWriter(w io.Writer) io.Writer {
+	if fder, ok := w.(interface{ Fd() uintptr }); ok {
+		if term.IsTerminal(int(fder.Fd())) {
+			return zerolog.ConsoleWriter{Out: w}
+		}
+	}
+	return w
 }
