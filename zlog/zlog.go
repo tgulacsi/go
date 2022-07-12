@@ -20,6 +20,11 @@ import (
 
 var _ = zerolog.LevelWriter((*levelWriter)(nil))
 
+const (
+	TraceLevel = zerolog.TraceLevel
+	InfoLevel  = zerolog.InfoLevel
+)
+
 type levelWriter struct {
 	ws        atomic.Value
 	threshold int32
@@ -103,9 +108,10 @@ func NewZerolog(w io.Writer) zerolog.Logger {
 	return zerolog.New(w).With().Timestamp().Logger()
 }
 
-// New returns a new logr.Logger writing to w as a zerolog.Logger.
+// New returns a new logr.Logger writing to w as a zerolog.Logger,
+// at InfoLevel.
 func New(w io.Writer) logr.Logger {
-	zl := NewZerolog(w)
+	zl := NewZerolog(w).Level(zerolog.InfoLevel)
 	return zerologr.New(&zl)
 }
 
