@@ -1,4 +1,4 @@
-// Copyright 2015 Tamás Gulácsi. All rights reserved.
+// Copyright 2015, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -33,7 +32,7 @@ func OpenReader(r io.Reader, passphrase []byte) (Key, io.Reader, error) {
 	if err := key.Populate(passphrase, 32); err != nil {
 		return key, nil, err
 	}
-	box, err := ioutil.ReadAll(io.MultiReader(dec.Buffered(), r))
+	box, err := io.ReadAll(io.MultiReader(dec.Buffered(), r))
 	if err != nil {
 		return key, nil, err
 	}

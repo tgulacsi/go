@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Tamás Gulácsi
+Copyright 2017, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package mevv_test
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -73,7 +72,7 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 			defer r.Close()
 		}
 		if err == nil && tc.ErrOK {
-			b, _ := ioutil.ReadAll(&io.LimitedReader{R: r, N: 1024})
+			b, _ := io.ReadAll(&io.LimitedReader{R: r, N: 1024})
 			t.Errorf("%d. wanted error, got [%s] %q.", i, ct, b)
 			continue
 		}

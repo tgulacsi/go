@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2015, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package promhlp
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -38,7 +37,7 @@ func NewCountingReader(r io.Reader) *CountingReadCloser {
 	return &CountingReadCloser{ReadCloser: struct {
 		io.Reader
 		io.Closer
-	}{r, ioutil.NopCloser(nil)}}
+	}{r, io.NopCloser(nil)}}
 }
 
 func (cr *CountingReadCloser) Read(p []byte) (n int, err error) {

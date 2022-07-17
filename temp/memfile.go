@@ -1,5 +1,5 @@
 /*
-Copyright 2013, 2020 the Camlistore authors.
+Copyright 2013, 2022 the Camlistore authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -170,7 +169,7 @@ func (ms *memorySlurper) ReadFrom(r io.Reader) (n int64, err error) {
 		return io.Copy(ms.buf, r)
 	}
 	if ms.file == nil {
-		ms.file, err = ioutil.TempFile("", "memorySlurper-"+ms.blobRef)
+		ms.file, err = os.CreateTemp("", "memorySlurper-"+ms.blobRef)
 		if err != nil {
 			return 0, err
 		}
@@ -196,7 +195,7 @@ func (ms *memorySlurper) Write(p []byte) (n int, err error) {
 		ms.maxInMemorySlurp = MaxInMemorySlurp
 	}
 	if ms.buf.Len()+len(p) > ms.maxInMemorySlurp {
-		ms.file, err = ioutil.TempFile("", "memorySlurper-"+ms.blobRef)
+		ms.file, err = os.CreateTemp("", "memorySlurper-"+ms.blobRef)
 		if err != nil {
 			return
 		}

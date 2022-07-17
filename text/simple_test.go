@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2015, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package text
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"testing"
 )
 
@@ -30,7 +30,7 @@ func TestISO8859_1(t *testing.T) {
 	}{
 		{"árvíz", []byte("\xe1rv\xedz")},
 	} {
-		b, err := ioutil.ReadAll(NewReader(bytes.NewReader(elt.encoded), enc))
+		b, err := io.ReadAll(NewReader(bytes.NewReader(elt.encoded), enc))
 		if err != nil {
 			t.Errorf("%d. read: %v", i, err)
 			continue

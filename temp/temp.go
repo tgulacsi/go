@@ -1,5 +1,5 @@
 /*
-  Copyright 2013 Tamás Gulácsi
+  Copyright 2013, 2022 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,14 +21,13 @@ package temp
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 )
 
 // ReaderToFile copies the reader to a temp file and returns its name or error
 func ReaderToFile(r io.Reader, prefix, suffix string) (filename string, err error) {
-	dfh, e := ioutil.TempFile("", "agostle-"+BaseName(prefix)+"-")
+	dfh, e := os.CreateTemp("", "agostle-"+BaseName(prefix)+"-")
 	if e != nil {
 		err = e
 		return

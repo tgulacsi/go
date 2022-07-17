@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Tamás Gulácsi
+Copyright 201, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package text
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/transform"
@@ -41,7 +40,7 @@ func NewReader(r io.Reader, enc encoding.Encoding) io.Reader {
 // Decode decodes the bytes from enc to utf8 (an allocating, convenience version of transform.Transform).
 func Decode(p []byte, enc encoding.Encoding) (string, error) {
 	r := NewReader(bytes.NewReader(p), enc)
-	q, err := ioutil.ReadAll(r)
+	q, err := io.ReadAll(r)
 	return string(q), err
 }
 

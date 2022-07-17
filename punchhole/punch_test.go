@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Tamás Gulácsi.
+Copyright 2014, 2022 Tamás Gulácsi.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ limitations under the License.
 package punchhole
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -27,7 +26,7 @@ func TestPunch(t *testing.T) {
 		t.Logf("No punchHole implementation is available, skipping.")
 		t.Skip()
 	}
-	file, err := ioutil.TempFile("", "punchhole-")
+	file, err := os.CreateTemp("", "punchhole-")
 	if err != nil {
 		t.Error(err)
 	}

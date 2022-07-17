@@ -1,5 +1,5 @@
 /*
-  Copyright 2017 Tamás Gulácsi
+  Copyright 2017, 2022 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ package loffice
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,7 +42,7 @@ var Timeout = 300
 // Convert from srcFn to dstFn files, with the given format.
 // Either filenames can be empty or "-" which treated as stdin/stdout
 func Convert(srcFn, dstFn, format string) error {
-	tempDir, err := ioutil.TempDir("", filepath.Base(srcFn))
+	tempDir, err := os.MkdirTemp("", filepath.Base(srcFn))
 	if err != nil {
 		return fmt.Errorf("cannot create temporary directory: %s", err)
 	}

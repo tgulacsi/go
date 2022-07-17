@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"net/url"
@@ -238,7 +237,7 @@ func (V Version) GetPDF(
 		return nil, "", "", mr
 	}
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
-		buf, _ := ioutil.ReadAll(resp.Body)
+		buf, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		return nil, "", "", fmt.Errorf("998: %s", buf)
 	}

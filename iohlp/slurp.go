@@ -1,4 +1,4 @@
-// Copyright 2019, 2021 Tamás Gulácsi. All rights reserved.
+// Copyright 2019, 2022 Tamás Gulácsi. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -7,7 +7,6 @@ package iohlp
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
 )
 
@@ -26,7 +25,7 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 	if err != nil || buf.Len() <= threshold {
 		return bsr, err
 	}
-	fh, err := ioutil.TempFile("", "iohlp-readall-")
+	fh, err := os.CreateTemp("", "iohlp-readall-")
 	if err != nil {
 		return bsr, err
 	}

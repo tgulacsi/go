@@ -1,4 +1,4 @@
-// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Copyright 2013, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -6,7 +6,6 @@ package i18nmail
 
 import (
 	"io"
-	"io/ioutil"
 	"net/mail"
 	"strconv"
 	"strings"
@@ -50,7 +49,7 @@ func TestWalk(t *testing.T) {
 					if err != nil {
 						panic(err)
 					}
-					if _, nextErr := io.Copy(ioutil.Discard, mp.Body); nextErr != nil && err == nil {
+					if _, nextErr := io.Copy(io.Discard, mp.Body); nextErr != nil && err == nil {
 						err = nextErr
 					}
 					if err != nil || n == 0 {

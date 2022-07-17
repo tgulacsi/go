@@ -9,7 +9,7 @@
 	patch for -rgb option contributed by James Cort
 	patch for a parallel computing problem with Tesseract 4, Dominique Meeus, 2018
 
-	Translate to Go, Tamás Gulácsi, 2020
+	Translate to Go, Tamás Gulácsi, 2020, 2022
 */
 
 // SPDX-License-Identifier:	GPL-2.0-or-later
@@ -21,7 +21,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"os"
@@ -56,7 +56,7 @@ var (
 )
 
 // print output, if verbose option is set (default)
-var logger = log.New(ioutil.Discard, "", log.LstdFlags)
+var logger = log.New(io.Discard, "", log.LstdFlags)
 
 func main() {
 	if err := Main(); err != nil {
@@ -65,7 +65,7 @@ func main() {
 }
 
 func makeTempFile(ext string) (string, error) {
-	fh, err := ioutil.TempFile(globalTempDir, "pdfsandwich-*"+ext)
+	fh, err := os.CreateTemp(globalTempDir, "pdfsandwich-*"+ext)
 	if err != nil {
 		return "", err
 	}
@@ -452,7 +452,7 @@ func Main() error {
 
 	// generate global temporary directory:
 	var err error
-	if globalTempDir, err = ioutil.TempDir("", "pdfsandwich_tmp"); err != nil {
+	if globalTempDir, err = os.MkdirTemp("", "pdfsandwich_tmp"); err != nil {
 		return err
 	}
 	if !debug {

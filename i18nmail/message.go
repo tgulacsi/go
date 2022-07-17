@@ -1,4 +1,4 @@
-// Copyright 2011, 2020 The Go Authors. All rights reserved.
+// Copyright 2011, 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net/mail"
 	"net/textproto"
@@ -274,7 +273,7 @@ func DecodeRFC2047Word(s string) (string, error) {
 		return "", fmt.Errorf("mail: RFC 2047 encoding not supported: %q", encMark)
 	}
 
-	dec, err := ioutil.ReadAll(text.NewReader(r, enc))
+	dec, err := io.ReadAll(text.NewReader(r, enc))
 	if err != nil {
 		return "", err
 	}

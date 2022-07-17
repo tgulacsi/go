@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -94,7 +93,7 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 			return retry, err
 		}
 		if resp.Body != nil {
-			b, _ := ioutil.ReadAll(io.LimitReader(resp.Body, 2000))
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 2000))
 			err = fmt.Errorf("%w: %s", err, string(b))
 		}
 		return retry, err

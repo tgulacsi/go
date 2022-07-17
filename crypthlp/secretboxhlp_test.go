@@ -1,4 +1,4 @@
-// Copyright 2015 Tamás Gulácsi. All rights reserved.
+// Copyright 2015, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -6,7 +6,7 @@ package crypthlp_test
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
@@ -35,7 +35,7 @@ func TestSecretBox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
 	}

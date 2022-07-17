@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -58,7 +58,7 @@ func Main() error {
 	flag.Parse()
 
 	if !*flagVerbose {
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	}
 
 	ctx, cancel := globalctx.Wrap(context.Background())
@@ -107,7 +107,7 @@ func Main() error {
 		kill(change.Container.PID, false, 0)
 
 		if *flagAC != "" {
-			b, err := ioutil.ReadFile(*flagAC)
+			b, err := os.ReadFile(*flagAC)
 			if err != nil {
 				return err
 			}
@@ -165,11 +165,11 @@ func ckill(ppid int, sig syscall.Signal, c map[int][]int, depth int) error {
 	if depth == 0 {
 		return syscall.Kill(ppid, sig)
 	}
-	fis, _ := ioutil.ReadDir("/proc")
+	dis, _ := os.ReadDir("/proc")
 	if c == nil {
-		c = make(map[int][]int, len(fis))
-		for _, fi := range fis {
-			pid, err := strconv.Atoi(fi.Name())
+		c = make(map[int][]int, len(dis))
+		for _, di := range dis {
+			pid, err := strconv.Atoi(di.Name())
 			if err != nil || pid == 0 {
 				continue
 			}
@@ -199,7 +199,7 @@ func ckill(ppid int, sig syscall.Signal, c map[int][]int, depth int) error {
 }
 
 func getPPid(pid int) (int, error) {
-	b, err := ioutil.ReadFile("/proc/" + strconv.Itoa(pid) + "/status")
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/status")
 	i := bytes.Index(b, []byte("\nPPid:"))
 	if i < 0 {
 		return 0, err

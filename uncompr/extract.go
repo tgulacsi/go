@@ -1,4 +1,4 @@
-// Copyright 2017, 2020 Tamás Gulácsi. All rights reserved.
+// Copyright 2017, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -8,7 +8,6 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -90,7 +89,7 @@ type rarLister struct {
 // NewRarLister copies the contents of the io.Reader into "rar.rar"
 // under a temp directory, which is used for extraction, too.
 func NewRarLister(r io.Reader) (Lister, error) {
-	tempdir, err := ioutil.TempDir("", "")
+	tempdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		return nil, err
 	}

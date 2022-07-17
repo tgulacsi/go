@@ -1,5 +1,5 @@
 /*
-  Copyright 2019, 2020 Tamás Gulácsi
+  Copyright 2019, 2022 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -176,7 +175,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 	}
 	if resp.StatusCode > 299 {
 		err := errors.New(resp.Status)
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		if len(b) == 0 {
 			return nil, err
 		}

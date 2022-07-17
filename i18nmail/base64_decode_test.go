@@ -1,4 +1,4 @@
-// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Copyright 2013, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -34,7 +33,7 @@ func testB64FilterReaderPeek(t *testing.T, newReader func(io.Reader, []byte) io.
 			rc := newReader(fh, []byte(b64chars))
 			r := bufio.NewReader(rc)
 			r.Peek(512)
-			_, err := io.Copy(ioutil.Discard, r)
+			_, err := io.Copy(io.Discard, r)
 			return err
 		})
 	}
@@ -59,7 +58,7 @@ func TestB64FilterReader(t *testing.T) {
 			t.Logf("%d. longer with %q (wanted %d, got %d bytes)", i, buf.Bytes(), tc.N, n)
 		}
 		if i == 1 {
-			fh, err := ioutil.TempFile("", "base64-decode-")
+			fh, err := os.CreateTemp("", "base64-decode-")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -1,4 +1,4 @@
-// Copyright 2015 Tamás Gulácsi. All rights reserved.
+// Copyright 2015, 2022 Tamás Gulácsi. All rights reserved.
 // Use of this source code is governed by an Apache 2.0
 // license that can be found in the LICENSE file.
 
@@ -6,7 +6,7 @@ package pools_test
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
@@ -17,7 +17,7 @@ func TestIdlePool(t *testing.T) {
 	p := pools.NewIdlePool(2)
 	defer p.Close()
 	r := bytes.NewReader(nil)
-	c := ioutil.NopCloser(r)
+	c := io.NopCloser(r)
 	p.Put(c)
 	d := p.Get()
 	if d != c {

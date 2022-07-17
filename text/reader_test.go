@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Tamás Gulácsi
+Copyright 2014, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ limitations under the License.
 package text
 
 import (
-	"io/ioutil"
+	"io"
 	"strings"
 	"testing"
 )
@@ -30,7 +30,7 @@ func TestDecodingReader(t *testing.T) {
 		{"utf-8", "\xf5\xf6abraka dabra", "\ufffd\ufffdabraka dabra"},
 	} {
 		enc := GetEncoding(tup.charset)
-		res, err := ioutil.ReadAll(NewDecodingReader(strings.NewReader(tup.encoded), enc))
+		res, err := io.ReadAll(NewDecodingReader(strings.NewReader(tup.encoded), enc))
 		if err != nil {
 			t.Errorf("%d. error reading: %v", i, err)
 		}

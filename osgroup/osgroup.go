@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Tamás Gulácsi
+Copyright 2019, 2022 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package osgroup
 
 import (
 	"bufio"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -122,6 +121,6 @@ func GroupName(gid int) (string, error) {
 
 // IsInsideDocker returns true iff we are inside a docker cgroup.
 func IsInsideDocker() bool {
-	_, err := ioutil.ReadFile("/proc/self/cgroup")
+	_, err := os.ReadFile("/proc/self/cgroup")
 	return err == nil
 }
