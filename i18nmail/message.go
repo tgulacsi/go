@@ -291,7 +291,7 @@ func (qd qDecoder) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if _, err := qd.r.Read(qd.scratch[:1]); err != nil {
+	if n, err := qd.r.Read(qd.scratch[:1]); n == 0 {
 		return 0, err
 	}
 	switch c := qd.scratch[0]; {
@@ -309,7 +309,7 @@ func (qd qDecoder) Read(p []byte) (n int, err error) {
 	default:
 		p[0] = c
 	}
-	return 1, nil
+	return 1, err
 }
 
 // isQtext returns true if c is an RFC 5322 qtest character.

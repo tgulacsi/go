@@ -19,18 +19,20 @@ limitations under the License.
 package temp
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 )
 
 // LinkAlreadyExists checks the error and returns whether this is about
 // a link already exists or not
 func LinkAlreadyExists(err error) bool {
-	if os.IsExist(err) {
+	if errors.Is(err, fs.ErrExist) {
 		return true
 	}
-	if le, ok := err.(*os.LinkError); ok && os.IsExist(le.Err) {
+	if le, ok := err.(*os.LinkError); ok && errors.Is(le.Err, fs.ErrExist) {
 		return true
 	}
 	return false
