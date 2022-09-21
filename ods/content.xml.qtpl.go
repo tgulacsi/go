@@ -5,13 +5,14 @@
 package ods
 
 //line content.xml.qtpl:1
-import "strings"
+import (
+	"encoding/xml"
+	"strings"
 
 //line content.xml.qtpl:2
-import "encoding/xml"
 
 //line content.xml.qtpl:5
-import (
+
 	qtio422016 "io"
 
 	qt422016 "github.com/valyala/quicktemplate"

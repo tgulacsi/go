@@ -20,6 +20,11 @@ import (
 
 var _ = zerolog.LevelWriter((*levelWriter)(nil))
 
+func init() {
+	zerolog.TimestampFieldName = "ts"
+	zerolog.LevelFieldName = "lvl"
+}
+
 const (
 	TraceLevel = zerolog.TraceLevel
 	InfoLevel  = zerolog.InfoLevel
@@ -135,7 +140,7 @@ func SetOutput(lgr logr.Logger, w io.Writer) {
 func MaybeConsoleWriter(w io.Writer) io.Writer {
 	if fder, ok := w.(interface{ Fd() uintptr }); ok {
 		if term.IsTerminal(int(fder.Fd())) {
-			return zerolog.ConsoleWriter{Out: w}
+			return zerolog.ConsoleWriter{Out: w, TimeFormat: "15:04:05"}
 		}
 	}
 	return w
