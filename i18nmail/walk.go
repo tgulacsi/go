@@ -7,7 +7,7 @@ package i18nmail
 import (
 	"bufio"
 	"bytes"
-	"crypto/sha1"
+	"crypto/sha512"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -138,9 +138,12 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 	if hsh := msg.Header.Get("X-Hash"); hsh != "" && child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
 	}
-	child.Body, err = MakeSectionReader(msg.Body, bodyThreshold)
-	if err != nil {
-		return err
+	{
+		childBody, err := MakeSectionReader(msg.Body, bodyThreshold)
+		if err != nil {
+			return err
+		}
+		child.Body = childBody
 	}
 	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
 	if strings.HasPrefix(ct, "multipart/") {
@@ -157,7 +160,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 //
 // By default this is recursive, except dontDescend is true.
 func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
-	h := sha1.New()
+	h := sha512.New512_224()
 	if _, err := io.Copy(h, part.Body); err != nil {
 		return err
 	}
@@ -229,8 +232,12 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		}
 		//fmt.Println(i, child.Seq, child.Header.Get("Content-Type"))
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		if child.Body, err = MakeSectionReader(body, bodyThreshold); err != nil {
-			return err
+		{
+			childBody, err := MakeSectionReader(body, bodyThreshold)
+			if err != nil {
+				return err
+			}
+			child.Body = childBody
 		}
 		if isMultipart := strings.HasPrefix(ct, "multipart/"); !dontDescend &&
 			(isMultipart && child.MediaType["boundary"] != "" ||
@@ -268,7 +275,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 	var eS string
 	if err != nil {
 		eS = err.Error()
-		if err != io.EOF && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
+		if !errors.Is(err, io.EOF) && !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
 			logger.Error(err, "reading parts")
 			var a [16 << 10]byte
 			n, _ := mp.Body.ReadAt(a[:], 0)
@@ -359,9 +366,9 @@ func getCT(
 	return
 }
 
-// HashBytes returns a hash (sha1 atm) for the given bytes
+// HashBytes returns a hash (sha512_224 atm) for the given bytes
 func HashBytes(data []byte) string {
-	h := sha1.New()
+	h := sha512.New512_224()
 	_, _ = h.Write(data)
 	return base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
