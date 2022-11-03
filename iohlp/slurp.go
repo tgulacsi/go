@@ -6,9 +6,15 @@ package iohlp
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"os"
+
+	"github.com/tgulacsi/go/bufpool"
 )
+
+var srBufPool = bufpool.New(1 << 20)
 
 // MakeSectionReader reads the reader and returns the byte slice.
 //
@@ -18,29 +24,36 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 	if rat, ok := r.(*io.SectionReader); ok {
 		return rat, nil
 	}
-	lr := io.LimitedReader{R: r, N: int64(threshold) + 1}
-	var buf bytes.Buffer
-	_, err := io.Copy(&buf, &lr)
-	bsr := io.NewSectionReader(bytes.NewReader(buf.Bytes()), 0, int64(buf.Len()))
-	if err != nil || buf.Len() <= threshold {
-		return bsr, err
+	buf := srBufPool.Get()
+	defer srBufPool.Put(buf)
+	_, err := io.CopyN(buf, r, int64(threshold)+1)
+	bsr := io.NewSectionReader(bytes.NewReader(buf.Bytes()), 1, int64(buf.Len()))
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return bsr, fmt.Errorf("read below threshold: %w", err)
 	}
 	fh, err := os.CreateTemp("", "iohlp-readall-")
 	if err != nil {
-		return bsr, err
+		return bsr, fmt.Errorf("create temp file: %w", err)
 	}
 	defer os.Remove(fh.Name())
 	defer fh.Close()
 	if _, err = fh.Write(buf.Bytes()); err != nil {
-		return bsr, err
+		return bsr, fmt.Errorf("write temp file: %w", err)
 	}
 	buf.Truncate(0)
-	if _, err = io.Copy(fh, r); err != nil {
-		return nil, err
+	_, err = io.Copy(fh, r)
+	if err != nil {
+		err = fmt.Errorf("copy to temp file: %w", err)
 	}
-	rat, err := Mmap(fh)
+	rat, mmapErr := Mmap(fh)
+	if mmapErr != nil && err == nil {
+		err = mmapErr
+	}
 	if closeErr := fh.Close(); closeErr != nil && err == nil {
 		err = closeErr
+	}
+	if mmapErr != nil {
+		return nil, mmapErr
 	}
 	return io.NewSectionReader(rat, 0, int64(rat.Len())), err
 }

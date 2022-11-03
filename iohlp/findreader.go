@@ -6,6 +6,7 @@ package iohlp
 
 import (
 	"bytes"
+	"errors"
 	"io"
 )
 
@@ -32,10 +33,10 @@ func FindReaderSize(r io.Reader, needle []byte, bufSize int) (int, error) {
 	var off, start int
 	for {
 		n, err := io.ReadAtLeast(r, buf[start:], needleLen)
-		if err == io.ErrUnexpectedEOF {
+		if errors.Is(err, io.ErrUnexpectedEOF) {
 			err = io.EOF
 		}
-		if n == 0 && err == io.EOF {
+		if n == 0 && errors.Is(err, io.EOF) {
 			return -1, nil
 		}
 		//fmt.Println(off, start, n)
