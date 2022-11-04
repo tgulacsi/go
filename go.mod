@@ -14,6 +14,7 @@ require (
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
+	github.com/emersion/go-message v0.16.0 // indirect
 	github.com/go-kit/kit v0.10.0
 	github.com/go-logr/logr v1.2.3
 	github.com/go-logr/zerologr v1.2.1

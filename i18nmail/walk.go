@@ -6,20 +6,20 @@ package i18nmail
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
-	"mime/multipart"
-	"net/mail"
 	"net/textproto"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+
+	"github.com/emersion/go-message"
+	_ "github.com/emersion/go-message/charset"
 
 	"github.com/go-logr/logr"
 	"github.com/sloonz/go-qprintable"
@@ -48,7 +48,7 @@ var (
 func SetLogger(lgr logr.Logger) { logger = lgr }
 
 // TodoFunc is the type of the function called by Walk and WalkMultipart.
-type TodoFunc func(mp MailPart) error
+type TodoFunc func(mp mailPart) error
 
 // sequence is a global sequence for numbering mail parts.
 var sequence uint64
@@ -63,16 +63,15 @@ func nextSeqInt() int {
 // HashKeyName is the header key name for the hash
 const HashKeyName = "X-HashOfFullMessage"
 
-// MailPart is part of a mail or multipart message.
-type MailPart struct {
-	// Body of the part.
-	Body *io.SectionReader
+// mailPart is part of a mail or multipart message.
+type mailPart struct {
+	entity *message.Entity
+	body   *io.SectionReader
+	Header textproto.MIMEHeader
 	// MediaType is the parsed media type.
 	MediaType map[string]string
-	// Header of the mail part.
-	Header textproto.MIMEHeader
 	// Parent of this part.
-	Parent *MailPart
+	Parent *mailPart
 	// ContenType for the part.
 	ContentType string
 	// Level is the depth level.
@@ -81,8 +80,22 @@ type MailPart struct {
 	Seq int
 }
 
+func NewMailPart(r io.Reader) (mailPart, error) {
+	var mp mailPart
+	msg, err := message.Read(r)
+	if err != nil {
+		return mp, err
+	}
+	return mp.WithEntity(msg)
+}
+
+// Entity returns the part as a *message.Entity
+func (mp mailPart) Entity() *message.Entity {
+	return mp.entity
+}
+
 // String returns some string representation of the part.
-func (mp MailPart) String() string {
+func (mp mailPart) String() string {
 	pseq := -1
 	if mp.Parent != nil {
 		pseq = mp.Parent.Seq
@@ -90,9 +103,58 @@ func (mp MailPart) String() string {
 	return fmt.Sprintf("%d:::{%s %s %s}", pseq, mp.ContentType, mp.MediaType, mp.Header)
 }
 
-// Spawn returns a descendant of the MailPart (Level+1, Parent=*mp, next sequence).
-func (mp *MailPart) Spawn() MailPart {
-	return MailPart{Parent: mp, Level: mp.Level + 1, Seq: nextSeqInt()}
+// Spawn returns a descendant of the mailPart (Level+1, Parent=*mp, next sequence).
+func (mp mailPart) Spawn() mailPart {
+	return mailPart{Parent: &mp, Level: mp.Level + 1, Seq: nextSeqInt()}
+}
+func (mp mailPart) GetBody() *io.SectionReader {
+	return io.NewSectionReader(mp.body, 0, mp.body.Size())
+}
+func (mp mailPart) WithEntity(entity *message.Entity) (mailPart, error) {
+	mp.entity = entity
+	hdr := mp.entity.Header
+	ct, params, decoder, err := getCTdecoder(hdr.Get("Content-Type"), hdr.Get("Content-Disposition"), hdr.Get("Content-Transfer-Encoding"))
+	if err != nil {
+		return mp, err
+	}
+	if ct == "" {
+		ct = "message/rfc822"
+	}
+	mp.ContentType, mp.MediaType = ct, params
+	hsh := sha512.New512_224()
+	mp.entity.Body = io.TeeReader(mp.entity.Body, hsh)
+	if decoder != nil {
+		mp.entity.Body = decoder(mp.entity.Body)
+	}
+	body, err := MakeSectionReader(mp.entity.Body, bodyThreshold)
+	if err != nil {
+		return mp, err
+	}
+	var a [sha512.Size224]byte
+
+	mp.body, mp.entity.Body = body, io.NewSectionReader(body, 0, body.Size())
+	if !mp.entity.Header.Has(HashKeyName) {
+		mp.entity.Header.Set(HashKeyName, base64.URLEncoding.EncodeToString(hsh.Sum(a[:0])))
+	}
+
+	fields := mp.entity.Header.Fields()
+	m := make(map[string][]string, fields.Len())
+	for fields.Next() {
+		k := textproto.CanonicalMIMEHeaderKey(fields.Key())
+		s, err := fields.Text()
+		if err != nil {
+			b, _ := fields.Raw()
+			s = string(b)
+		}
+		m[k] = append(m[k], s)
+	}
+	mp.Header = textproto.MIMEHeader(m)
+	return mp, err
+}
+
+func (mp mailPart) FileName() string {
+	_, params, _ := mp.entity.Header.ContentDisposition()
+	return params["filename"]
 }
 
 // DecoderFunc is a type of a decoder (io.Reader wrapper)
@@ -110,144 +172,75 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 // The part.Body given to todo is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
-	msg.Header = DecodeHeaders(msg.Header)
-	ct, params, decoder, err := getCT(msg.Header)
-	if decoder != nil {
-		msg.Body = decoder(msg.Body)
-	}
-	logger.V(1).Info("Walk message", "headers", msg.Header)
-	if err != nil {
-		return fmt.Errorf("WalkMessage: %w", err)
-	}
-	if ct == "" {
-		ct = "message/rfc822"
-	}
-	var level int
+func WalkMessage(msg *message.Entity, todo TodoFunc, dontDescend bool, parent *mailPart) error {
+	var child mailPart
 	if parent != nil {
-		level = parent.Level
+		child = parent.Spawn()
+	} else {
+		child.Level = 1
+		child.Seq = nextSeqInt()
 	}
-	child := MailPart{
-		ContentType: ct, MediaType: params,
-		Header: textproto.MIMEHeader(msg.Header),
-		Parent: parent,
-		Level:  level + 1,
-		Seq:    nextSeqInt(),
-	}
-	//fmt.Println("WM", child.Seq, "ct", child.ContentType)
-	if hsh := msg.Header.Get("X-Hash"); hsh != "" && child.Header.Get(HashKeyName) == "" {
-		child.Header.Add(HashKeyName, hsh)
-	}
-	{
-		childBody, err := MakeSectionReader(msg.Body, bodyThreshold)
-		if err != nil {
-			logger.Error(err, "read child body")
-			if !errors.Is(err, io.ErrUnexpectedEOF) {
-				return fmt.Errorf("MakeSectionReader: %w", err)
-			}
-		}
-		child.Body = childBody
+	var err error
+	if child, err = child.WithEntity(msg); err != nil {
+		return err
 	}
 	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
-	if strings.HasPrefix(ct, "multipart/") {
+	if strings.HasPrefix(child.ContentType, "multipart/") {
 		if err = WalkMultipart(child, todo, dontDescend); err != nil {
-			return fmt.Errorf("WalkMultipart(seq=%d, ct=%q): %w", child.Seq, ct, err)
+			return fmt.Errorf("WalkMultipart(seq=%d, ct=%q): %w", child.Seq, child.ContentType, err)
 		}
 		return nil
 	}
-	child.Body.Seek(0, 0)
 	return todo(child)
 }
 
 // Walk over the parts of the email, calling todo on every part.
 //
 // By default this is recursive, except dontDescend is true.
-func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
-	h := sha512.New512_224()
-	if _, err := io.Copy(h, part.Body); err != nil {
-		return fmt.Errorf("ready part: %w", err)
-	}
-	part.Body.Seek(0, 0)
-	msg, err := mail.ReadMessage(io.MultiReader(
-		part.Body,
-		bytes.NewReader([]byte("\r\n\r\n")),
-	))
-	hsh := base64.URLEncoding.EncodeToString(h.Sum(nil))
-	if err != nil {
-		b := make([]byte, 2048)
-		n, _ := part.Body.ReadAt(b, 0)
-		logger.Error(err, "ReadAndHashMessage", "message", string(b[:n]))
-		return fmt.Errorf("mail.ReadMessage: %w", err)
-	}
-	if hsh != "" {
-		msg.Header["X-Hash"] = []string{hsh}
-	}
-	// force a new SectionReader
-	part.Body = io.NewSectionReader(part.Body, 0, part.Body.Size())
-	return WalkMessage(msg, todo, dontDescend, &part)
+func Walk(part mailPart, todo TodoFunc, dontDescend bool) error {
+	return part.entity.Walk(func(path []int, entity *message.Entity, err error) error {
+		if err != nil {
+			return err
+		}
+		mp, err := part.Spawn().WithEntity(entity)
+		if err != nil {
+			return err
+		}
+		return todo(mp)
+	})
 }
 
 // WalkMultipart walks a multipart/ MIME parts, calls todo on every part
 // mp.Body is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
-	boundary := mp.MediaType["boundary"]
-	if boundary == "" {
-		ct, params, _, ctErr := getCT(mp.Header)
-		if ctErr != nil {
-			return fmt.Errorf("getCT(%v): %w", mp.Header, ctErr)
-		}
-		if boundary = params["boundary"]; boundary != "" {
-			mp.ContentType = ct
-			mp.MediaType = params
-		}
-	}
-	parts := multipart.NewReader(
-		io.MultiReader(mp.Body, strings.NewReader("\r\n")),
-		boundary)
-	mp.Body = io.NewSectionReader(mp.Body, 0, mp.Body.Size())
-	logger.Info("WalkMultipart", "seq", mp.Seq, "ct", mp.ContentType, "media", mp.MediaType)
+func WalkMultipart(mp mailPart, todo TodoFunc, dontDescend bool) error {
+	parts := mp.entity.MultipartReader()
 	var err error
 	var i int
 	for {
-		var part *multipart.Part
+		var part *message.Entity
 		if part, err = parts.NextPart(); err != nil {
-			if !errors.Is(err, io.EOF) {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			} else {
 				err = fmt.Errorf("NextPart: %w", err)
 			}
 			break
 		}
 		i++
-		part.Header = DecodeHeaders(part.Header)
-		var ct string
-		ct, params, decoder, ctErr := getCT(part.Header)
-		if ctErr != nil {
-			return fmt.Errorf("%d.getCT(%v): %w", i, part.Header, ctErr)
-		}
-		body := io.Reader(part)
-		if decoder != nil {
-			body = decoder(part)
-		}
-		child := MailPart{
-			ContentType: ct, MediaType: params,
-			Header: part.Header,
+		child, entErr := mailPart{
 			Parent: &mp,
 			Level:  mp.Level + 1,
 			Seq:    nextSeqInt(),
+		}.WithEntity(part)
+		if entErr != nil {
+			err = entErr
+			break
 		}
-		//fmt.Println(i, child.Seq, child.Header.Get("Content-Type"))
-		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		{
-			childBody, err := MakeSectionReader(body, bodyThreshold)
-			if err != nil {
-				return fmt.Errorf("MakeSectionReader(threshold=%d): %w", bodyThreshold, err)
-			}
-			child.Body = childBody
-		}
-		if isMultipart := strings.HasPrefix(ct, "multipart/"); !dontDescend &&
+		if isMultipart := strings.HasPrefix(child.ContentType, "multipart/"); !dontDescend &&
 			(isMultipart && child.MediaType["boundary"] != "" ||
-				strings.HasPrefix(ct, "message/")) {
+				strings.HasPrefix(child.ContentType, "message/")) {
 			if isMultipart {
 				err = WalkMultipart(child, todo, dontDescend)
 			} else {
@@ -255,19 +248,16 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			}
 			if err != nil {
 				data := make([]byte, 1024)
-				if n, readErr := child.Body.ReadAt(data, 0); readErr == io.EOF && n == 0 {
+				if n, readErr := child.body.ReadAt(data, 0); readErr == io.EOF && n == 0 {
 					err = nil
 				} else {
 					err = fmt.Errorf("descending data=%s: %w", data[:n], err)
 					break
 				}
 			}
-			child.Body.Seek(0, 0)
+			child.body.Seek(0, 0)
 		} else {
-			fn := part.FileName()
-			if fn != "" {
-				fn = HeadDecode(fn)
-			}
+			fn := child.FileName()
 			if fn == "" {
 				ext, _ := mime.ExtensionsByType(child.ContentType)
 				fn = fmt.Sprintf("%d.%d%s", child.Level, child.Seq, append(ext, ".dat")[0])
@@ -284,7 +274,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		if !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
 			logger.Error(err, "reading parts")
 			var a [16 << 10]byte
-			n, _ := mp.Body.ReadAt(a[:], 0)
+			n, _ := mp.body.ReadAt(a[:], 0)
 			return fmt.Errorf("reading parts [media=%v body=%q]: %w", mp.MediaType, string(a[:n]), err)
 		}
 	}
@@ -292,8 +282,8 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 }
 
 // returns the content-type, params and a decoder for the body of the multipart
-func getCT(
-	header map[string][]string,
+func getCTdecoder(
+	Type, contentDisposition, contentTransferEncoding string,
 ) (
 	contentType string,
 	params map[string]string,
@@ -303,8 +293,7 @@ func getCT(
 	decoder = func(r io.Reader) io.Reader {
 		return r
 	}
-	hdr := mail.Header(header)
-	contentType = hdr.Get("Content-Type")
+	contentType = Type
 	//infof("getCT ct=%q", contentType)
 	if contentType == "" {
 		return
@@ -314,7 +303,7 @@ func getCT(
 	//infof("getCT mediaType=%v; %v (%+v)", nct, params, err)
 	if err != nil {
 		// Guess from filename's extension
-		cd := hdr.Get("Content-Disposition")
+		cd := contentDisposition
 		var ok bool
 		if cd != "" {
 			cd, cdParams, _ := mime.ParseMediaType(cd)
@@ -346,7 +335,7 @@ func getCT(
 		}
 	}
 	contentType = nct
-	te := strings.ToLower(hdr.Get("Content-Transfer-Encoding"))
+	te := strings.ToLower(contentTransferEncoding)
 	switch te {
 	case "", "7bit", "8bit", "binary":
 		// https://stackoverflow.com/questions/25710599/content-transfer-encoding-7bit-or-8-bit
@@ -376,7 +365,8 @@ func getCT(
 func HashBytes(data []byte) string {
 	h := sha512.New512_224()
 	_, _ = h.Write(data)
-	return base64.URLEncoding.EncodeToString(h.Sum(nil))
+	var a [sha512.Size224]byte
+	return base64.URLEncoding.EncodeToString(h.Sum(a[:0]))
 }
 
 func safeFn(fn string, maskPercent bool) string {
