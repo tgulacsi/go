@@ -5,6 +5,7 @@
 package i18nmail
 
 import (
+	"bufio"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -17,6 +18,9 @@ import (
 	"sync/atomic"
 
 	"github.com/emersion/go-message"
+	tp "github.com/emersion/go-message/textproto"
+
+	// charsets
 	_ "github.com/emersion/go-message/charset"
 
 	"github.com/go-logr/logr"
@@ -42,10 +46,11 @@ var (
 	ErrStopWalk = errors.New("stop the walk")
 )
 
+// SetLogger sets the global logger
 func SetLogger(lgr logr.Logger) { logger = lgr }
 
 // TodoFunc is the type of the function called by Walk and WalkMultipart.
-type TodoFunc func(mp mailPart) error
+type TodoFunc func(mp MailPart) error
 
 // sequence is a global sequence for numbering mail parts.
 var sequence uint64
@@ -60,15 +65,15 @@ func nextSeqInt() int {
 // HashKeyName is the header key name for the hash
 const HashKeyName = "X-HashOfFullMessage"
 
-// mailPart is part of a mail or multipart message.
-type mailPart struct {
+// MailPart is part of a mail or multipart message.
+type MailPart struct {
 	entity *message.Entity
 	body   *io.SectionReader
 	Header textproto.MIMEHeader
 	// MediaType is the parsed media type.
 	MediaType map[string]string
 	// Parent of this part.
-	Parent *mailPart
+	Parent *MailPart
 	// ContenType for the part.
 	ContentType string
 	// Level is the depth level.
@@ -77,8 +82,9 @@ type mailPart struct {
 	Seq int
 }
 
-func NewMailPart(r io.Reader) (mailPart, error) {
-	var mp mailPart
+// NewMailPart parses the io.Reader as a full email message and returns it as a MailPart.
+func NewMailPart(r io.Reader) (MailPart, error) {
+	var mp MailPart
 	msg, err := message.Read(r)
 	if err != nil {
 		return mp, err
@@ -87,12 +93,12 @@ func NewMailPart(r io.Reader) (mailPart, error) {
 }
 
 // Entity returns the part as a *message.Entity
-func (mp mailPart) Entity() *message.Entity {
+func (mp MailPart) Entity() *message.Entity {
 	return mp.entity
 }
 
 // String returns some string representation of the part.
-func (mp mailPart) String() string {
+func (mp MailPart) String() string {
 	pseq := -1
 	if mp.Parent != nil {
 		pseq = mp.Parent.Seq
@@ -100,14 +106,56 @@ func (mp mailPart) String() string {
 	return fmt.Sprintf("%d:::{%s %s %s}", pseq, mp.ContentType, mp.MediaType, mp.Header)
 }
 
-// Spawn returns a descendant of the mailPart (Level+1, Parent=*mp, next sequence).
-func (mp mailPart) Spawn() mailPart {
-	return mailPart{Parent: &mp, Level: mp.Level + 1, Seq: nextSeqInt()}
+// Spawn returns a descendant of the MailPart (Level+1, Parent=*mp, next sequence).
+func (mp MailPart) Spawn() MailPart {
+	return MailPart{Parent: &mp, Level: mp.Level + 1, Seq: nextSeqInt()}
 }
-func (mp mailPart) GetBody() *io.SectionReader {
+
+// GetBody returns an intact *io.SectionReader of the body.
+func (mp MailPart) GetBody() *io.SectionReader {
 	return io.NewSectionReader(mp.body, 0, mp.body.Size())
 }
-func (mp mailPart) WithEntity(entity *message.Entity) (mailPart, error) {
+
+// NewEntity returns a new *message.Entity from the header map and body readers.
+func NewEntity(header map[string][]string, body io.Reader) (*message.Entity, error) {
+	hdr := message.HeaderFromMap(header)
+	return message.New(fixHeader(hdr), body)
+}
+
+// NewEntityFromReaders returns a new *message.Entity from the header and body readers.
+func NewEntityFromReaders(header, body io.Reader) (*message.Entity, error) {
+	hdr, err := tp.ReadHeader(bufio.NewReader(io.LimitReader(header, 1<<20)))
+	if err != nil {
+		return nil, err
+	}
+	return message.New(fixHeader(message.Header{Header: hdr}), body)
+}
+
+func fixHeader(hdr message.Header) message.Header {
+	if cte := hdr.Get("Content-Transfer-Encoding"); cte != "" && strings.ToLower(cte) != cte {
+		hdr.Set("Content-Transfer-Encoding", cte)
+	}
+	return hdr
+}
+
+// WithReader returns a MailPart parsing the io.Reader as a full email.
+func (mp MailPart) WithReader(r io.Reader) (MailPart, error) {
+	entity, err := message.Read(r)
+	if err != nil {
+		return mp, err
+	}
+	return mp.WithEntity(entity)
+}
+
+// WithBody replaces only the body part.
+func (mp MailPart) WithBody(r io.Reader) (MailPart, error) {
+	entity := *mp.entity
+	entity.Body = r
+	return mp.WithEntity(&entity)
+}
+
+// WithEntity populates MailPart with the parsed *message.Entity.
+func (mp MailPart) WithEntity(entity *message.Entity) (MailPart, error) {
 	mp.entity = entity
 	hdr := mp.entity.Header
 	ct, params, err := hdr.ContentType()
@@ -146,7 +194,8 @@ func (mp mailPart) WithEntity(entity *message.Entity) (mailPart, error) {
 	return mp, err
 }
 
-func (mp mailPart) FileName() string {
+// FileName returns the file name from the Content-Disposition header.
+func (mp MailPart) FileName() string {
 	_, params, _ := mp.entity.Header.ContentDisposition()
 	return params["filename"]
 }
@@ -166,8 +215,8 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 // The part.Body given to todo is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMessage(msg *message.Entity, todo TodoFunc, dontDescend bool, parent *mailPart) error {
-	var child mailPart
+func WalkMessage(msg *message.Entity, todo TodoFunc, dontDescend bool, parent *MailPart) error {
+	var child MailPart
 	if parent != nil {
 		child = parent.Spawn()
 	} else {
@@ -191,7 +240,7 @@ func WalkMessage(msg *message.Entity, todo TodoFunc, dontDescend bool, parent *m
 // Walk over the parts of the email, calling todo on every part.
 //
 // By default this is recursive, except dontDescend is true.
-func Walk(part mailPart, todo TodoFunc, dontDescend bool) error {
+func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	return part.entity.Walk(func(path []int, entity *message.Entity, err error) error {
 		if err != nil {
 			return err
@@ -208,7 +257,7 @@ func Walk(part mailPart, todo TodoFunc, dontDescend bool) error {
 // mp.Body is reused, so read if you want to use it!
 //
 // By default this is recursive, except dontDescend is true.
-func WalkMultipart(mp mailPart, todo TodoFunc, dontDescend bool) error {
+func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 	parts := mp.entity.MultipartReader()
 	var err error
 	var i int
@@ -223,7 +272,7 @@ func WalkMultipart(mp mailPart, todo TodoFunc, dontDescend bool) error {
 			break
 		}
 		i++
-		child, entErr := mailPart{
+		child, entErr := MailPart{
 			Parent: &mp,
 			Level:  mp.Level + 1,
 			Seq:    nextSeqInt(),
