@@ -5,7 +5,6 @@
 package i18nmail
 
 import (
-	"bufio"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	"mime"
 	"net/textproto"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 
@@ -22,7 +20,6 @@ import (
 	_ "github.com/emersion/go-message/charset"
 
 	"github.com/go-logr/logr"
-	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/iohlp"
 )
 
@@ -113,7 +110,7 @@ func (mp mailPart) GetBody() *io.SectionReader {
 func (mp mailPart) WithEntity(entity *message.Entity) (mailPart, error) {
 	mp.entity = entity
 	hdr := mp.entity.Header
-	ct, params, decoder, err := getCTdecoder(hdr.Get("Content-Type"), hdr.Get("Content-Disposition"), hdr.Get("Content-Transfer-Encoding"))
+	ct, params, err := hdr.ContentType()
 	if err != nil {
 		return mp, err
 	}
@@ -123,12 +120,9 @@ func (mp mailPart) WithEntity(entity *message.Entity) (mailPart, error) {
 	mp.ContentType, mp.MediaType = ct, params
 	hsh := sha512.New512_224()
 	mp.entity.Body = io.TeeReader(mp.entity.Body, hsh)
-	if decoder != nil {
-		mp.entity.Body = decoder(mp.entity.Body)
-	}
 	body, err := MakeSectionReader(mp.entity.Body, bodyThreshold)
 	if err != nil {
-		return mp, err
+		return mp, fmt.Errorf("part %s: %w", mp, err)
 	}
 	var a [sha512.Size224]byte
 
@@ -279,86 +273,6 @@ func WalkMultipart(mp mailPart, todo TodoFunc, dontDescend bool) error {
 		}
 	}
 	return nil
-}
-
-// returns the content-type, params and a decoder for the body of the multipart
-func getCTdecoder(
-	Type, contentDisposition, contentTransferEncoding string,
-) (
-	contentType string,
-	params map[string]string,
-	decoder func(io.Reader) io.Reader,
-	err error,
-) {
-	decoder = func(r io.Reader) io.Reader {
-		return r
-	}
-	contentType = Type
-	//infof("getCT ct=%q", contentType)
-	if contentType == "" {
-		return
-	}
-	var nct string
-	nct, params, err = mime.ParseMediaType(contentType)
-	//infof("getCT mediaType=%v; %v (%+v)", nct, params, err)
-	if err != nil {
-		// Guess from filename's extension
-		cd := contentDisposition
-		var ok bool
-		if cd != "" {
-			cd, cdParams, _ := mime.ParseMediaType(cd)
-			if params == nil {
-				params = cdParams
-			} else {
-				for k, v := range cdParams {
-					if _, occupied := params[k]; !occupied {
-						params[k] = v
-					}
-				}
-			}
-			if cd != "" {
-				if ext := filepath.Ext(cdParams["filename"]); ext != "" {
-					if nct = mime.TypeByExtension(ext); nct == "" {
-						nct = "application/octet-stream"
-					}
-				}
-				ok = true
-			}
-		}
-		if !ok {
-			err = fmt.Errorf("cannot parse Content-Type %s: %w", contentType, err)
-			return
-		}
-		err = nil
-		if nct == "" {
-			nct = "application/octet-stream"
-		}
-	}
-	contentType = nct
-	te := strings.ToLower(contentTransferEncoding)
-	switch te {
-	case "", "7bit", "8bit", "binary":
-		// https://stackoverflow.com/questions/25710599/content-transfer-encoding-7bit-or-8-bit
-	case "base64":
-		decoder = func(r io.Reader) io.Reader {
-			//return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}
-			//return B64FilterReader(r, base64.StdEncoding)
-			return NewB64Decoder(base64.StdEncoding, r)
-		}
-	case "quoted-printable":
-		decoder = func(r io.Reader) io.Reader {
-			br := bufio.NewReaderSize(r, 1024)
-			first, _ := br.Peek(1024)
-			enc := qprintable.BinaryEncoding
-			if len(first) > 0 {
-				enc = qprintable.DetectEncoding(string(first))
-			}
-			return qprintable.NewDecoder(enc, br)
-		}
-	default:
-		logger.Info("unknown", "transfer-encoding", te)
-	}
-	return
 }
 
 // HashBytes returns a hash (sha512_224 atm) for the given bytes
