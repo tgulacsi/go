@@ -6,6 +6,7 @@ package i18nmail
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -167,11 +168,28 @@ func (mp MailPart) WithEntity(entity *message.Entity) (MailPart, error) {
 	}
 	mp.ContentType, mp.MediaType = ct, params
 	hsh := sha512.New512_224()
-	mp.entity.Body = io.TeeReader(mp.entity.Body, hsh)
-	body, err := MakeSectionReader(mp.entity.Body, bodyThreshold)
+	body, err := MakeSectionReader(io.TeeReader(mp.entity.Body, hsh), bodyThreshold)
 	if err != nil {
 		return mp, fmt.Errorf("part %s: %w", mp, err)
 	}
+	// Strip boundary from the beginning and the end.
+	if strings.HasPrefix(mp.ContentType, "multipart/") {
+		var pa, sa [128]byte // "Boundary delimiters must not appear within the encapsulated material, and must be no longer than 70 characters, not counting the two leading hyphens." -- https://www.rfc-editor.org/rfc/rfc2046#section-5.1.1
+		n, _ := body.ReadAt(pa[2:], 0)
+		prefix := pa[2:n]
+		if bytes.HasPrefix(prefix, []byte("--")) {
+			if i := bytes.Index(prefix, []byte("\r\n")); i >= 0 {
+				prefix = prefix[:i]
+				n, _ = body.ReadAt(sa[:], body.Size()-int64(len(prefix))-4)
+				suffix := sa[:n]
+				pa[0], pa[1] = '-', '-'
+				if j := bytes.Index(suffix, pa[:2+len(prefix)]); j >= 0 {
+					body = io.NewSectionReader(body, int64(i)+2, body.Size()-int64(i)-2-int64(len(suffix)-j))
+				}
+			}
+		}
+	}
+
 	var a [sha512.Size224]byte
 
 	mp.body, mp.entity.Body = body, io.NewSectionReader(body, 0, body.Size())
