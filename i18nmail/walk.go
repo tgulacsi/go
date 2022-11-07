@@ -6,7 +6,6 @@ package i18nmail
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -172,24 +171,6 @@ func (mp MailPart) WithEntity(entity *message.Entity) (MailPart, error) {
 	if err != nil {
 		return mp, fmt.Errorf("part %s: %w", mp, err)
 	}
-	// Strip boundary from the beginning and the end.
-	if strings.HasPrefix(mp.ContentType, "multipart/") {
-		var pa, sa [128]byte // "Boundary delimiters must not appear within the encapsulated material, and must be no longer than 70 characters, not counting the two leading hyphens." -- https://www.rfc-editor.org/rfc/rfc2046#section-5.1.1
-		n, _ := body.ReadAt(pa[2:], 0)
-		prefix := pa[2:n]
-		if bytes.HasPrefix(prefix, []byte("--")) {
-			if i := bytes.Index(prefix, []byte("\r\n")); i >= 0 {
-				prefix = prefix[:i]
-				n, _ = body.ReadAt(sa[:], body.Size()-int64(len(prefix))-4)
-				suffix := sa[:n]
-				pa[0], pa[1] = '-', '-'
-				if j := bytes.Index(suffix, pa[:2+len(prefix)]); j >= 0 {
-					body = io.NewSectionReader(body, int64(i)+2, body.Size()-int64(i)-2-int64(len(suffix)-j))
-				}
-			}
-		}
-	}
-
 	var a [sha512.Size224]byte
 
 	mp.body, mp.entity.Body = body, io.NewSectionReader(body, 0, body.Size())
@@ -218,9 +199,6 @@ func (mp MailPart) FileName() string {
 	return params["filename"]
 }
 
-// DecoderFunc is a type of a decoder (io.Reader wrapper)
-type DecoderFunc func(io.Reader) io.Reader
-
 // MakeSectionReader reads the reader and returns the byte slice.
 //
 // If the read length is below the threshold, then the bytes are read into memory;
@@ -245,14 +223,7 @@ func WalkMessage(msg *message.Entity, todo TodoFunc, dontDescend bool, parent *M
 	if child, err = child.WithEntity(msg); err != nil {
 		return err
 	}
-	//debugf("message sequence=%d content-type=%q params=%v", child.Seq, ct, params)
-	if strings.HasPrefix(child.ContentType, "multipart/") {
-		if err = WalkMultipart(child, todo, dontDescend); err != nil {
-			return fmt.Errorf("WalkMultipart(seq=%d, ct=%q): %w", child.Seq, child.ContentType, err)
-		}
-		return nil
-	}
-	return todo(child)
+	return Walk(child, todo, dontDescend)
 }
 
 // Walk over the parts of the email, calling todo on every part.
@@ -263,11 +234,20 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 		if err != nil {
 			return err
 		}
-		mp, err := part.Spawn().WithEntity(entity)
+		child, err := part.Spawn().WithEntity(entity)
 		if err != nil {
 			return err
 		}
-		return todo(mp)
+		fn := child.FileName()
+		if fn == "" {
+			ext, _ := mime.ExtensionsByType(child.ContentType)
+			fn = fmt.Sprintf("%d.%d%s", child.Level, child.Seq, append(ext, ".dat")[0])
+		}
+		child.Header.Add("X-FileName", safeFn(fn, true))
+		if err = todo(child); err != nil {
+			return fmt.Errorf("todo(%q): %w", fn, err)
+		}
+		return todo(child)
 	})
 }
 
@@ -276,70 +256,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 //
 // By default this is recursive, except dontDescend is true.
 func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
-	parts := mp.entity.MultipartReader()
-	var err error
-	var i int
-	for {
-		var part *message.Entity
-		if part, err = parts.NextPart(); err != nil {
-			if errors.Is(err, io.EOF) {
-				err = nil
-			} else {
-				err = fmt.Errorf("NextPart: %w", err)
-			}
-			break
-		}
-		i++
-		child, entErr := MailPart{
-			Parent: &mp,
-			Level:  mp.Level + 1,
-			Seq:    nextSeqInt(),
-		}.WithEntity(part)
-		if entErr != nil {
-			err = entErr
-			break
-		}
-		if isMultipart := strings.HasPrefix(child.ContentType, "multipart/"); !dontDescend &&
-			(isMultipart && child.MediaType["boundary"] != "" ||
-				strings.HasPrefix(child.ContentType, "message/")) {
-			if isMultipart {
-				err = WalkMultipart(child, todo, dontDescend)
-			} else {
-				err = Walk(child, todo, dontDescend)
-			}
-			if err != nil {
-				data := make([]byte, 1024)
-				if n, readErr := child.body.ReadAt(data, 0); readErr == io.EOF && n == 0 {
-					err = nil
-				} else {
-					err = fmt.Errorf("descending data=%s: %w", data[:n], err)
-					break
-				}
-			}
-			child.body.Seek(0, 0)
-		} else {
-			fn := child.FileName()
-			if fn == "" {
-				ext, _ := mime.ExtensionsByType(child.ContentType)
-				fn = fmt.Sprintf("%d.%d%s", child.Level, child.Seq, append(ext, ".dat")[0])
-			}
-			child.Header.Add("X-FileName", safeFn(fn, true))
-			if err = todo(child); err != nil {
-				return fmt.Errorf("todo(%q): %w", fn, err)
-			}
-		}
-	}
-	var eS string
-	if err != nil && !errors.Is(err, io.EOF) {
-		eS = err.Error()
-		if !(strings.HasSuffix(eS, "EOF") || strings.Contains(eS, "multipart: expecting a new Part")) {
-			logger.Error(err, "reading parts")
-			var a [16 << 10]byte
-			n, _ := mp.body.ReadAt(a[:], 0)
-			return fmt.Errorf("reading parts [media=%v body=%q]: %w", mp.MediaType, string(a[:n]), err)
-		}
-	}
-	return nil
+	return Walk(mp, todo, dontDescend)
 }
 
 // HashBytes returns a hash (sha512_224 atm) for the given bytes
