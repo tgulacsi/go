@@ -6,6 +6,7 @@ package i18nmail
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -178,7 +179,11 @@ func (mp MailPart) WithEntity(entity *message.Entity) (MailPart, error) {
 		mp.entity.Header.Set(HashKeyName, base64.URLEncoding.EncodeToString(hsh.Sum(a[:0])))
 	}
 
-	fields := mp.entity.Header.Fields()
+	mp.Header = headersAsMap(mp.entity.Header)
+	return mp, err
+}
+func headersAsMap(headers message.Header) textproto.MIMEHeader {
+	fields := headers.Fields()
 	m := make(map[string][]string, fields.Len())
 	for fields.Next() {
 		k := textproto.CanonicalMIMEHeaderKey(fields.Key())
@@ -189,8 +194,7 @@ func (mp MailPart) WithEntity(entity *message.Entity) (MailPart, error) {
 		}
 		m[k] = append(m[k], s)
 	}
-	mp.Header = textproto.MIMEHeader(m)
-	return mp, err
+	return textproto.MIMEHeader(m)
 }
 
 // FileName returns the file name from the Content-Disposition header.
@@ -232,7 +236,16 @@ func WalkMessage(msg *message.Entity, todo TodoFunc, dontDescend bool, parent *M
 func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	return part.entity.Walk(func(path []int, entity *message.Entity, err error) error {
 		if err != nil {
+			logger.Error(err, "go-message.Walk", "path", path)
 			return err
+		}
+		ct, params, _ := entity.Header.ContentType()
+		if logger.V(1).Enabled() {
+			logger.V(1).Info("entity", "path", path, "headers", headersAsMap(entity.Header), "contentType", ct, "params", params)
+		}
+		if path != nil && strings.HasPrefix(ct, "multipart/") && params["boundary"] != "" {
+			logger.Info("SKIP", "contentType", ct, "params", params, "path", path)
+			return nil
 		}
 		child, err := part.Spawn().WithEntity(entity)
 		if err != nil {
@@ -286,4 +299,49 @@ func DecodeHeaders(hdr map[string][]string) map[string][]string {
 		hdr[k] = vv
 	}
 	return hdr
+}
+
+func hasBoundaries(body *io.SectionReader, prefixS string) bool {
+	// Strip boundary from the beginning and the end.
+	// "Boundary delimiters must not appear within the encapsulated material, and must be no longer than 70 characters, not counting the two leading hyphens."
+	// -- https://www.rfc-editor.org/rfc/rfc2046#section-5.1.1
+	// The preceeding -- is mandatory for every boundary used in the message and the trailing -- is mandatory for the closing boundary (close-delimiter).
+	var pa, sa [128]byte
+	n, _ := body.ReadAt(pa[:], 0)
+	prefix := pa[:n]
+	if !bytes.HasPrefix(prefix, []byte("--")) {
+		if logger.V(1).Enabled() {
+			logger.V(1).Info("line does not start with dash", "line", string(prefix))
+		}
+		return false
+	}
+	if prefixS != "" && !bytes.HasPrefix(prefix, []byte(prefixS+"\r\n")) {
+		if logger.V(1).Enabled() {
+			logger.V(1).Info("line does not start with the given", "prefix", prefixS, "line", string(prefix))
+		}
+		return false
+	}
+	i := bytes.Index(prefix, []byte("\r\n"))
+	if i < 0 {
+		if logger.V(1).Enabled() {
+			logger.V(1).Info("line does not have EOL", "line", string(prefix))
+		}
+		return false
+	}
+	if prefix = prefix[:i]; body.Size() < 2*int64(len(prefix))+4 {
+		if logger.V(1).Enabled() {
+			logger.V(1).Info("body is not long enough", "body", body.Size())
+		}
+		return false
+	}
+	n, _ = body.ReadAt(sa[:], body.Size()-int64(len(prefix))-4)
+	suffix := append(prefix, '-', '-')
+	j := bytes.Index(sa[:n], suffix)
+	if j < 0 {
+		if logger.V(1).Enabled() {
+			logger.V(1).Info("no end", "suffix", suffix, "line", string(sa[:n]))
+		}
+		return false
+	}
+	return true
 }
