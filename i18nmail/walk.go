@@ -6,7 +6,6 @@ package i18nmail
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -299,49 +298,4 @@ func DecodeHeaders(hdr map[string][]string) map[string][]string {
 		hdr[k] = vv
 	}
 	return hdr
-}
-
-func hasBoundaries(body *io.SectionReader, prefixS string) bool {
-	// Strip boundary from the beginning and the end.
-	// "Boundary delimiters must not appear within the encapsulated material, and must be no longer than 70 characters, not counting the two leading hyphens."
-	// -- https://www.rfc-editor.org/rfc/rfc2046#section-5.1.1
-	// The preceeding -- is mandatory for every boundary used in the message and the trailing -- is mandatory for the closing boundary (close-delimiter).
-	var pa, sa [128]byte
-	n, _ := body.ReadAt(pa[:], 0)
-	prefix := pa[:n]
-	if !bytes.HasPrefix(prefix, []byte("--")) {
-		if logger.V(1).Enabled() {
-			logger.V(1).Info("line does not start with dash", "line", string(prefix))
-		}
-		return false
-	}
-	if prefixS != "" && !bytes.HasPrefix(prefix, []byte(prefixS+"\r\n")) {
-		if logger.V(1).Enabled() {
-			logger.V(1).Info("line does not start with the given", "prefix", prefixS, "line", string(prefix))
-		}
-		return false
-	}
-	i := bytes.Index(prefix, []byte("\r\n"))
-	if i < 0 {
-		if logger.V(1).Enabled() {
-			logger.V(1).Info("line does not have EOL", "line", string(prefix))
-		}
-		return false
-	}
-	if prefix = prefix[:i]; body.Size() < 2*int64(len(prefix))+4 {
-		if logger.V(1).Enabled() {
-			logger.V(1).Info("body is not long enough", "body", body.Size())
-		}
-		return false
-	}
-	n, _ = body.ReadAt(sa[:], body.Size()-int64(len(prefix))-4)
-	suffix := append(prefix, '-', '-')
-	j := bytes.Index(sa[:n], suffix)
-	if j < 0 {
-		if logger.V(1).Enabled() {
-			logger.V(1).Info("no end", "suffix", suffix, "line", string(sa[:n]))
-		}
-		return false
-	}
-	return true
 }
