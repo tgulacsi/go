@@ -106,6 +106,11 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 	return iohlp.MakeSectionReader(r, threshold)
 }
 
+// Returns a fresh copy of mp.Body.
+func (mp MailPart) GetBody() *io.SectionReader {
+	return io.NewSectionReader(mp.Body, 0, mp.Body.Size())
+}
+
 // WalkMessage walks over the parts of the email, calling todo on every part.
 // The part.Body given to todo is reused, so read if you want to use it!
 //
