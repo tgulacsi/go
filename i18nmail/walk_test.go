@@ -68,14 +68,6 @@ func TestWalk(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fn := tcName
-			if strings.Contains(fn, " ") {
-				fn = strings.ReplaceAll(fn, " ", "_")
-			}
-			if !strings.HasSuffix(fn, ".eml") {
-				fn += ".eml"
-			}
-			os.WriteFile(filepath.Join("testdata", fn), buf.Bytes(), 0400)
 
 			if true {
 				msg, err := mail.ReadMessage(bytes.NewReader(buf.Bytes()))
