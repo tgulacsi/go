@@ -45,6 +45,7 @@ var (
 	ErrStopWalk = errors.New("stop the walk")
 )
 
+// SetLogger sets the package-level logger
 func SetLogger(lgr logr.Logger) { logger = lgr }
 
 // TodoFunc is the type of the function called by Walk and WalkMultipart.
@@ -106,7 +107,7 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 	return iohlp.MakeSectionReader(r, threshold)
 }
 
-// Returns a fresh copy of mp.Body.
+// GetBody returns a fresh copy of mp.Body.
 func (mp MailPart) GetBody() *io.SectionReader {
 	return io.NewSectionReader(mp.Body, 0, mp.Body.Size())
 }
@@ -175,6 +176,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 		Level:  level + 1,
 		Seq:    nextSeqInt(),
 	}
+	child.Header.Del("Content-Transfer-Encoding")
 	//fmt.Println("WM", child.Seq, "ct", child.ContentType)
 	if hsh := msg.Header.Get("X-Hash"); hsh != "" && child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
@@ -183,7 +185,6 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 	if !strings.HasPrefix(ct, "multipart/") {
 		return todo(child)
 	}
-	logger.Info("WalkMultipart", "params", child.MediaType)
 	if err = WalkMultipart(child, todo, dontDescend); err != nil {
 		return fmt.Errorf("WalkMessage/WalkMultipart(seq=%d, ct=%q): %w", child.Seq, ct, err)
 	}
@@ -213,10 +214,13 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			strings.NewReader("\r\n"),
 		),
 		boundary)
-	logger.Info("WalkMultipart", "media", mp.MediaType)
+	nextPart := parts.NextPart
+	if mp.Header.Get("Content-Transfer-Encoding") == "" {
+		nextPart = parts.NextRawPart
+	}
 	var i int
 	for {
-		part, err := parts.NextPart()
+		part, err := nextPart()
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
 				return fmt.Errorf("NextPart: %w", err)

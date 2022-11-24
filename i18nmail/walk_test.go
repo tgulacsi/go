@@ -51,10 +51,11 @@ func TestWalk(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, di := range dis {
-		tcName := di.Name()
+		fn := di.Name()
+		tcName := strings.TrimSuffix(fn, ".gz")
 		t.Run(tcName, func(t *testing.T) {
 			var buf bytes.Buffer
-			fh, err := os.Open(filepath.Join("testdata", tcName))
+			fh, err := os.Open(filepath.Join("testdata", fn))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -83,7 +84,7 @@ func TestWalk(t *testing.T) {
 					if strings.HasPrefix(mediaType, "multipart/") {
 						mr := multipart.NewReader(msg.Body, params["boundary"])
 						for {
-							p, err := mr.NextPart()
+							p, err := mr.NextRawPart()
 							if err == io.EOF {
 								break
 							}
@@ -92,10 +93,11 @@ func TestWalk(t *testing.T) {
 								break
 							}
 							slurp, err := io.ReadAll(p)
+							p.Close()
 							if err != nil {
 								t.Log("slurp part:", err)
 							}
-							t.Logf("Part %q: %q\n", p.Header.Get("Foo"), len(slurp))
+							t.Logf("Part %q: %d\n", p.Header.Get("Content-Type"), len(slurp))
 						}
 					}
 				}
