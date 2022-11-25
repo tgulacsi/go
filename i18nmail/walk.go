@@ -352,16 +352,16 @@ func getCT(
 		// https://stackoverflow.com/questions/25710600/content-transfer-encoding-7bit-or-8-bit
 		hdr.Del(cteKey)
 	case "base64":
-		hdr.Del(cteKey)
 		decoder = func(r io.Reader) io.Reader {
+			hdr.Del(cteKey)
 			//return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}
 			//return B64FilterReader(r, base64.StdEncoding)
 			logger.Info("base64 decoder")
 			return NewB64Decoder(base64.StdEncoding, r)
 		}
 	case "quoted-printable":
-		hdr.Del(cteKey)
 		decoder = func(r io.Reader) io.Reader {
+			hdr.Del(cteKey)
 			br := bufio.NewReaderSize(r, 1024)
 			first, _ := br.Peek(1024)
 			enc := qprintable.BinaryEncoding
