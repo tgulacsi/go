@@ -143,11 +143,12 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 //
 // By default this is recursive, except dontDescend is true.
 func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *MailPart) error {
-	msg.Header = DecodeHeaders(msg.Header)
-	ct, params, decoder, err := getCT(msg.Header)
+	hdr := textproto.MIMEHeader(DecodeHeaders(msg.Header))
+	ct, params, decoder, err := getCT(hdr)
 	if err != nil {
 		return err
 	}
+	msg.Header = mail.Header(hdr)
 	r := msg.Body
 	if decoder != nil {
 		r = decoder(msg.Body)
@@ -176,7 +177,6 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 		Level:  level + 1,
 		Seq:    nextSeqInt(),
 	}
-	child.Header.Del("Content-Transfer-Encoding")
 	//fmt.Println("WM", child.Seq, "ct", child.ContentType)
 	if hsh := msg.Header.Get("X-Hash"); hsh != "" && child.Header.Get(HashKeyName) == "" {
 		child.Header.Add(HashKeyName, hsh)
@@ -296,14 +296,13 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 
 // returns the content-type, params and a decoder for the body of the multipart
 func getCT(
-	header map[string][]string,
+	hdr textproto.MIMEHeader,
 ) (
 	contentType string,
 	params map[string]string,
 	decoder func(io.Reader) io.Reader,
 	err error,
 ) {
-	hdr := mail.Header(header)
 	contentType = hdr.Get("Content-Type")
 	//infof("getCT ct=%q", contentType)
 	if contentType == "" {
@@ -346,11 +345,14 @@ func getCT(
 		}
 	}
 	contentType = nct
-	te := strings.ToLower(hdr.Get("Content-Transfer-Encoding"))
+	const cteKey = "Content-Transfer-Encoding"
+	te := strings.ToLower(hdr.Get(cteKey))
 	switch te {
 	case "", "7bit", "8bit", "binary":
 		// https://stackoverflow.com/questions/25710600/content-transfer-encoding-7bit-or-8-bit
+		hdr.Del(cteKey)
 	case "base64":
+		hdr.Del(cteKey)
 		decoder = func(r io.Reader) io.Reader {
 			//return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}
 			//return B64FilterReader(r, base64.StdEncoding)
@@ -358,17 +360,16 @@ func getCT(
 			return NewB64Decoder(base64.StdEncoding, r)
 		}
 	case "quoted-printable":
-		if !strings.HasPrefix(contentType, "multipart/") {
-			decoder = func(r io.Reader) io.Reader {
-				br := bufio.NewReaderSize(r, 1024)
-				first, _ := br.Peek(1024)
-				enc := qprintable.BinaryEncoding
-				if len(first) > 0 {
-					enc = qprintable.DetectEncoding(string(first))
-				}
-				logger.Info("qprintable decoder", "enc", enc)
-				return qprintable.NewDecoder(enc, br)
+		hdr.Del(cteKey)
+		decoder = func(r io.Reader) io.Reader {
+			br := bufio.NewReaderSize(r, 1024)
+			first, _ := br.Peek(1024)
+			enc := qprintable.BinaryEncoding
+			if len(first) > 0 {
+				enc = qprintable.DetectEncoding(string(first))
 			}
+			logger.Info("qprintable decoder", "enc", enc)
+			return qprintable.NewDecoder(enc, br)
 		}
 	default:
 		logger.Info("unknown", "transfer-encoding", te)
