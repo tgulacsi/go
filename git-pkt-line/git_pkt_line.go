@@ -43,12 +43,20 @@ func (r *Reader) fill() error {
 		return err
 	}
 	length := int(r.length[0]<<8) + int(r.length[1])
-	if length < 4 || length > 65520 {
+	length -= 4
+	if length < 0 || length > 65516 {
 		return fmt.Errorf("invalid length: %d", length)
+	}
+	if length == 0 {
+		return nil
+	}
+
+	if cap(r.buf) < length {
+		r.buf = make([]byte, length)
 	}
 
 	// A pkt-line is a variable length binary string. The first four bytes of the line, the pkt-len, indicates the total length of the line, in hexadecimal. The pkt-len includes the 4 bytes used to contain the length’s hexadecimal representation.
-	n, err = io.ReadFull(r.br, r.buf[:length-4])
+	n, err = io.ReadFull(r.br, r.buf[:length])
 	r.buf = r.buf[:n]
 	return err
 }
@@ -57,6 +65,10 @@ func (r *Reader) fill() error {
 type Writer struct{ io.Writer }
 
 func (w Writer) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		_, err := w.Writer.Write([]byte("0004"))
+		return 0, err
+	}
 	var off int
 	for off < len(p) {
 		slice := p[off:]
