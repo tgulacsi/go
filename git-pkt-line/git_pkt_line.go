@@ -7,11 +7,64 @@ package gitpktline
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 )
+
+// https://git-scm.com/docs/gitattributes
+
+type LongRunningProcess struct {
+	r *Reader
+	w Writer
+}
+
+func NewLongRunningProcess(r io.Reader, w io.Writer, caps []string) *LongRunningProcess {
+	return &LongRunningProcess{r: NewReader(r), w: NewWriter(w)}
+}
+
+// Handshake initates the handshake with the parent git process, advertises the given capabilities.
+func (p *LongRunningProcess) Handshake(caps []string) error {
+	first, err := p.r.ReadPacket()
+	if err != nil {
+		return err
+	}
+
+	if !(bytes.HasPrefix(first, []byte("git-")) && bytes.HasSuffix(first, []byte("-client"))) {
+		return fmt.Errorf("got %q, wanted git-*-client", first)
+	}
+	lines, err := p.r.ReadPackets()
+	if err != nil {
+		return err
+	}
+	if err = p.w.WritePackets(
+		append(first[:len(first)-6], []byte("server")...),
+		[]byte("version=2"),
+	); err != nil {
+		return err
+	}
+
+	var pkts [][]byte
+	lines, err = p.r.ReadPackets()
+	for _, line := range lines {
+		if bytes.HasPrefix(line, []byte("capability=")) {
+			for _, c := range caps {
+				if c == string(line[len("capability="):]) {
+					pkts = append(pkts, line)
+				}
+			}
+		}
+	}
+	if err = p.w.WritePackets(pkts...); err != nil {
+		return err
+	}
+	if len(pkts) == 0 {
+		return fmt.Errorf("no common capabilities (got %q, have %q)", lines, pkts)
+	}
+	return nil
+}
 
 // Reader reads git-pkt-line formatted slices.
 type Reader struct {
@@ -23,6 +76,34 @@ type Reader struct {
 
 // NewReader returns a new git-pkt-line reader.
 func NewReader(r io.Reader) *Reader { return &Reader{br: bufio.NewReaderSize(r, 65520)} }
+
+// ReadPackets reads the input till a flush packet.
+func (r *Reader) ReadPackets() ([][]byte, error) {
+	var lines [][]byte
+	for {
+		line, err := r.ReadPacket()
+		if len(line) == 0 || bytes.Equal(line, []byte("0000")) {
+			return lines, err
+		}
+		lines = append(lines, append([]byte(nil), line...))
+		if err != nil {
+			return lines, err
+		}
+	}
+	return lines, nil
+}
+
+// ReadPacket reads and returns then next packet (line).
+// The returned buffer is valid only till the next call to ReadPacket/Read.
+func (r *Reader) ReadPacket() ([]byte, error) {
+	var err error
+	if len(r.buf) == 0 {
+		err = r.fill()
+	}
+	p := r.buf
+	r.buf = r.buf[:0]
+	return p, err
+}
 
 // https://git-scm.com/docs/protocol-common
 func (r *Reader) Read(p []byte) (int, error) {
@@ -108,4 +189,14 @@ func (w Writer) Write(p []byte) (int, error) {
 		}
 	}
 	return off, nil
+}
+
+func (w Writer) WritePackets(pkts ...[]byte) error {
+	for _, p := range pkts {
+		if _, err := w.Write(p); err != nil {
+			return err
+		}
+	}
+	_, err := w.Write([]byte("0000"))
+	return err
 }
