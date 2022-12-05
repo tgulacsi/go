@@ -35,8 +35,7 @@ func (p *LongRunningProcess) Handshake(caps []string) error {
 	if !(bytes.HasPrefix(first, []byte("git-")) && bytes.HasSuffix(first, []byte("-client"))) {
 		return fmt.Errorf("got %q, wanted git-*-client", first)
 	}
-	lines, err := p.r.ReadPackets()
-	if err != nil {
+	if _, err = p.r.ReadPackets(); err != nil {
 		return err
 	}
 	if err = p.w.WritePackets(
@@ -47,7 +46,10 @@ func (p *LongRunningProcess) Handshake(caps []string) error {
 	}
 
 	var pkts [][]byte
-	lines, err = p.r.ReadPackets()
+	lines, err := p.r.ReadPackets()
+	if err != nil {
+		return err
+	}
 	for _, line := range lines {
 		if bytes.HasPrefix(line, []byte("capability=")) {
 			for _, c := range caps {
@@ -138,7 +140,7 @@ func (r *Reader) fill() error {
 	if _, err = hex.Decode(r.length[:2], r.length[:4]); err != nil {
 		return err
 	}
-	length := int(r.length[0]<<8) + int(r.length[1])
+	length := int(r.length[0])<<8 + int(r.length[1])
 	length -= 4
 	if length < 0 || length > 65516 {
 		return fmt.Errorf("invalid length: %d", length)

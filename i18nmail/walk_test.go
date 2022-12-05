@@ -120,7 +120,7 @@ func TestWalk(t *testing.T) {
 					if err != nil || n == 0 {
 						t.Errorf("%q %d/%d. read body of: %v", tcName, mp.Level, mp.Seq, err)
 					}
-					t.Logf("\n--- %q %d/%d. part ---\n%q %#v\n%s", tcName, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header)
+					t.Logf("\n--- %q %d/%d. part ---\nContent-Type=%q MediaType=%#v\nHeader=%s", tcName, mp.Level, mp.Seq, mp.ContentType, mp.MediaType, mp.Header)
 					t.Log(strconv.Quote(string(b[:n])))
 					return nil
 				},

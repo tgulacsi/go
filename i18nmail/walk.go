@@ -198,14 +198,16 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 	logger := logger.WithValues("level", mp.Level, "seq", mp.Seq)
 	boundary := mp.MediaType["boundary"]
-	if boundary == "" {
+	if len(mp.MediaType) == 0 || boundary == "" {
 		ct, params, _, ctErr := getCT(mp.Header)
 		if ctErr != nil {
 			return fmt.Errorf("getCT(%v): %w", mp.Header, ctErr)
 		}
 		if boundary = params["boundary"]; boundary != "" {
 			mp.ContentType = ct
-			mp.MediaType = params
+			if len(mp.MediaType) == 0 {
+				mp.MediaType = params
+			}
 		}
 	}
 	parts := multipart.NewReader(
@@ -317,7 +319,7 @@ func getCT(
 		var ok bool
 		if cd != "" {
 			cd, cdParams, _ := mime.ParseMediaType(cd)
-			if params == nil {
+			if len(params) == 0 {
 				params = cdParams
 			} else {
 				for k, v := range cdParams {
