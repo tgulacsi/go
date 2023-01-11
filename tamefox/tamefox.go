@@ -20,25 +20,25 @@ import (
 )
 
 /*
-
 #!/bin/sh
 firefox=
-swaymsg -m -t subscribe '["window"]' | \
-	jq -r --unbuffered '.change +" "+  .container.app_id + " " + (.container.pid | tostring)' | \
-	grep --line-buffered '^focus ' | \
-	while read -r x app pid; do
-		#echo "# x=$x app=$app pid=$pid" >&2
-		if [ "$app" = 'firefox' ]; then
-			echo "CONT $pid" >&2
-			firefox=$pid
-			kill -CONT $pid
-			pkill -CONT -P $pid
-		elif [ -n "$firefox" ]; then
-			echo "STOP $firefox" >&2
-			pkill -STOP -P $firefox
-			kill -STOP $firefox
-		fi
-	done
+
+	swaymsg -m -t subscribe '["window"]' | \
+		jq -r --unbuffered '.change +" "+  .container.app_id + " " + (.container.pid | tostring)' | \
+		grep --line-buffered '^focus ' | \
+		while read -r x app pid; do
+			#echo "# x=$x app=$app pid=$pid" >&2
+			if [ "$app" = 'firefox' ]; then
+				echo "CONT $pid" >&2
+				firefox=$pid
+				kill -CONT $pid
+				pkill -CONT -P $pid
+			elif [ -n "$firefox" ]; then
+				echo "STOP $firefox" >&2
+				pkill -STOP -P $firefox
+				kill -STOP $firefox
+			fi
+		done
 */
 func main() {
 	if err := Main(); err != nil {
@@ -98,7 +98,8 @@ func Main() error {
 		if change.Change != "focus" {
 			continue
 		}
-		if strings.EqualFold(change.Container.AppID, *flagProg) {
+		if strings.EqualFold(change.Container.AppID, *flagProg) ||
+			(*flagProg == "firefox" && strings.EqualFold(change.Container.AppID, "firefox-esr")) {
 			ff = change.Container.PID
 			kill(ff, false, 999)
 			stopTimer()
