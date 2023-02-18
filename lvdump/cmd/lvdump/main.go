@@ -1,4 +1,4 @@
-// Copyright 2017 The Go Authors. All rights reserved.
+// Copyright 2017, 2023 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -10,15 +10,14 @@ import (
 	"flag"
 	"os"
 
-	"github.com/go-kit/kit/log"
-	"github.com/tgulacsi/go/loghlp/kitloghlp"
+	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/tgulacsi/go/lvdump"
 )
 
-var logger = kitloghlp.Stringify{Logger: log.NewLogfmtLogger(os.Stderr)}
+var logger = zlog.New(os.Stderr)
 
 func main() {
-	lvdump.Log = log.With(logger, "lib", "lvdump").Log
+	lvdump.Log = logger.WithGroup("lvdump").Log
 
 	flag.Parse()
 	if err := lvdump.Dump(os.Stdout, flag.Arg(0)); err != nil {

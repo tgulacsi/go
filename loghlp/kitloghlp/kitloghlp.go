@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Tamás Gulácsi
+Copyright 2017, 2023 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 )
 
 // LogFunc is the Log function.
@@ -52,6 +52,7 @@ func (t testLog) Write(p []byte) (int, error) {
 // Stringify stringifies every value to make it printable by logfmt.
 //
 // Example:
+//
 //	Logger := log.LogfmtLogger(os.Stderr)
 //	Logger = log.Stringify{Logger}
 type Stringify struct {
