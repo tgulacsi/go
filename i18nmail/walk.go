@@ -7,6 +7,7 @@ package i18nmail
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/base64"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/sloonz/go-qprintable"
@@ -120,8 +122,14 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if _, err := io.Copy(h, part.GetBody()); err != nil {
 		return fmt.Errorf("ready part: %w", err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	body, err := DecodeSMIME(ctx, part.GetBody())
+	cancel()
+	if err != nil {
+		body = part.GetBody()
+	}
 	msg, err := mail.ReadMessage(io.MultiReader(
-		part.GetBody(),
+		body,
 		bytes.NewReader([]byte("\r\n\r\n")),
 	))
 	hsh := base64.URLEncoding.EncodeToString(h.Sum(nil))
