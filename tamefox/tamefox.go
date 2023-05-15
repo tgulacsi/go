@@ -1,4 +1,4 @@
-// Copyright 2020, 2022 Tamás Gulácsi. All rights reserved.
+// Copyright 2020, 2023 Tamás Gulácsi. All rights reserved.
 
 package main
 
@@ -99,7 +99,9 @@ func Main() error {
 			continue
 		}
 		if strings.EqualFold(change.Container.AppID, *flagProg) ||
-			(*flagProg == "firefox" && strings.EqualFold(change.Container.AppID, "firefox-esr")) {
+			(*flagProg == "firefox" &&
+				(strings.EqualFold(change.Container.AppID, "firefox") ||
+					strings.EqualFold(change.Container.AppID, "firefox-esr"))) {
 			ff = change.Container.PID
 			kill(ff, false, 999)
 			stopTimer()
