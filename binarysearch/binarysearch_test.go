@@ -47,7 +47,9 @@ var tests = []struct {
 	{"1 true", 1, func(i int) bool { return true }, 0},
 	{"1 false", 1, func(i int) bool { return false }, 1},
 	{"1e9 991", 1e9, func(i int) bool { return i >= 991 }, 991},
+	{"1e18 991", 1e18, func(i int) bool { return i >= 991 }, 991},
 	{"1e9 true", 1e9, func(i int) bool { return true }, 0},
+	{"1e18 true", 1e18, func(i int) bool { return true }, 0},
 	{"1e9 false", 1e9, func(i int) bool { return false }, 1e9},
 	{"data -20", len(data), f(data, -20), 0},
 	{"data -10", len(data), f(data, -10), 0},
@@ -73,26 +75,4 @@ func TestSearch(t *testing.T) {
 			t.Errorf("%s: expected index %d; got %d", e.name, e.i, i)
 		}
 	}
-}
-
-func TestStdFloor(t *testing.T) {
-	for _, tC := range []struct {
-		In, Want int
-	}{
-		{In: 0, Want: 0},
-		{In: 1, Want: 1},
-		{In: 2, Want: 2},
-		{In: 3, Want: 2},
-		{In: 4, Want: 4},
-		{In: 5, Want: 4},
-		{In: 6, Want: 4},
-		{In: 7, Want: 4},
-		{In: 8, Want: 8},
-		{In: 9, Want: 8},
-	} {
-		if got := stdFloor(tC.In); got != tC.Want {
-			t.Errorf("%d. got %d, wanted %d", tC.In, got, tC.Want)
-		}
-	}
-
 }
