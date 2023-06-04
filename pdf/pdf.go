@@ -23,15 +23,16 @@ import (
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
 // Log is used for logging.
 var Log = func(...interface{}) error { return nil }
 
-var config = pdfcpu.NewDefaultConfiguration()
+var config = model.NewDefaultConfiguration()
 
 func init() {
-	config.ValidationMode = pdfcpu.ValidationNone
+	config.ValidationMode = model.ValidationNone
 }
 
 // MergeFiles merges the given sources into dest.
