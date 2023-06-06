@@ -1,5 +1,5 @@
 /*
-Copyright 2017, 2022 Tamás Gulácsi
+Copyright 2017, 2023 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,15 +54,23 @@ func GetRawTTYEncoding() encoding.Encoding {
 
 // GetTTYEncodingName returns the TTY encoding's name, or empty if not found.
 func GetTTYEncodingName() string {
-	lang := os.Getenv("LANG")
+	return GetLangEncodingName(os.Getenv("LANG"))
+}
+
+// GetLangEncodingName returns the encoding's name from the given LANG string.
+func GetLangEncodingName(lang string) string {
 	if i := strings.IndexByte(lang, '.'); i >= 0 {
 		lang = lang[i+1:]
-		if strings.HasPrefix(lang, "iso8859") && len(lang) > 7 && '0' <= lang[7] && lang[7] <= '9' {
-			return lang[:7] + "-" + lang[7:]
-		}
-		return lang
 	}
-	return ""
+	if len(lang) > 7 &&
+		strings.EqualFold(lang[:7], "iso8859") {
+		lang = lang[7:]
+		for lang != "" && lang[0] == '-' || lang[0] == '_' {
+			lang = lang[1:]
+		}
+		return "iso8859-" + lang
+	}
+	return strings.ToLower(lang)
 }
 
 // MaskInOutTTY mask os.Stdin, os.Stdout, os.Stderr with the TTY encoding, if any.
