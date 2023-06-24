@@ -174,6 +174,8 @@ github.com/hhrutter/tiff v1.0.0/go.mod h1:zluYmeCkNexc8HFzfc2MTVwA8gcPuFQp/ngjvI
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
+github.com/jacobsa/fuse v0.0.0-20230509090321-7263f3a2b474 h1:6z3Yj4PZKk3n18T2s7RYCa4uBCOpeLoQfDH/mUZTrVo=
+github.com/jacobsa/fuse v0.0.0-20230509090321-7263f3a2b474/go.mod h1:XUKuYy1M4vamyxQjW8/WZBTxyZ0NnUiq+kkA+WWOfeI=
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=

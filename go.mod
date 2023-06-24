@@ -10,6 +10,7 @@ require (
 	github.com/go-logr/zerologr v1.2.3
 	github.com/hack-pad/hackpadfs v0.2.0
 	github.com/hashicorp/go-retryablehttp v0.7.2
+	github.com/jacobsa/fuse v0.0.0-20230509090321-7263f3a2b474
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/klauspost/compress v1.15.15
 	github.com/kylelemons/godebug v1.1.0
