@@ -7,6 +7,8 @@ package fsfuse
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"path"
@@ -50,6 +52,11 @@ func NewFS(fsys fs.FS, uid, gid uint32, cacheDur time.Duration) fuse.Server {
 	}
 	return fuseutil.NewFileSystemServer(&FS{
 		fsys: fsys, uid: uid, gid: gid, cacheDur: cacheDur,
+		inodeSeq:       1,
+		inodePaths:     map[fuseops.InodeID]string{1: "."},
+		pathInodes:     map[string]fuseops.InodeID{"": 1, ".": 1},
+		inodeRefCounts: map[fuseops.InodeID]uint32{1: 1},
+		files:          make(map[fuseops.HandleID]fs.File),
 	})
 }
 
@@ -78,6 +85,7 @@ func (f *FS) infoAttributes(fi fs.FileInfo) fuseops.InodeAttributes {
 		Atime: fi.ModTime(),
 		Mtime: fi.ModTime(),
 		Ctime: fi.ModTime(),
+		Nlink: 1,
 		Uid:   f.uid, Gid: f.gid,
 	}
 }
@@ -88,12 +96,15 @@ func (f *FS) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) error {
 	f.mu.RUnlock()
 	file, err := f.fsys.Open(fn)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("%w: %w", fuse.ENOENT, err)
+		}
 		return err
 	}
 	fi, err := file.Stat()
 	file.Close()
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", fuse.EIO, err)
 	}
 	op.Entry = fuseops.ChildInodeEntry{
 		Child:      f.getPathInode(fn),
@@ -112,14 +123,20 @@ func (f *FS) GetInodeAttributes(ctx context.Context, op *fuseops.GetInodeAttribu
 	f.mu.RLock()
 	path := f.inodePaths[op.Inode]
 	f.mu.RUnlock()
+	if path == "" && op.Inode == 1 {
+		path = "."
+	}
 	file, err := f.fsys.Open(path)
 	if err != nil {
-		return err
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("%w: %w", fuse.ENOENT, err)
+		}
+		return fmt.Errorf("%w: open %q: %w", fuse.EIO, path, err)
 	}
 	fi, err := file.Stat()
 	file.Close()
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", fuse.EIO, err)
 	}
 	op.Attributes = f.infoAttributes(fi)
 	if f.cacheDur != 0 {
@@ -147,15 +164,17 @@ func (f *FS) forgetInode(inode fuseops.InodeID, N uint64) error {
 }
 
 func (f *FS) ForgetInode(ctx context.Context, op *fuseops.ForgetInodeOp) error {
-	f.forgetInode(op.Inode, 1)
-	return nil
+	return f.forgetInode(op.Inode, 1)
 }
 
 func (f *FS) BatchForget(ctx context.Context, op *fuseops.BatchForgetOp) error {
+	var firstErr error
 	for _, e := range op.Entries {
-		f.forgetInode(e.Inode, e.N)
+		if err := f.forgetInode(e.Inode, e.N); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	return nil
+	return firstErr
 }
 
 func (f *FS) openFile(inode fuseops.InodeID) (fuseops.HandleID, error) {
@@ -163,10 +182,13 @@ func (f *FS) openFile(inode fuseops.InodeID) (fuseops.HandleID, error) {
 	path, ok := f.inodePaths[inode]
 	f.mu.RUnlock()
 	if !ok {
-		return 0, fuse.ENOENT
+		return 0, fmt.Errorf("%d: %w", inode, fuse.ENOENT)
 	}
 	file, err := f.fsys.Open(path)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, fmt.Errorf("%w: %q: %w", fuse.ENOENT, path, err)
+		}
 		return 0, err
 	}
 	f.mu.Lock()
@@ -179,6 +201,9 @@ func (f *FS) openFile(inode fuseops.InodeID) (fuseops.HandleID, error) {
 func (f *FS) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) error {
 	handle, err := f.openFile(op.Inode)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fuse.ENOENT
+		}
 		return err
 	}
 	op.Handle = handle
@@ -190,21 +215,35 @@ func (f *FS) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) error {
 	dn := f.inodePaths[op.Inode]
 	f.mu.RUnlock()
 	dis, err := fs.ReadDir(f.fsys, dn)
-	if op.Offset < fuseops.DirOffset(len(dis)) {
+	if 0 < op.Offset && op.Offset <= fuseops.DirOffset(len(dis)) {
 		dis = dis[op.Offset:]
 	}
+	op.BytesRead = 0
 	for i, di := range dis {
 		inode := f.getPathInode(path.Join(dn, di.Name()))
 		typ := fuseutil.DT_File
-		if di.Type().IsDir() {
-			typ = fuseutil.DT_Directory
+		if t := di.Type() & fs.ModeType; t != 0 {
+			if t&fs.ModeDir != 0 || t.IsDir() {
+				typ = fuseutil.DT_Directory
+			} else if t&fs.ModeCharDevice != 0 {
+				typ = fuseutil.DT_Char
+			} else if t&fs.ModeDevice != 0 {
+				typ = fuseutil.DT_Block
+			} else if t&fs.ModeNamedPipe != 0 {
+				typ = fuseutil.DT_FIFO
+			}
 		}
-		fuseutil.WriteDirent(op.Dst, fuseutil.Dirent{
-			Offset: op.Offset + fuseops.DirOffset(i),
+		n := fuseutil.WriteDirent(op.Dst[op.BytesRead:], fuseutil.Dirent{
+			Offset: op.Offset + fuseops.DirOffset(i+1),
 			Inode:  inode,
 			Name:   di.Name(),
 			Type:   typ,
 		})
+		//log.Println("off:", op.Offset+fuseops.DirOffset(i+1), "bytesRead:", op.BytesRead, "dirents:", n)
+		op.BytesRead += n
+		if n == 0 {
+			break
+		}
 	}
 	return err
 }
