@@ -40,7 +40,7 @@ type FS struct {
 
 const DefaultCacheDur = 356 * 24 * time.Hour
 
-// NewFS returns a fuser.Server for the given fs.FS.
+// NewFS returns a fuse.Server for the given fs.FS.
 //
 // If cacheDur < 0 then the caching will be disabled;
 // if cacheDur == 0 then the default 1 year will be used.
