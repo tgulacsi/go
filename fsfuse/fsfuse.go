@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
+	"os"
 	"path"
 	"sync"
 	"sync/atomic"
@@ -40,24 +42,99 @@ type FS struct {
 
 const DefaultCacheDur = 356 * 24 * time.Hour
 
-// NewFS returns a fuse.Server for the given fs.FS.
+// options zero value means the default: process' uid,gid, DefaultCacheDur
+type options struct {
+	uid, gid int32
+	cacheDur time.Duration
+}
+
+// Option sets an option on options.
+type Option func(*options)
+
+// WithUid sets the uid for the mount.
+func WithUid(uid uint32) Option { return func(o *options) { o.uid = int32(uid) - 1 } }
+
+// WithGid sets the gid for the mount.
+func WithGid(uid uint32) Option { return func(o *options) { o.uid = int32(uid) - 1 } }
+
+// WithCacheDur sets the cache duration for the mount.
+func WithCacheDur(dur time.Duration) Option { return func(o *options) { o.cacheDur = dur - 1 } }
+
+// NewServer returns a fuse.Server for the given fs.FS.
+func NewServer(fsys fs.FS, opts ...Option) fuse.Server {
+	return fuseutil.NewFileSystemServer(New(fsys, opts...))
+}
+func fix[T int32 | time.Duration](i, d T) T {
+	if i < 0 {
+		return 0
+	}
+	if i == 0 {
+		return d
+	}
+	return i + 1
+}
+
+// New returns an *FS, with the given Options.
 //
 // If cacheDur < 0 then the caching will be disabled;
 // if cacheDur == 0 then the default 1 year will be used.
-func NewFS(fsys fs.FS, uid, gid uint32, cacheDur time.Duration) fuse.Server {
-	if cacheDur < 0 {
-		cacheDur = 0
-	} else if cacheDur == 0 {
-		cacheDur = DefaultCacheDur
+func New(fsys fs.FS, opts ...Option) *FS {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
 	}
-	return fuseutil.NewFileSystemServer(&FS{
-		fsys: fsys, uid: uid, gid: gid, cacheDur: cacheDur,
+	return &FS{
+		fsys:           fsys,
+		uid:            uint32(fix(o.uid, int32(os.Getuid()))),
+		gid:            uint32(fix(o.gid, int32(os.Getuid()))),
+		cacheDur:       fix(o.cacheDur, DefaultCacheDur),
 		inodeSeq:       1,
 		inodePaths:     map[fuseops.InodeID]string{1: "."},
 		pathInodes:     map[string]fuseops.InodeID{"": 1, ".": 1},
 		inodeRefCounts: map[fuseops.InodeID]uint32{1: 1},
 		files:          make(map[fuseops.HandleID]fs.File),
-	})
+	}
+}
+
+// Mount the fuse.Server at mountPath.
+func Mount(ctx context.Context, f fuse.Server, mountPath string) (MountedFileSystem, error) {
+	m, err := fuse.Mount(mountPath, f,
+		&fuse.MountConfig{
+			OpContext: ctx,
+			ReadOnly:  true,
+			//DebugLogger: log.Default(),
+			ErrorLogger: log.Default(),
+		},
+	)
+	if err != nil {
+		return MountedFileSystem{}, err
+	}
+	return MountedFileSystem{MountedFileSystem: m, Path: mountPath}, nil
+}
+
+// Unmount the mountPath.
+func Unmount(mountPath string) error { return fuse.Unmount(mountPath) }
+
+// MountedFileSystem wraps a *fuse.MountedFileSystem to store the mount path.
+type MountedFileSystem struct {
+	*fuse.MountedFileSystem
+	Path string
+}
+
+// Mount the FS on mountPath, with the given Context.
+func (f *FS) Mount(ctx context.Context, mountPath string) (MountedFileSystem, error) {
+	return Mount(ctx, fuseutil.NewFileSystemServer(f), mountPath)
+}
+
+// Unmount the MountedFileSystem, waiting for finish till Context.Deadline.
+func (m MountedFileSystem) Unmount(ctx context.Context) error {
+	if m.MountedFileSystem == nil {
+		return nil
+	}
+	if err := fuse.Unmount(m.Path); err != nil {
+		return err
+	}
+	return m.MountedFileSystem.Join(ctx)
 }
 
 func (f *FS) getPathInode(fn string) fuseops.InodeID {
@@ -288,9 +365,9 @@ func (f *FS) ReadFile(ctx context.Context, op *fuseops.ReadFileOp) error {
 		data, err = spec.ReadFile(path)
 		op.BytesRead = copy(op.Dst, data[op.Offset:])
 	} else {
-		file, err := f.fsys.Open(path)
-		if err != nil {
-			return err
+		file, openErr := f.fsys.Open(path)
+		if openErr != nil {
+			return openErr
 		}
 		defer file.Close()
 		if op.Offset != 0 {
@@ -317,3 +394,5 @@ func (f *FS) ReleaseFileHandle(ctx context.Context, op *fuseops.ReleaseFileHandl
 	}
 	return nil
 }
+
+func (f *FS) FlushFile(context.Context, *fuseops.FlushFileOp) error { return nil }

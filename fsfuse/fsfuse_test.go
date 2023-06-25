@@ -7,7 +7,6 @@ package fsfuse_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"sort"
@@ -16,7 +15,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/jacobsa/fuse"
 	"github.com/tgulacsi/go/fsfuse"
 )
 
@@ -28,28 +26,14 @@ func TestDirFS(t *testing.T) {
 	defer os.Remove(tempDir)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	m, err := fuse.Mount(tempDir, fsfuse.NewFS(
-		os.DirFS(".."),
-		uint32(os.Geteuid()),
-		uint32(os.Getegid()),
-		0,
-	),
-		&fuse.MountConfig{
-			OpContext: ctx,
-			ReadOnly:  true,
-			//DebugLogger: log.Default(),
-			ErrorLogger: log.Default(),
-		},
-	)
+	m, err := fsfuse.Mount(ctx, fsfuse.NewServer(os.DirFS("..")), tempDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer func() {
-		defer m.Join(ctx)
-		if err := fuse.Unmount(tempDir); err != nil {
-			t.Error(err)
-		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		m.Unmount(ctx)
 	}()
 
 	{
