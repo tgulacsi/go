@@ -44,7 +44,7 @@ const DefaultCacheDur = 356 * 24 * time.Hour
 
 // options zero value means the default: process' uid,gid, DefaultCacheDur
 type options struct {
-	uid, gid int32
+	uid, gid uint32
 	cacheDur time.Duration
 }
 
@@ -52,26 +52,23 @@ type options struct {
 type Option func(*options)
 
 // WithUid sets the uid for the mount.
-func WithUid(uid uint32) Option { return func(o *options) { o.uid = int32(uid) - 1 } }
+func WithUid(uid uint32) Option { return func(o *options) { o.uid = uid + 1 } }
 
 // WithGid sets the gid for the mount.
-func WithGid(uid uint32) Option { return func(o *options) { o.uid = int32(uid) - 1 } }
+func WithGid(uid uint32) Option { return func(o *options) { o.uid = uid + 1 } }
 
 // WithCacheDur sets the cache duration for the mount.
-func WithCacheDur(dur time.Duration) Option { return func(o *options) { o.cacheDur = dur - 1 } }
+func WithCacheDur(dur time.Duration) Option { return func(o *options) { o.cacheDur = dur + 1 } }
 
 // NewServer returns a fuse.Server for the given fs.FS.
 func NewServer(fsys fs.FS, opts ...Option) fuse.Server {
 	return fuseutil.NewFileSystemServer(New(fsys, opts...))
 }
-func fix[T int32 | time.Duration](i, d T) T {
-	if i < 0 {
-		return 0
-	}
+func fix[T uint32 | time.Duration](i, d T) T {
 	if i == 0 {
 		return d
 	}
-	return i + 1
+	return i - 1
 }
 
 // New returns an *FS, with the given Options.
@@ -85,8 +82,8 @@ func New(fsys fs.FS, opts ...Option) *FS {
 	}
 	return &FS{
 		fsys:           fsys,
-		uid:            uint32(fix(o.uid, int32(os.Getuid()))),
-		gid:            uint32(fix(o.gid, int32(os.Getuid()))),
+		uid:            fix(o.uid, uint32(os.Getuid())),
+		gid:            fix(o.gid, uint32(os.Getuid())),
 		cacheDur:       fix(o.cacheDur, DefaultCacheDur),
 		inodeSeq:       1,
 		inodePaths:     map[fuseops.InodeID]string{1: "."},
