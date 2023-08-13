@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-logr/logr/testr"
+	"github.com/UNO-SOFT/zlog/v2"
 )
 
 func TestMailAddress(t *testing.T) {
@@ -44,7 +44,7 @@ func TestMailAddress(t *testing.T) {
 	}
 }
 func TestWalk(t *testing.T) {
-	logger = testr.New(t)
+	logger = zlog.NewT(t).SLog()
 	b := make([]byte, 1024)
 	dis, err := os.ReadDir("testdata")
 	if len(dis) == 0 && err != nil {
@@ -112,7 +112,7 @@ func TestWalk(t *testing.T) {
 						panic(err)
 					}
 					if _, nextErr := io.Copy(io.Discard, body); nextErr != nil {
-						logger.Error(nextErr, "next error")
+						logger.Error("next error", "error", nextErr)
 						if err == nil {
 							err = nextErr
 						}

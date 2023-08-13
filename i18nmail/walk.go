@@ -22,8 +22,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/go-logr/logr"
+"log/slog"
+	
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/iohlp"
 )
@@ -35,7 +35,7 @@ const (
 )
 
 var (
-	logger = logr.Discard()
+	logger = slog.Default()
 
 	// CheckEncoding is true if we should check Base64 encodings
 	CheckEncoding = true
@@ -48,7 +48,7 @@ var (
 )
 
 // SetLogger sets the package-level logger
-func SetLogger(lgr logr.Logger) { logger = lgr }
+func SetLogger(lgr *slog.Logger) { logger = lgr }
 
 // TodoFunc is the type of the function called by Walk and WalkMultipart.
 type TodoFunc func(mp MailPart) error
@@ -136,7 +136,7 @@ func Walk(part MailPart, todo TodoFunc, dontDescend bool) error {
 	if err != nil {
 		b := make([]byte, 2048)
 		n, _ := part.Body.ReadAt(b, 0)
-		logger.Error(err, "ReadAndHashMessage", "message", string(b[:n]))
+		logger.Error("ReadAndHashMessage", "message", string(b[:n]), "error", err)
 		return fmt.Errorf("mail.ReadMessage: %w", err)
 	}
 	if hsh != "" {
@@ -163,10 +163,10 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 	}
 	childBody, err := MakeSectionReader(r, bodyThreshold)
 	if err != nil {
-		logger.Error(err, "read body")
+		logger.Error("read body", "error", err)
 		return fmt.Errorf("MakeSectionReader: %w", err)
 	}
-	logger.V(1).Info("Walk message", "headers", msg.Header, "body", childBody.Size())
+	logger.Debug("Walk message", "headers", msg.Header, "body", childBody.Size())
 	if err != nil {
 		return fmt.Errorf("WalkMessage: %w", err)
 	}
@@ -204,7 +204,7 @@ func WalkMessage(msg *mail.Message, todo TodoFunc, dontDescend bool, parent *Mai
 //
 // By default this is recursive, except dontDescend is true.
 func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
-	logger := logger.WithValues("level", mp.Level, "seq", mp.Seq)
+	logger := logger.With(slog.Int("level", mp.Level), slog.Int("seq", mp.Seq))
 	boundary := mp.MediaType["boundary"]
 	if len(mp.MediaType) == 0 || boundary == "" {
 		ct, params, _, ctErr := getCT(mp.Header)
@@ -239,7 +239,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		}
 		sr, readErr := MakeSectionReader(part, bodyThreshold)
 		if readErr != nil {
-			logger.Error(readErr, "read part")
+			logger.Error("read part", "error", readErr, )
 			return fmt.Errorf("read part: %w", readErr)
 		}
 		i++
@@ -257,10 +257,10 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 			Level:  mp.Level + 1,
 			Seq:    nextSeqInt(),
 		}
-		logger := logger.WithValues("seq", child.Seq, "level", child.Level)
+		logger := logger.With(slog.Int("seq", child.Seq), slog.Int("level", child.Level))
 		//fmt.Println(i, child.Seq, child.Header.Get("Content-Type"))
 		child.Header.Add(HashKeyName, mp.Header.Get(HashKeyName))
-		logger.Info("child", "ct", child.ContentType, "params", child.MediaType, "header", child.Header)
+		logger.Debug("child", slog.String("ct", child.ContentType), "params", child.MediaType, "header", child.Header)
 
 		if decoder != nil {
 			childBody, err := MakeSectionReader(decoder(child.Body), bodyThreshold)
@@ -277,7 +277,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 				err = Walk(child, todo, dontDescend)
 			}
 			if err != nil {
-				logger.Info("Walk child", "error", err)
+				logger.Warn("Walk child", "error", err)
 				err = fmt.Errorf("Walk child: %w", err)
 				data := make([]byte, 1024)
 				if n, readErr := child.Body.ReadAt(data, 0); readErr == io.EOF && n == 0 {
@@ -366,7 +366,7 @@ func getCT(
 			hdr.Del(cteKey)
 			//return &b64ForceDecoder{Encoding: base64.StdEncoding, r: r}
 			//return B64FilterReader(r, base64.StdEncoding)
-			logger.Info("base64 decoder")
+			logger.Debug("base64 decoder")
 			return NewB64Decoder(base64.StdEncoding, r)
 		}
 	case "quoted-printable":
@@ -378,11 +378,11 @@ func getCT(
 			if len(first) > 0 {
 				enc = qprintable.DetectEncoding(string(first))
 			}
-			logger.Info("qprintable decoder", "enc", enc)
+			logger.Debug("qprintable decoder", "enc", enc)
 			return qprintable.NewDecoder(enc, br)
 		}
 	default:
-		logger.Info("unknown", "transfer-encoding", te)
+		logger.Warn("unknown", "transfer-encoding", te)
 	}
 	return
 }

@@ -241,11 +241,11 @@ func HeadDecode(head string) string {
 	}
 	res, err := WordDecoder.DecodeHeader(head)
 	if err != nil {
-		logger.Error(err, "HeadDecode", "head", head)
+		logger.Error("HeadDecode", "head", head, "error", err)
 		return head
 	}
 	if strings.Contains(res, "=?") && !strings.HasSuffix(res, "=?u...") {
-		logger.V(1).Info("WordDecoder", "head", head, "res", res)
+		logger.Debug("WordDecoder", "head", head, "res", res)
 	}
 	return res
 }
