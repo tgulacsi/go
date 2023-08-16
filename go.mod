@@ -2,7 +2,7 @@ module github.com/tgulacsi/go
 
 require (
 	github.com/BurntSushi/toml v1.2.1
-	github.com/UNO-SOFT/zlog v0.7.4
+	github.com/UNO-SOFT/zlog v0.7.6
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/go-kit/log v0.2.1
