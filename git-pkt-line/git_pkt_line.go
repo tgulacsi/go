@@ -92,7 +92,6 @@ func (r *Reader) ReadPackets() ([][]byte, error) {
 			return lines, err
 		}
 	}
-	return lines, nil
 }
 
 // ReadPacket reads and returns then next packet (line).

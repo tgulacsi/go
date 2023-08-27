@@ -129,11 +129,11 @@ func director(dest string) func(r *http.Request) {
 		if q2.Get("date") == "" {
 			t1, err := time.Parse("2006-01-02", q1.Get("from_date"))
 			if err != nil {
-				log.Printf("from_date=%s: %w", q1.Get("from_date"), err)
+				log.Printf("from_date=%s: %+v", q1.Get("from_date"), err)
 			}
 			t2, err := time.Parse("2006-01-02", q1.Get("to_date"))
 			if err != nil {
-				log.Printf("to_date=%s: %w", q1.Get("to_date"), err)
+				log.Printf("to_date=%s: %+v", q1.Get("to_date"), err)
 			}
 			if t1.IsZero() && t2.IsZero() {
 				t2 = time.Now()

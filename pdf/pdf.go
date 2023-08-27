@@ -40,7 +40,7 @@ func MergeFiles(dest string, sources ...string) error {
 	var err error
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("PANIC: %w", r)
+			err = fmt.Errorf("PANIC: %+v", r)
 		}
 	}()
 	err = api.MergeAppendFile(sources, dest, config)
@@ -52,7 +52,7 @@ func Split(ctx context.Context, destDir, fn string) error {
 	var err error
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("PANIC: %w", r)
+			err = fmt.Errorf("PANIC: %+v", r)
 		}
 	}()
 	err = api.SplitFile(fn, destDir, 1, config)
@@ -67,7 +67,7 @@ func PageNum(ctx context.Context, fn string) (int, error) {
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("PANIC: %w", r)
+			err = fmt.Errorf("PANIC: %+v", r)
 		}
 	}()
 	pdf, err := api.ReadContext(fh, config)

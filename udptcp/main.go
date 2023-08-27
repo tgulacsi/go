@@ -47,7 +47,7 @@ func main() {
 	for {
 		conn, err := net.ListenUDP(listenType, lAddr)
 		if err != nil {
-			log.Printf("%s:%v: %w", listenType, lAddr, err)
+			log.Printf("%s:%v: %+v", listenType, lAddr, err)
 		}
 		log.Println(conn, err)
 		if conn != nil {

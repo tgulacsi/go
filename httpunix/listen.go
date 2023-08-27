@@ -32,7 +32,7 @@ import (
 
 // ListenAndServe is the same as http.ListenAndServe, except it can listen on unix domain sockets.
 func ListenAndServe(ctx context.Context, addr string, hndl http.Handler) error {
-	return ListenAndServeSrv(ctx, addr, http.Server{
+	return ListenAndServeSrv(ctx, addr, &http.Server{
 		Handler: hndl,
 
 		// ReadTimeout is the maximum duration for reading the entire
@@ -67,7 +67,7 @@ func ListenAndServe(ctx context.Context, addr string, hndl http.Handler) error {
 }
 
 // ListenAndServeSrv is the same as http.ListenAndServe, except it can listen on unix domain sockets.
-func ListenAndServeSrv(ctx context.Context, addr string, srv http.Server) error {
+func ListenAndServeSrv(ctx context.Context, addr string, srv *http.Server) error {
 	addr = strings.TrimPrefix(addr, "http+")
 	var ln net.Listener
 	if !strings.HasPrefix(addr, "unix:") {
