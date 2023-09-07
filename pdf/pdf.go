@@ -1,5 +1,5 @@
 /*
-  Copyright 2019, 2020 Tamás Gulácsi
+  Copyright 2019, 2023 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -19,7 +19,9 @@ package pdf
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"os/exec"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
@@ -36,14 +38,47 @@ func init() {
 }
 
 // MergeFiles merges the given sources into dest.
-func MergeFiles(dest string, sources ...string) error {
-	var err error
+func MergeFiles(ctx context.Context, dest string, sources ...string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			slog.Error("panic", "error", r)
 			err = fmt.Errorf("PANIC: %+v", r)
 		}
 	}()
-	err = api.MergeAppendFile(sources, dest, config)
+	_ = os.Remove(dest)
+	fileSize := func(fn string) int64 {
+		if fi, err := os.Stat(fn); err == nil {
+			size := fi.Size()
+			slog.Info("dest", slog.String("file", fn), slog.Int64("size", size))
+			return size
+		}
+		return 0
+	}
+
+	if err = api.MergeAppendFile(sources, dest, config); err == nil {
+		size := fileSize(dest)
+		if size > 5 {
+			return nil
+		}
+	}
+	slog.Warn("MergeAppendFile", "error", err)
+
+	_ = os.Remove(dest)
+	if path, pathErr := exec.LookPath("pdfunite"); pathErr != nil {
+		slog.Warn("pdfunite is not found")
+		return err
+	} else if err := exec.CommandContext(ctx,
+		path,
+		append(append(make([]string, 0, len(sources)+1),
+			sources...), dest)...,
+	).Run(); err == nil {
+		if fileSize(dest) > 5 {
+			return nil
+		}
+		slog.Warn("empty", "file", dest)
+	} else {
+		slog.Warn(path, "error", err)
+	}
 	return err
 }
 
