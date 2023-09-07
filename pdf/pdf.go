@@ -34,9 +34,6 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
-// Log is used for logging.
-var Log = func(...interface{}) error { return nil }
-
 var config = model.NewDefaultConfiguration()
 
 func init() {
