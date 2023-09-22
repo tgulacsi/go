@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/tgulacsi/go/globalctx"
+	"golang.org/x/sync/errgroup"
 )
 
 /*
@@ -63,6 +65,7 @@ func Main() error {
 
 	ctx, cancel := globalctx.Wrap(context.Background())
 	defer cancel()
+	grp, ctx := errgroup.WithContext(ctx)
 	cmd := exec.CommandContext(ctx, "swaymsg", "-m", "-t", "subscribe", "[\"window\"]")
 	pr, err := cmd.StdoutPipe()
 	if err != nil {
@@ -88,48 +91,65 @@ func Main() error {
 			kill(ff, false, 999)
 		}
 	}()
-	dec := json.NewDecoder(pr)
-	for dec.More() {
-		var change Change
-		if err = dec.Decode(&change); err != nil {
-			return err
-		}
-		log.Println(change)
-		if change.Change != "focus" {
-			continue
-		}
-		if strings.EqualFold(change.Container.AppID, *flagProg) ||
-			(*flagProg == "firefox" &&
-				(strings.EqualFold(change.Container.AppID, "firefox") ||
-					strings.EqualFold(change.Container.AppID, "firefox-esr"))) {
-			ff = change.Container.PID
-			kill(ff, false, 999)
-			stopTimer()
-			continue
-		}
-		kill(change.Container.PID, false, 0)
-
-		if *flagAC != "" {
-			b, err := os.ReadFile(*flagAC)
-			if err != nil {
+	grp.Go(func() error {
+		dec := json.NewDecoder(pr)
+		for dec.More() {
+			var change Change
+			if err = dec.Decode(&change); err != nil {
 				return err
 			}
-			b = bytes.TrimSpace(b)
-			if bytes.Equal(bytes.TrimSpace(b), []byte("1")) {
-				log.Println("on AC, skip STOP")
+			log.Println(change)
+			if change.Change != "focus" {
 				continue
 			}
+			if strings.EqualFold(change.Container.AppID, *flagProg) ||
+				(*flagProg == "firefox" &&
+					(strings.EqualFold(change.Container.AppID, "firefox") ||
+						strings.EqualFold(change.Container.AppID, "firefox-esr"))) {
+				ff = change.Container.PID
+				kill(ff, false, 999)
+				stopTimer()
+				continue
+			}
+			kill(change.Container.PID, false, 0)
+
+			if *flagAC != "" {
+				b, err := os.ReadFile(*flagAC)
+				if err != nil {
+					return err
+				}
+				b = bytes.TrimSpace(b)
+				if bytes.Equal(bytes.TrimSpace(b), []byte("1")) {
+					log.Println("on AC, skip STOP")
+					continue
+				}
+			}
+			if timer == nil {
+				timer = time.AfterFunc(timeout, func() {
+					kill(ff, true, *flagStopDepth)
+				})
+				continue
+			}
+			stopTimer()
+			timer.Reset(timeout)
 		}
-		if timer == nil {
-			timer = time.AfterFunc(timeout, func() {
-				kill(ff, true, *flagStopDepth)
-			})
-			continue
+		return nil
+	})
+
+	grp.Go(func() error {
+		ticker := time.NewTicker(time.Minute)
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-ticker.C:
+				if os.Getppid() == 1 {
+					return errors.New("parent is 1")
+				}
+			}
 		}
-		stopTimer()
-		timer.Reset(timeout)
-	}
-	return nil
+	})
+	return grp.Wait()
 }
 
 type Change struct {
