@@ -1,5 +1,5 @@
 /*
-Copyright 2017, 2022 Tamás Gulácsi
+Copyright 2017, 2023 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -40,26 +41,66 @@ import (
 var ErrAuth = errors.New("authentication error")
 
 const (
-	macroExpertURLv0 = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
-	macroExpertURLv1 = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
-	macroExpertURLv2 = `https://macrometeo.hu/meteo-api-app/api/pdf/query`
+	macroExpertURLv0     = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
+	macroExpertURLv1     = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
+	macroExpertURLv2     = `https://macrometeo.hu/meteo-api-app/api/pdf/query`
+	macroExpertURLv3     = `https://frontend.macrometeo.hu/webapi/query-civil`
+	macroExpertTestURLv3 = `https://frontend-test.macrometeo.hu/webapi/query-civil`
 
 	TestHost = "40.68.241.196"
 )
 
 // Options are the space/time coordinates and the required details.
 type Options struct {
-	Since, Till                      time.Time
-	At                               time.Time
-	Address                          string
-	ContractID                       string
-	Host                             string
-	Lat, Lng                         float64
-	Interval                         int
-	NeedThunders, NeedIce, NeedWinds bool
-	NeedRains, NeedRainsIntensity    bool
-	ExtendedLightning                bool
-	WithStatistics                   bool
+	Since, Till                      time.Time `json:"-"`
+	At                               time.Time `json:"eventDate"`
+	Address                          string    `json:"address"`
+	ContractID                       string    `json:"-"`
+	Host                             string    `json:"-"`
+	Lat                              float64   `json:"locationLat"`
+	Lng                              float64   `json:"locationLon"`
+	Interval                         int       `json:"interval"`
+	NeedThunders, NeedIce, NeedWinds bool      `json:"-"`
+	NeedRains, NeedRainsIntensity    bool      `json:"-"`
+	NeedTemperature                  bool      `json:"-"`
+	ExtendedLightning                bool      `json:"extendedRange"`
+	NeedPDF, NeedData                bool      `json:"-"`
+	WithStatistics                   bool      `json:"withStatistic"`
+}
+
+type Request struct {
+	Options
+	ReferenceNo        string   `json:"referenceNo"`
+	ResultTypes        []string `json:"resultTypes"`
+	SelectedOperations []string `json:"selectedOperations"`
+}
+
+func (req *Request) Prepare() {
+	req.ResultTypes = req.ResultTypes[:0]
+	if req.Options.NeedPDF {
+		req.ResultTypes = append(req.ResultTypes, "PDF")
+	}
+	if req.Options.NeedData {
+		req.ResultTypes = append(req.ResultTypes, "DATA")
+	}
+	if req.Options.NeedThunders {
+		req.SelectedOperations = append(req.SelectedOperations, "QUERY_LIGHTNING")
+	}
+	if req.Options.NeedRains {
+		req.SelectedOperations = append(req.SelectedOperations, "QUERY_PRECIPITATION")
+	}
+	if req.Options.NeedRainsIntensity {
+		req.SelectedOperations = append(req.SelectedOperations, "QUERY_PRECIPITATION_INTENSITY")
+	}
+	if req.Options.NeedWinds {
+		req.SelectedOperations = append(req.SelectedOperations, "QUERY_WIND")
+	}
+	if req.Options.NeedIce {
+		req.SelectedOperations = append(req.SelectedOperations, "QUERY_ICE")
+	}
+	if req.Options.NeedTemperature {
+		req.SelectedOperations = append(req.SelectedOperations, "QUERY_TEMPERATURE")
+	}
 }
 
 var client = &http.Client{Transport: httpinsecure.InsecureTransport}
@@ -70,33 +111,54 @@ const (
 	V0 = Version("v0")
 	V1 = Version("v1")
 	V2 = Version("v2")
+	V3 = Version("v3")
 )
 
 func (V Version) URL() string {
 	switch V {
-	case V0:
-		return macroExpertURLv0
-	case V1:
-		return macroExpertURLv1
+	case V3:
+		return macroExpertURLv3
 	case V2:
 		return macroExpertURLv2
+	case V1:
+		return macroExpertURLv1
+	case V0:
+		return macroExpertURLv0
+
 	default:
 		return ""
 	}
 }
 
+func (V Version) LatKey() string {
+	switch V {
+	case V3:
+		return "locationLat"
+	case V2:
+		return "lat"
+	}
+	return "lng"
+}
+
 func (V Version) LngKey() string {
-	if V == V2 {
+	switch V {
+	case V3:
+		return "locationLon"
+	case V2:
 		return "lon"
 	}
 	return "lng"
 }
 
 func (V Version) RefKey() string {
-	if V == V2 {
+	switch V {
+	case V3, V2:
 		return "referenceNo"
 	}
 	return "contr_id"
+}
+
+type GetPDFParams struct {
 }
 
 // GetPDF returns the meteorological data in PDF form.
@@ -119,100 +181,114 @@ func (V Version) GetPDF(
 	opt Options,
 ) (rc io.ReadCloser, fileName, mimeType string, err error) {
 	logger := logr.FromContextOrDiscard(ctx)
-	params := url.Values(map[string][]string{
-		"address":  {opt.Address},
-		"lat":      {fmt.Sprintf("%.5f", opt.Lat)},
-		V.LngKey(): {fmt.Sprintf("%.5f", opt.Lng)},
-		V.RefKey(): {opt.ContractID},
-	})
-
-	if V == V0 || V == V1 {
-		params["needThunders"] = []string{fmtBool(opt.NeedThunders)}
-		params["needRains"] = []string{fmtBool(opt.NeedRains)}
-		params["needWinds"] = []string{fmtBool(opt.NeedWinds)}
-		params["needRainsInt"] = []string{fmtBool(opt.NeedRainsIntensity)}
-	}
-
-	if V == V0 {
-		params["language"] = []string{"hu"}
-		params["from_date"] = []string{V.fmtDate(opt.Since)}
-		params["to_date"] = []string{V.fmtDate(opt.Till)}
+	meURL := V.URL()
+	var body io.Reader
+	if V == V3 {
+		b, marshalErr := json.Marshal(Request{Options: opt})
+		if marshalErr != nil {
+			err = marshalErr
+			return
+		}
+		body = bytes.NewReader(b)
 	} else {
-		params["language"] = []string{"hu_HU"}
-		var d time.Duration
-		if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
-			d = opt.Till.Sub(opt.Since) / 2
-			opt.At = opt.Since.Add(d)
+		params := url.Values(map[string][]string{
+			"address":  {opt.Address},
+			V.LatKey(): {fmt.Sprintf("%.5f", opt.Lat)},
+			V.LngKey(): {fmt.Sprintf("%.5f", opt.Lng)},
+			V.RefKey(): {opt.ContractID},
+		})
+
+		if V == V0 || V == V1 {
+			params["needThunders"] = []string{fmtBool(opt.NeedThunders)}
+			params["needRains"] = []string{fmtBool(opt.NeedRains)}
+			params["needWinds"] = []string{fmtBool(opt.NeedWinds)}
+			params["needRainsInt"] = []string{fmtBool(opt.NeedRainsIntensity)}
+		}
+
+		if V == V0 {
+			params["language"] = []string{"hu"}
+			params["from_date"] = []string{V.fmtDate(opt.Since)}
+			params["to_date"] = []string{V.fmtDate(opt.Till)}
+		} else {
+			params["language"] = []string{"hu_HU"}
+			var d time.Duration
+			if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
+				d = opt.Till.Sub(opt.Since) / 2
+				opt.At = opt.Since.Add(d)
+				if opt.Interval == 0 {
+					opt.Interval = int(d/(24*time.Hour)) + 1
+				}
+			}
+			switch {
+			case opt.Interval < 15:
+				opt.Interval = 5
+			case opt.Interval < 90:
+				opt.Interval = 30
+				if d != 0 {
+					opt.At = opt.Since
+				}
+			default:
+				opt.Interval = 180
+				if d != 0 {
+					opt.At = opt.Since
+				}
+			}
+
+			params["date"] = []string{V.fmtDate(opt.At)}
 			if opt.Interval == 0 {
-				opt.Interval = int(d/(24*time.Hour)) + 1
+				opt.Interval = 5
 			}
-		}
-		switch {
-		case opt.Interval < 15:
-			opt.Interval = 5
-		case opt.Interval < 90:
-			opt.Interval = 30
-			if d != 0 {
-				opt.At = opt.Since
-			}
-		default:
-			opt.Interval = 180
-			if d != 0 {
-				opt.At = opt.Since
-			}
-		}
+			params["interval"] = []string{strconv.Itoa(opt.Interval)}
 
-		params["date"] = []string{V.fmtDate(opt.At)}
-		if opt.Interval == 0 {
-			opt.Interval = 5
-		}
-		params["interval"] = []string{strconv.Itoa(opt.Interval)}
+			switch V {
+			case V2:
+				if opt.ExtendedLightning {
+					params["extended"] = []string{"1"}
+				}
+				if opt.WithStatistics {
+					params["withStatistics"] = []string{"1"}
+				}
+				if opt.NeedThunders {
+					params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
+				}
+				if opt.NeedWinds {
+					params["operation"] = append(params["operation"], "QUERY_WIND")
+				}
+				if opt.NeedIce {
+					params["operation"] = append(params["operation"], "QUERY_ICE")
+				}
+				if opt.NeedRains {
+					params["operation"] = append(params["operation"], "QUERY_PRECIPITATION")
+				}
+				if opt.NeedRainsIntensity {
+					params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
+				}
+				if opt.NeedRainsIntensity {
+					params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
+				}
 
-		if V == V2 {
-			if opt.ExtendedLightning {
-				params["extended"] = []string{"1"}
-			}
-			if opt.WithStatistics {
-				params["withStatistics"] = []string{"1"}
-			}
-			if opt.NeedThunders {
-				params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
-			}
-			if opt.NeedWinds {
-				params["operation"] = append(params["operation"], "QUERY_WIND")
-			}
-			if opt.NeedIce {
-				params["operation"] = append(params["operation"], "QUERY_ICE")
-			}
-			if opt.NeedRains {
-				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION")
-			}
-			if opt.NeedRainsIntensity {
-				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
-			}
-			if opt.NeedRainsIntensity {
-				params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
-			}
-
-			if len(params["operation"]) == 0 {
-				params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
+				if len(params["operation"]) == 0 {
+					params["operation"] = append(params["operation"], "QUERY_LIGHTNING")
+				}
 			}
 		}
+		meURL += "?" + params.Encode()
 	}
 
-	meURL := V.URL() + "?" + params.Encode()
 	if opt.Host != "" {
 		u, _ := url.Parse(meURL)
 		u.Host = opt.Host
 		meURL = u.String()
 	}
-	req, err := http.NewRequest("GET", meURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", meURL, body)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("url=%q: %w", meURL, err)
 	}
 	logger.Info("MEVV", "username", username, "password", strings.Repeat("*", len(password)))
 	req.SetBasicAuth(username, password)
-	req = req.WithContext(ctx)
+	if V == V3 {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	logger.Info("Get", "url", req.URL, "headers", req.Header)
 	resp, err := client.Do(req)
 	if err != nil {
