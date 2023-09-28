@@ -1,0 +1,141 @@
+{
+    "operationId": 3400,
+    "isSuccessful": true,
+    "errors": [{
+            "code": "",
+            "message": ""
+        }
+    ]
+    "resultData": {
+        "locationLat": 47.08219889999999,
+        "locationLon": 18.9232321,
+        "address": "Érd, Fő u. 20",
+        "referenceNo": "KliensAzonosito",
+        "dateFrom": "2023-05-20T00:00:00+00:00",
+        "dateTo": "2023-05-24T23:59:00+00:00",
+        "interval": 5,
+        "eventDate": "Urc dátum",
+        "lightingRadius": 3,
+        "visibility": {
+            "hasDailyData": true,
+            "hasDailyData_Wind": true,
+            "hasDailyData_Precipitation": false,
+            "hasDailyData_PrecipitationIntensity": false,
+            "hasDailyData_Ice": false,
+            "hasDailyData_Temperature": false,
+            "hasLightingData": false,
+            "hasByStationTemperature": false,
+            "hasByStationPrecipitation": false,
+            "hasByStationWind": false,
+            "hasAgroFrost": false,
+            "hasAgroFrostExtended": false,
+            "hasAgroDrought": false,
+            "hasAgroDroughtExtended": false,
+            "hasStatistic": false
+        }
+        "dailyListWind": [{
+                "dateString": "2023.05.20",
+                "value": "32.4 -  43.164",
+                "code": "4"
+            }, {
+                "dateString": "2023.05.21",
+                "value": "21.6 -  32.364",
+                "code": "3"
+            }
+        ],
+        "dailyListPrecipitation": [{
+                "dateString": "2023.05.20",
+                "value": "6.7"
+            }
+        ],
+        "dailyListPrecipitationIntensity": [{
+                "dateString": "2023.05.20",
+                "value": true
+            }
+        ],
+        "dailyListIce": [{
+                "dateString": "2023.05.20",
+                "value": true
+            }
+        ],
+        "dailyListTemperature": [{
+                "dateString": "2023.05.20",
+                "value": "3.1 - 9.7"
+            }
+        ],
+        "lightingList": [{
+                "Index": 1,
+                "Zone": "BETWEEN_1_AND_1_5",
+                "eventDateUtc": "2023-05-16T17:22:58.6549999Z",
+                "eventDate": "2023-05-16T19:22:58.6549999+00:00",
+                "altitude": 0,
+                "lightningType": "cG"
+                "currentIntensity": 12.1
+                "distanceFromOrigin": 2542.935120889431,
+                "currentIntensity": 12.1
+            }
+        ],
+        "byStationList": [{
+                "date": "2023.04.26",
+                "hour": "01",
+                "settlementText": "Budapest Zugliget",
+                "value": "5.6 C - 5.8 C"
+            }, {
+                "date": "2023.04.26",
+                "hour": "01",
+                "settlementText": "Budapest János-hegy",
+                "value": "2.6 C - 2.8 C"
+            }
+        ],
+        "agroFrostList": [{
+                "dateString": "2023.05.20",
+                "temperatureMin": -4
+                "value": true
+            }, {
+                "dateString": "2023.05.22",
+                "temperatureMin": -3
+                "value": true
+            }
+        ],
+        "agroFrostExtendedList": [{
+                "dateString": "2023.05.20",
+                "temperatureMin": -4
+                "value": true
+            }, {
+                "dateString": "2023.05.21",
+                "temperatureMin": 3
+                "value": false
+            }, {
+                "dateString": "2023.05.22",
+                "temperatureMin": -3
+                "value": true
+            }
+        ],
+        "agroDroughtList": [{
+                "FromDate": "",
+                "toDate": "",
+                "Index1": true,
+                "Index2": true
+            }
+        ],
+        "agroDroughtExtendedList": [{
+                "eventDate": "2023.05.21",
+                "temperatureMax": 20.5,
+                "precipitationMax": 1.4,
+                "droughtIndex": true,
+                "droughtIndex2": true
+            }
+        ],
+        "statisticsList": [{
+                "operationTypeName": "QUERY_WIND",
+                "sum": 40
+            }
+        ]
+    },
+    "file": {
+        "uuid": "dasdsad",
+        "fileName": "173690_karszam_20230525074749587.pdf",
+        "contentType": "application/pdf",
+        "data": "base64 byte array"
+    }
+}

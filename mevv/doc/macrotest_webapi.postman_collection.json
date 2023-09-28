@@ -1,0 +1,109 @@
+{
+	"info": {
+		"_postman_id": "1c7304fb-8f01-45a4-82bf-8e3d35d1ee5b",
+		"name": "MacroTest Webapi",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "10050542"
+	},
+	"item": [
+		{
+			"name": "QueryCivil Test",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"userName\": \"xxxx@yyyy.zz\",\r\n    \"password\": \"pwd123\",\r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"interval\": \"13\",\r\n        \"resultTypes\": [\r\n            \"PDF\", \"DATA\"\r\n        ],\r\n        \"eventDate\": \"2021-06-10T22:00:00Z\",\r\n        \"selectedOperations\": [\r\n            \"QUERY_WIND\",\"QUERY_TEMPERATURE\"\r\n        ]\r\n    },\r\n    \"withStatistic\": true,\r\n    \"extendedRange\": true\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://frontend-test.macrometeo.hu/webapi/query-civil",
+					"protocol": "https",
+					"host": [
+						"frontend-test",
+						"macrometeo",
+						"hu"
+					],
+					"path": [
+						"webapi",
+						"query-civil"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "QueryCivil hourly Test",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"userName\": \"xxxx@yyyy.zz\",\r\n    \"password\": \"pwd123\",\r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"resultTypes\": [\r\n            \"PDF\",\r\n            \"DATA\"\r\n        ],\r\n        \"eventDate\": \"2022-05-10T22:00:00Z\",\r\n        \"selectedOperations\": [\r\n            \"QUERY_BY_STATION_PREC\"\r\n        ]\r\n    },\r\n    \"withStatistic\": true,\r\n    \"extendedRange\": true\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://frontend-test.macrometeo.hu/webapi/query-civil",
+					"protocol": "https",
+					"host": [
+						"frontend-test",
+						"macrometeo",
+						"hu"
+					],
+					"path": [
+						"webapi",
+						"query-civil"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "QueryAgro Test",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"userName\": \"xxxx@yyyy.zz\",\r\n    \"password\": \"pwd123\",\r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"year\": 2021,\r\n        \"resultTypes\": [\r\n            \"PDF\",\r\n            \"DATA\"\r\n        ],\r\n        \"selectedOperations\": [\r\n            \"QUERY_DROUGHT\"\r\n        ]\r\n    }\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://frontend-test.macrometeo.hu/webapi/query-agro",
+					"protocol": "https",
+					"host": [
+						"frontend-test",
+						"macrometeo",
+						"hu"
+					],
+					"path": [
+						"webapi",
+						"query-agro"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
