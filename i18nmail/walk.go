@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -22,8 +23,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-"log/slog"
-	
+
 	"github.com/sloonz/go-qprintable"
 	"github.com/tgulacsi/go/iohlp"
 )
@@ -94,8 +94,8 @@ func (mp MailPart) String() string {
 }
 
 // Spawn returns a descendant of the MailPart (Level+1, Parent=*mp, next sequence).
-func (mp *MailPart) Spawn() MailPart {
-	return MailPart{Parent: mp, Level: mp.Level + 1, Seq: nextSeqInt()}
+func (mp MailPart) Spawn() MailPart {
+	return MailPart{Parent: &mp, Level: mp.Level + 1, Seq: nextSeqInt()}
 }
 
 // DecoderFunc is a type of a decoder (io.Reader wrapper)
@@ -111,6 +111,9 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 
 // GetBody returns a fresh copy of mp.Body.
 func (mp MailPart) GetBody() *io.SectionReader {
+	if mp.Body == nil {
+		return io.NewSectionReader(bytes.NewReader(nil), 0, 0)
+	}
 	return io.NewSectionReader(mp.Body, 0, mp.Body.Size())
 }
 
@@ -239,7 +242,7 @@ func WalkMultipart(mp MailPart, todo TodoFunc, dontDescend bool) error {
 		}
 		sr, readErr := MakeSectionReader(part, bodyThreshold)
 		if readErr != nil {
-			logger.Error("read part", "error", readErr, )
+			logger.Error("read part", "error", readErr)
 			return fmt.Errorf("read part: %w", readErr)
 		}
 		i++
