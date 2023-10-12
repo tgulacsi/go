@@ -413,12 +413,11 @@ func (V Version) GetPDF(
 		return nil, "", "", fmt.Errorf("%s %q: %w\nbody: %s", method, meURL, err, buf.String())
 	}
 	// logger.Debug("MEVV", "username", username, "password", strings.Repeat("*", len(password)))
-	if username != "" {
-		req.SetBasicAuth(username, password)
-	}
 	if V == V3 || V == V3test {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
+	} else if username != "" {
+		req.SetBasicAuth(username, password)
 	}
 	logger.Debug(method, "url", req.URL, "headers", req.Header)
 	resp, err := client.Do(req)
