@@ -36,6 +36,7 @@ import (
 
 	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/tgulacsi/go/httpinsecure"
+	"github.com/tgulacsi/go/iohlp"
 )
 
 var ErrAuth = errors.New("authentication error")
@@ -55,7 +56,7 @@ type Options struct {
 	Since, Till                      time.Time `json:"-"`
 	At                               time.Time `json:"eventDate"`
 	Address                          string    `json:"address"`
-	ContractID                       string    `json:"-"`
+	ContractID                       string    `json:"referenceNo"`
 	Host                             string    `json:"-"`
 	Lat                              float64   `json:"locationLat"`
 	Lng                              float64   `json:"locationLon"`
@@ -68,6 +69,35 @@ type Options struct {
 	WithStatistics                   bool      `json:"withStatistic"`
 }
 
+func (opt *Options) Prepare() {
+	var d time.Duration
+	if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
+		d = opt.Till.Sub(opt.Since) / 2
+		opt.At = opt.Since.Add(d)
+		if opt.Interval == 0 {
+			opt.Interval = int(d/(24*time.Hour)) + 1
+		}
+	}
+	switch {
+	case opt.Interval < 15:
+		opt.Interval = 5
+	case opt.Interval < 90:
+		opt.Interval = 30
+		if d != 0 {
+			opt.At = opt.Since
+		}
+	default:
+		opt.Interval = 180
+		if d != 0 {
+			opt.At = opt.Since
+		}
+	}
+
+	if opt.Interval <= 0 {
+		opt.Interval = 5
+	}
+}
+
 type V3Request struct {
 	Username string  `json:"userName"`
 	Password string  `json:"password"`
@@ -75,28 +105,19 @@ type V3Request struct {
 }
 type V3Query struct {
 	Options
-	ReferenceNo        string   `json:"referenceNo"`
 	ResultTypes        []string `json:"resultTypes"`
 	SelectedOperations []string `json:"selectedOperations"`
 }
 
 func (req *V3Query) Prepare() {
-	if req.At.IsZero() {
-		req.At = req.Since.Add(req.Till.Sub(req.Since) / 2).UTC()
-	}
-	if req.Interval <= 0 {
-		req.Interval = 5
-	}
-
+	(&req.Options).Prepare()
+	req.Options.At = req.Options.At.UTC()
 	req.ResultTypes = req.ResultTypes[:0]
 	if req.Options.NeedData {
 		req.ResultTypes = append(req.ResultTypes, "DATA")
 	}
 	if req.Options.NeedPDF || len(req.ResultTypes) == 0 {
 		req.ResultTypes = append(req.ResultTypes, "PDF")
-	}
-	if req.Options.NeedThunders {
-		req.SelectedOperations = append(req.SelectedOperations, "QUERY_LIGHTNING")
 	}
 	if req.Options.NeedRains {
 		req.SelectedOperations = append(req.SelectedOperations, "QUERY_PRECIPITATION")
@@ -112,6 +133,9 @@ func (req *V3Query) Prepare() {
 	}
 	if req.Options.NeedTemperature {
 		req.SelectedOperations = append(req.SelectedOperations, "QUERY_TEMPERATURE")
+	}
+	if req.Options.NeedThunders || len(req.SelectedOperations) == 0 {
+		req.SelectedOperations = append(req.SelectedOperations, "QUERY_LIGHTNING")
 	}
 }
 
@@ -173,17 +197,102 @@ func (V Version) RefKey() string {
 	return "contr_id"
 }
 
-type V3Response struct {
-	OperationID int  `json:"operationId"`
-	Successful  bool `json:"isSuccessful"`
-	Errors      []V3Error
-}
-type V3Error struct {
-	Field   string `json:"fieldName"`
-	Code    string `json:"errorCode"`
-	Message string `json:"errorMessage"`
-	Serious bool   `json:"isSerious"`
-}
+type (
+	V3Response struct {
+		OperationID int          `json:"operationId"`
+		Successful  bool         `json:"isSuccessful"`
+		Errors      []V3Error    `json:"errors"`
+		Data        V3ResultData `json:"resultData"`
+		File        V3File       `json:"file"`
+	}
+	V3ResultData struct {
+		Lat                             float64         `json:"locationLat"`
+		Lon                             float64         `json:"locationLon"`
+		Address                         string          `json:"address"`
+		ReferenceNo                     string          `json:"referenceNo"`
+		DateFrom                        time.Time       `json:"dateFrom"`
+		DateTo                          time.Time       `json:"dateTo"`
+		EventDate                       time.Time       `json:"eventDate"`
+		Interval                        int             `json:"interval"`
+		LightningRadius                 int             `json:"lightningRadius"`
+		Visibility                      V3Visibility    `json:"visibility"`
+		DailyListWind                   []V3Measurement `json:"dailyListWind"`
+		DailyListPrecipitation          []V3Measurement `json:"dailyListPrecipitation"`
+		DailyListPrecipitationIntensity []V3Measurement `json:"dailyListPrecipitationIntensity"`
+		DailyListIce                    []V3Measurement `json:"dailyListIce"`
+		DailyListTemperature            []V3Measurement `json:"dailyListTemperature"`
+		LightningList                   []V3Lightning   `json:"lightingList"`
+		ByStationList                   []V3Measurement `json:"byStationList"`
+		AgroFrostList                   []V3Measurement `json:"agroFrostList"`
+		AgroExtendedList                []V3Measurement `json:"agroFrostExtendedList"`
+		Drought                         []V3Drought     `json:"agroDroughtList"`
+		DroughtExtendedList             []V3Measurement `json:"agroDroughtExtendedList"`
+		Statistics                      []V3Statistic   `json:"statisticsList"`
+	}
+
+	V3Visibility struct {
+		Daily                       bool `json:"hasDailyData"`
+		DailyWind                   bool `json:"hasDailyData_Wind"`
+		DailyPrecipitation          bool `json:"hasDailyData_Precipitation"`
+		DailyPrecipitationIntensity bool `json:"hasDailyData_PrecipitationIntensity"`
+		DailyIce                    bool `json:"hasDailyData_Ice"`
+		DailyTemperature            bool `json:"hasDailyData_Temperature"`
+		Lightning                   bool `json:"hasLightingData"`
+		ByStationTemperature        bool `json:"hasByStationTemperature"`
+		ByStationPrecipitation      bool `json:"hasByStationPrecipitation"`
+		ByStationWind               bool `json:"hasByStationWind"`
+		AgroFrost                   bool `json:"hasAgroFrost"`
+		AgroFrostExtended           bool `json:"hasAgroFrostExtended"`
+		AgroDrought                 bool `json:"hasAgroDrought"`
+		AgroDroughtExtended         bool `json:"hasAgroDroughtExtended"`
+		Statistic                   bool `json:"hasStatistic"`
+	}
+
+	V3Measurement struct {
+		Date             string          `json:"dateString"`
+		Hour             string          `json:"hour"`
+		Value            json.RawMessage `json:"value"`
+		Code             json.Number     `json:"code"`
+		Settlement       string          `json:"settlementText"`
+		TemperatureMin   float64         `json:"temperatureMin"`
+		TemperatureMax   float64         `json:"temperatureMax"`
+		PrecipitationMax float64         `json:"precipitationMax"`
+		DroughtIndex1    bool            `json:"droughtIndex"`
+		DroughtIndex2    bool            `json:"droughtIndex2"`
+	}
+
+	V3Lightning struct {
+		Index              int
+		Zone               string
+		EventDateUTC       time.Time `json:"eventDateUtc"`
+		EventDate          time.Time `json:"eventDate"`
+		Altitude           float64   `json:"altitude"`
+		Type               string    `json:"lightningType"`
+		CurrentIntensity   float64   `json:"currentIntensity"`
+		DistanceFromOrigin float64   `json:"distanceFromOrigin"`
+	}
+	V3Drought struct {
+		FromDate       string
+		ToDate         string `json:"toDate"`
+		Index1, Index2 bool
+	}
+	V3Statistic struct {
+		OperationTypeName string  `json:"operationTypeName"`
+		Sum               float64 `json:"sum"`
+	}
+	V3File struct {
+		UUID        string `json:"uuid"`
+		Name        string `json:"fileName"`
+		ContentType string `json:"contentType"`
+		Data        []byte `json:"data"`
+	}
+	V3Error struct {
+		Field   string      `json:"fieldName"`
+		Code    json.Number `json:"errorCode"`
+		Message string      `json:"errorMessage"`
+		Serious bool        `json:"isSerious"`
+	}
+)
 
 var _ error = (*V3Error)(nil)
 
@@ -225,8 +334,10 @@ func (V Version) GetPDF(
 			err = marshalErr
 			return
 		}
+		logger.Debug("V3Request", "body", string(b))
 		body = bytes.NewReader(b)
 	} else {
+		opt.Prepare()
 		params := url.Values(map[string][]string{
 			"address":  {opt.Address},
 			V.LatKey(): {fmt.Sprintf("%.5f", opt.Lat)},
@@ -247,33 +358,7 @@ func (V Version) GetPDF(
 			params["to_date"] = []string{V.fmtDate(opt.Till)}
 		} else {
 			params["language"] = []string{"hu_HU"}
-			var d time.Duration
-			if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
-				d = opt.Till.Sub(opt.Since) / 2
-				opt.At = opt.Since.Add(d)
-				if opt.Interval == 0 {
-					opt.Interval = int(d/(24*time.Hour)) + 1
-				}
-			}
-			switch {
-			case opt.Interval < 15:
-				opt.Interval = 5
-			case opt.Interval < 90:
-				opt.Interval = 30
-				if d != 0 {
-					opt.At = opt.Since
-				}
-			default:
-				opt.Interval = 180
-				if d != 0 {
-					opt.At = opt.Since
-				}
-			}
-
 			params["date"] = []string{V.fmtDate(opt.At)}
-			if opt.Interval == 0 {
-				opt.Interval = 5
-			}
 			params["interval"] = []string{strconv.Itoa(opt.Interval)}
 
 			switch V {
@@ -362,14 +447,29 @@ func (V Version) GetPDF(
 	}
 	if V == V3 || V == V3test {
 		if prefix, _, _ := strings.Cut(ct, ";"); prefix == "application/json" {
-			b, _ := io.ReadAll(resp.Body)
+			sr, err := iohlp.MakeSectionReader(resp.Body, 1<<20)
+			if err != nil {
+				return nil, "", "", err
+			}
+			var a [1024]byte
+			n, _ := sr.Read(a[:])
+			b := a[:n]
+			logger.Debug("V3", "response", string(b))
 			var v3resp V3Response
-			if err := json.Unmarshal(b, &v3resp); err != nil {
+			if err := json.NewDecoder(io.NewSectionReader(
+				sr, 0, sr.Size(),
+			)).Decode(&v3resp); err != nil {
 				return nil, "", "", err
 			}
 			if len(v3resp.Errors) != 0 {
 				return nil, "", "", &v3resp.Errors[0]
 			}
+			f := v3resp.File
+			logger.Info("got", "file", f.Name, "length", len(f.Data), "ct", f.ContentType)
+			return struct {
+				io.Reader
+				io.Closer
+			}{bytes.NewReader(f.Data), io.NopCloser(nil)}, f.Name, f.ContentType, nil
 		}
 	}
 

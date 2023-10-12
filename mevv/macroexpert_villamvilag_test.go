@@ -17,6 +17,7 @@ limitations under the License.
 package mevv_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -40,26 +41,27 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 	}
 
 	ctx := zlog.NewSContext(context.Background(), zlog.NewT(t).SLog())
+	var buf bytes.Buffer
 	for i, tc := range []struct {
 		mevv.Options
 		ErrOK bool
 	}{
 		{mevv.Options{
-			Address:    "Budapest, Venyige utca 3",
+			Address: "Érd, Fő u. 20.",
+			Lat:     47.08219889999999, Lng: 18.9232321,
 			Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
 			Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
-			Lat:        47.47809,
-			Lng:        19.16839,
 			ContractID: "TESZT",
-			Host:       testHost,
-		}, true},
+			NeedData:   true, NeedPDF: true,
+			Host: testHost,
+		}, false},
 		{mevv.Options{
-			Address:      "Budapest, Venyige utca 3",
-			Since:        time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
-			Till:         time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
-			Lat:          47.47809,
-			Lng:          19.16839,
-			ContractID:   "TESZT",
+			Address: "Érd, Fő u. 20.",
+			Lat:     47.08219889999999, Lng: 18.9232321,
+			Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
+			Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
+			ContractID: "TESZT",
+			NeedData:   true, NeedPDF: true,
 			NeedThunders: true,
 			NeedWinds:    true,
 			NeedRains:    true, NeedRainsIntensity: true,
@@ -71,17 +73,21 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 		r, _, ct, err := mevv.V3test.GetPDF(ctx, username, password, tc.Options)
 		cancel()
 		t.Logf("%d. ct=%q err=%v", i, ct, err)
-		if r != nil {
-			defer r.Close()
-		}
-		b, _ := io.ReadAll(r)
-		t.Log(string(b))
-		if err == nil && tc.ErrOK {
-			t.Errorf("%d. wanted error, got [%s] %q.", i, ct, b)
-			continue
-		}
 		if err != nil && !tc.ErrOK {
 			t.Errorf("%d. got [%s] %v.", i, ct, err)
+			continue
+		}
+		buf.Reset()
+		if r != nil {
+			_, err = io.Copy(&buf, r)
+			r.Close()
+			if err != nil {
+				t.Errorf("read response: %+v", err)
+			}
+		}
+		// t.Log("response:", buf.String())
+		if err == nil && tc.ErrOK {
+			t.Errorf("%d. wanted error, got [%s] %q.", i, ct, buf.String())
 			continue
 		}
 	}
