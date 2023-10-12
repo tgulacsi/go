@@ -11,7 +11,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/renameio/v2 v2.0.0
 	github.com/hack-pad/hackpadfs v0.2.0
-	github.com/hashicorp/go-retryablehttp v0.7.2
+	github.com/hashicorp/go-retryablehttp v0.7.4
 	github.com/jacobsa/fuse v0.0.0-20230509090321-7263f3a2b474
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/klauspost/compress v1.15.15
