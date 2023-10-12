@@ -34,7 +34,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
+	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/tgulacsi/go/httpinsecure"
 )
 
@@ -68,20 +68,32 @@ type Options struct {
 	WithStatistics                   bool      `json:"withStatistic"`
 }
 
-type Request struct {
+type V3Request struct {
+	Username string  `json:"userName"`
+	Password string  `json:"password"`
+	Query    V3Query `json:"query"`
+}
+type V3Query struct {
 	Options
 	ReferenceNo        string   `json:"referenceNo"`
 	ResultTypes        []string `json:"resultTypes"`
 	SelectedOperations []string `json:"selectedOperations"`
 }
 
-func (req *Request) Prepare() {
-	req.ResultTypes = req.ResultTypes[:0]
-	if req.Options.NeedPDF {
-		req.ResultTypes = append(req.ResultTypes, "PDF")
+func (req *V3Query) Prepare() {
+	if req.At.IsZero() {
+		req.At = req.Since.Add(req.Till.Sub(req.Since) / 2).UTC()
 	}
+	if req.Interval <= 0 {
+		req.Interval = 5
+	}
+
+	req.ResultTypes = req.ResultTypes[:0]
 	if req.Options.NeedData {
 		req.ResultTypes = append(req.ResultTypes, "DATA")
+	}
+	if req.Options.NeedPDF || len(req.ResultTypes) == 0 {
+		req.ResultTypes = append(req.ResultTypes, "PDF")
 	}
 	if req.Options.NeedThunders {
 		req.SelectedOperations = append(req.SelectedOperations, "QUERY_LIGHTNING")
@@ -108,14 +120,17 @@ var client = &http.Client{Transport: httpinsecure.InsecureTransport}
 type Version string
 
 const (
-	V0 = Version("v0")
-	V1 = Version("v1")
-	V2 = Version("v2")
-	V3 = Version("v3")
+	V0     = Version("v0")
+	V1     = Version("v1")
+	V2     = Version("v2")
+	V3     = Version("v3")
+	V3test = Version("v3-test")
 )
 
 func (V Version) URL() string {
 	switch V {
+	case V3test:
+		return macroExpertTestURLv3
 	case V3:
 		return macroExpertURLv3
 	case V2:
@@ -132,7 +147,7 @@ func (V Version) URL() string {
 
 func (V Version) LatKey() string {
 	switch V {
-	case V3:
+	case V3, V3test:
 		return "locationLat"
 	case V2:
 		return "lat"
@@ -142,7 +157,7 @@ func (V Version) LatKey() string {
 
 func (V Version) LngKey() string {
 	switch V {
-	case V3:
+	case V3, V3test:
 		return "locationLon"
 	case V2:
 		return "lon"
@@ -152,13 +167,31 @@ func (V Version) LngKey() string {
 
 func (V Version) RefKey() string {
 	switch V {
-	case V3, V2:
+	case V3, V3test, V2:
 		return "referenceNo"
 	}
 	return "contr_id"
 }
 
-type GetPDFParams struct {
+type V3Response struct {
+	OperationID int  `json:"operationId"`
+	Successful  bool `json:"isSuccessful"`
+	Errors      []V3Error
+}
+type V3Error struct {
+	Field   string `json:"fieldName"`
+	Code    string `json:"errorCode"`
+	Message string `json:"errorMessage"`
+	Serious bool   `json:"isSerious"`
+}
+
+var _ error = (*V3Error)(nil)
+
+func (ve V3Error) Error() string {
+	if ve.Field != "" {
+		return fmt.Sprintf("%q: %s: %s", ve.Field, ve.Code, ve.Message)
+	}
+	return fmt.Sprintf("%s: %s", ve.Code, ve.Message)
 }
 
 // GetPDF returns the meteorological data in PDF form.
@@ -180,11 +213,14 @@ func (V Version) GetPDF(
 	username, password string,
 	opt Options,
 ) (rc io.ReadCloser, fileName, mimeType string, err error) {
-	logger := logr.FromContextOrDiscard(ctx)
+	logger := zlog.SFromContext(ctx)
 	meURL := V.URL()
 	var body io.Reader
-	if V == V3 {
-		b, marshalErr := json.Marshal(Request{Options: opt})
+	if V == V3 || V == V3test {
+		qry := V3Query{Options: opt}
+		qry.Prepare()
+		req := V3Request{Query: qry, Username: username, Password: password}
+		b, marshalErr := json.Marshal(req)
 		if marshalErr != nil {
 			err = marshalErr
 			return
@@ -280,25 +316,37 @@ func (V Version) GetPDF(
 		u.Host = opt.Host
 		meURL = u.String()
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", meURL, body)
+	method := "GET"
+	var buf strings.Builder
+	if body != nil {
+		method = "POST"
+		body = io.TeeReader(body, &buf)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, meURL, body)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("url=%q: %w", meURL, err)
+		logger.Error("NewRequest", "method", method, "url", meURL, "body", buf.String(), "error", err)
+		return nil, "", "", fmt.Errorf("%s %q: %w\nbody: %s", method, meURL, err, buf.String())
 	}
-	logger.Info("MEVV", "username", username, "password", strings.Repeat("*", len(password)))
-	req.SetBasicAuth(username, password)
-	if V == V3 {
+	// logger.Debug("MEVV", "username", username, "password", strings.Repeat("*", len(password)))
+	if username != "" {
+		req.SetBasicAuth(username, password)
+	}
+	if V == V3 || V == V3test {
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
 	}
-	logger.Info("Get", "url", req.URL, "headers", req.Header)
+	logger.Debug(method, "url", req.URL, "headers", req.Header)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("do %#v: %w", req.URL.String(), err)
+		logger.Error(method, "url", req.URL, "headers", req.Header, "body", buf.String(), "error", err)
+		return nil, "", "", fmt.Errorf("do %#v (%q): %w", req.URL.String(), buf.String(), err)
 	}
 	if resp.StatusCode > 299 {
 		resp.Body.Close()
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return nil, "", "", fmt.Errorf("%s: %w", resp.Status, ErrAuth)
 		}
+		logger.Error(method, "url", req.URL, "headers", req.Header, "body", buf.String(), "status", resp.Status)
 		return nil, "", "", fmt.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
@@ -312,6 +360,19 @@ func (V Version) GetPDF(
 		}
 		return nil, "", "", mr
 	}
+	if V == V3 || V == V3test {
+		if prefix, _, _ := strings.Cut(ct, ";"); prefix == "application/json" {
+			b, _ := io.ReadAll(resp.Body)
+			var v3resp V3Response
+			if err := json.Unmarshal(b, &v3resp); err != nil {
+				return nil, "", "", err
+			}
+			if len(v3resp.Errors) != 0 {
+				return nil, "", "", &v3resp.Errors[0]
+			}
+		}
+	}
+
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
 		buf, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()

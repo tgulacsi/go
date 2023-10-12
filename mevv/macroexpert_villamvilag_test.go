@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/tgulacsi/go/mevv"
 )
 
@@ -37,14 +38,16 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+
+	ctx := zlog.NewSContext(context.Background(), zlog.NewT(t).SLog())
 	for i, tc := range []struct {
 		mevv.Options
 		ErrOK bool
 	}{
 		{mevv.Options{
 			Address:    "Budapest, Venyige utca 3",
-			Since:      time.Date(2015, 01, 27, 0, 0, 0, 0, time.Local),
-			Till:       time.Date(2015, 01, 30, 0, 0, 0, 0, time.Local),
+			Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
+			Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
 			Lat:        47.47809,
 			Lng:        19.16839,
 			ContractID: "TESZT",
@@ -52,8 +55,8 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 		}, true},
 		{mevv.Options{
 			Address:      "Budapest, Venyige utca 3",
-			Since:        time.Date(2015, 01, 27, 0, 0, 0, 0, time.Local),
-			Till:         time.Date(2015, 01, 30, 0, 0, 0, 0, time.Local),
+			Since:        time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
+			Till:         time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
 			Lat:          47.47809,
 			Lng:          19.16839,
 			ContractID:   "TESZT",
@@ -64,8 +67,8 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 		}, false},
 	} {
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		r, _, ct, err := mevv.V2.GetPDF(ctx, username, password, tc.Options)
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		r, _, ct, err := mevv.V3test.GetPDF(ctx, username, password, tc.Options)
 		cancel()
 		t.Logf("%d. ct=%q err=%v", i, ct, err)
 		if r != nil {
