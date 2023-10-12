@@ -104,9 +104,9 @@ type V3Request struct {
 	Query    V3Query `json:"query"`
 }
 type V3Query struct {
-	Options
 	ResultTypes        []string `json:"resultTypes"`
 	SelectedOperations []string `json:"selectedOperations"`
+	Options
 }
 
 func (req *V3Query) Prepare() {
@@ -199,23 +199,18 @@ func (V Version) RefKey() string {
 
 type (
 	V3Response struct {
-		OperationID int          `json:"operationId"`
-		Successful  bool         `json:"isSuccessful"`
-		Errors      []V3Error    `json:"errors"`
 		Data        V3ResultData `json:"resultData"`
 		File        V3File       `json:"file"`
+		Errors      []V3Error    `json:"errors"`
+		OperationID int          `json:"operationId"`
+		Successful  bool         `json:"isSuccessful"`
 	}
 	V3ResultData struct {
-		Lat                             float64         `json:"locationLat"`
-		Lon                             float64         `json:"locationLon"`
-		Address                         string          `json:"address"`
-		ReferenceNo                     string          `json:"referenceNo"`
 		DateFrom                        time.Time       `json:"dateFrom"`
 		DateTo                          time.Time       `json:"dateTo"`
 		EventDate                       time.Time       `json:"eventDate"`
-		Interval                        int             `json:"interval"`
-		LightningRadius                 int             `json:"lightningRadius"`
-		Visibility                      V3Visibility    `json:"visibility"`
+		Address                         string          `json:"address"`
+		ReferenceNo                     string          `json:"referenceNo"`
 		DailyListWind                   []V3Measurement `json:"dailyListWind"`
 		DailyListPrecipitation          []V3Measurement `json:"dailyListPrecipitation"`
 		DailyListPrecipitationIntensity []V3Measurement `json:"dailyListPrecipitationIntensity"`
@@ -228,6 +223,11 @@ type (
 		Drought                         []V3Drought     `json:"agroDroughtList"`
 		DroughtExtendedList             []V3Measurement `json:"agroDroughtExtendedList"`
 		Statistics                      []V3Statistic   `json:"statisticsList"`
+		Lat                             float64         `json:"locationLat"`
+		Lon                             float64         `json:"locationLon"`
+		Interval                        int             `json:"interval"`
+		LightningRadius                 int             `json:"lightningRadius"`
+		Visibility                      V3Visibility    `json:"visibility"`
 	}
 
 	V3Visibility struct {
@@ -251,9 +251,9 @@ type (
 	V3Measurement struct {
 		Date             string          `json:"dateString"`
 		Hour             string          `json:"hour"`
-		Value            json.RawMessage `json:"value"`
 		Code             json.Number     `json:"code"`
 		Settlement       string          `json:"settlementText"`
+		Value            json.RawMessage `json:"value"`
 		TemperatureMin   float64         `json:"temperatureMin"`
 		TemperatureMax   float64         `json:"temperatureMax"`
 		PrecipitationMax float64         `json:"precipitationMax"`
@@ -262,14 +262,14 @@ type (
 	}
 
 	V3Lightning struct {
-		Index              int
-		Zone               string
 		EventDateUTC       time.Time `json:"eventDateUtc"`
 		EventDate          time.Time `json:"eventDate"`
-		Altitude           float64   `json:"altitude"`
-		Type               string    `json:"lightningType"`
-		CurrentIntensity   float64   `json:"currentIntensity"`
-		DistanceFromOrigin float64   `json:"distanceFromOrigin"`
+		Zone               string
+		Type               string `json:"lightningType"`
+		Index              int
+		Altitude           float64 `json:"altitude"`
+		CurrentIntensity   float64 `json:"currentIntensity"`
+		DistanceFromOrigin float64 `json:"distanceFromOrigin"`
 	}
 	V3Drought struct {
 		FromDate       string
