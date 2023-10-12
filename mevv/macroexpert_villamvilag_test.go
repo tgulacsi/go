@@ -74,8 +74,9 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 		if r != nil {
 			defer r.Close()
 		}
+		b, _ := io.ReadAll(r)
+		t.Log(string(b))
 		if err == nil && tc.ErrOK {
-			b, _ := io.ReadAll(&io.LimitedReader{R: r, N: 1024})
 			t.Errorf("%d. wanted error, got [%s] %q.", i, ct, b)
 			continue
 		}
