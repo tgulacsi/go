@@ -18,9 +18,10 @@ limitations under the license.
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
-	"github.com/go-logr/logr"
+	"github.com/UNO-SOFT/zlog/v2"
 )
 
 type Handler func(w http.ResponseWriter, r *http.Request) error
@@ -44,7 +45,7 @@ type statuser interface {
 
 type ErrHandler struct {
 	Handler
-	logr.Logger
+	*slog.Logger
 }
 
 // ServeHTTP allows our Handler type to satisfy http.Handler.
@@ -53,20 +54,20 @@ func (h ErrHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		return
 	}
-	logger, err := logr.FromContext(r.Context())
+	logger := zlog.SFromContext(r.Context())
 	if err != nil {
 		logger = h.Logger
 	}
 	if se, ok := err.(statuser); ok {
 		// We can retrieve the status here and write out a specific
 		// HTTP status code.
-		logger.Error(err, "HTTP error", "status", se.Status())
+		logger.Error("HTTP error", "status", se.Status(), "error", err)
 		http.Error(w, err.Error(), se.Status())
 		return
 	}
 	// Any error types we don't specifically look out for default
 	// to serving a HTTP 500
-	logger.Error(err, "HTTP")
+	logger.Error("HTTP", "error", err)
 	http.Error(w, http.StatusText(http.StatusInternalServerError),
 		http.StatusInternalServerError)
 }
