@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -29,11 +30,19 @@ import (
 	"github.com/tgulacsi/go/mevv"
 )
 
+const testHost = "40.68.241.196"
+
 func TestMacroExpertVillamVilagPDF(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	username, password, cases := testCases(t)
-	for _, V := range []mevv.Version{mevv.V2, mevv.V3test} {
+	U2, _ := url.Parse(mevv.V2.URL())
+	U2.Scheme, U2.Host = "http", testHost
+	for V, URL := range map[mevv.Version]string{
+		mevv.V2: U2.String(),
+		mevv.V3: mevv.MacroExpertURLv3Test,
+	} {
+		V, URL := V, URL
 		t.Run(string(V), func(t *testing.T) {
 			for i, tc := range cases {
 				i, tc := i, tc
@@ -41,7 +50,8 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 					t.Parallel()
 					ctx := zlog.NewSContext(ctx, zlog.NewT(t).SLog().
 						With("version", V, "case", i))
-					ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					tc.Options.URL = URL
+					ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 					r, _, ct, err := V.GetPDF(ctx, username, password, tc.Options)
 					cancel()
 					t.Logf("%d. ct=%q err=%v", i, ct, err)
@@ -74,7 +84,6 @@ type testCase struct {
 
 func testCases(t *testing.T) (string, string, []testCase) {
 	username, password := os.Getenv("MEVV_USERNAME"), os.Getenv("MEVV_PASSWORD")
-	testHost := os.Getenv("MEVV_HOST")
 	if username == "" && password == "" {
 		t.Logf("Environment variables MEVV_USERNAME and MEVV_PASSWORD are empty, reading from .password")
 		var err error
@@ -93,7 +102,6 @@ func testCases(t *testing.T) (string, string, []testCase) {
 				Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
 				ContractID: "TESZT",
 				NeedData:   true, NeedPDF: true,
-				Host: testHost,
 			}, false},
 			{mevv.Options{
 				Address: "Érd, Fő u. 20.",
@@ -105,7 +113,6 @@ func testCases(t *testing.T) (string, string, []testCase) {
 				NeedThunders: true,
 				NeedWinds:    true,
 				NeedRains:    true, NeedRainsIntensity: true,
-				Host: testHost,
 			}, false},
 		}
 }

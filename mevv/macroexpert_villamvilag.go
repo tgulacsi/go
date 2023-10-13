@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -46,9 +47,7 @@ const (
 	macroExpertURLv1     = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
 	macroExpertURLv2     = `https://macrometeo.hu/meteo-api-app/api/pdf/query`
 	macroExpertURLv3     = `https://frontend.macrometeo.hu/webapi/query-civil`
-	macroExpertTestURLv3 = `https://frontend-test.macrometeo.hu/webapi/query-civil`
-
-	TestHost = "40.68.241.196"
+	MacroExpertURLv3Test = `https://frontend-test.macrometeo.hu/webapi/query-civil`
 )
 
 // Options are the space/time coordinates and the required details.
@@ -57,7 +56,7 @@ type Options struct {
 	At                               time.Time `json:"eventDate"`
 	Address                          string    `json:"address"`
 	ContractID                       string    `json:"referenceNo"`
-	Host                             string    `json:"-"`
+	URL                              string    `json:"-"`
 	Lat                              float64   `json:"locationLat"`
 	Lng                              float64   `json:"locationLon"`
 	Interval                         int       `json:"interval"`
@@ -146,17 +145,14 @@ var client = &http.Client{Transport: httpinsecure.InsecureTransport}
 type Version string
 
 const (
-	V0     = Version("v0")
-	V1     = Version("v1")
-	V2     = Version("v2")
-	V3     = Version("v3")
-	V3test = Version("v3-test")
+	V0 = Version("v0")
+	V1 = Version("v1")
+	V2 = Version("v2")
+	V3 = Version("v3")
 )
 
 func (V Version) URL() string {
 	switch V {
-	case V3test:
-		return macroExpertTestURLv3
 	case V3:
 		return macroExpertURLv3
 	case V2:
@@ -173,7 +169,7 @@ func (V Version) URL() string {
 
 func (V Version) LatKey() string {
 	switch V {
-	case V3, V3test:
+	case V3:
 		return "locationLat"
 	case V2:
 		return "lat"
@@ -183,7 +179,7 @@ func (V Version) LatKey() string {
 
 func (V Version) LngKey() string {
 	switch V {
-	case V3, V3test:
+	case V3:
 		return "locationLon"
 	case V2:
 		return "lon"
@@ -193,7 +189,7 @@ func (V Version) LngKey() string {
 
 func (V Version) RefKey() string {
 	switch V {
-	case V3, V3test, V2:
+	case V3, V2:
 		return "referenceNo"
 	}
 	return "contr_id"
@@ -325,9 +321,12 @@ func (V Version) GetPDF(
 	opt Options,
 ) (rc io.ReadCloser, fileName, mimeType string, err error) {
 	logger := zlog.SFromContext(ctx)
-	meURL := V.URL()
+	meURL := opt.URL
+	if meURL == "" {
+		meURL = V.URL()
+	}
 	var body io.Reader
-	if V == V3 || V == V3test {
+	if V == V3 {
 		qry := V3Query{Options: opt}.Prepare()
 		req := V3Request{Query: qry, Username: username, Password: password}
 		b, marshalErr := json.Marshal(req)
@@ -397,11 +396,6 @@ func (V Version) GetPDF(
 		meURL += "?" + params.Encode()
 	}
 
-	if opt.Host != "" {
-		u, _ := url.Parse(meURL)
-		u.Host = opt.Host
-		meURL = u.String()
-	}
 	method := "GET"
 	var buf strings.Builder
 	if body != nil {
@@ -414,7 +408,7 @@ func (V Version) GetPDF(
 		return nil, "", "", fmt.Errorf("%s %q: %w\nbody: %s", method, meURL, err, buf.String())
 	}
 	// logger.Debug("MEVV", "username", username, "password", strings.Repeat("*", len(password)))
-	if V == V3 || V == V3test {
+	if V == V3 {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
 	} else if username != "" {
@@ -426,35 +420,40 @@ func (V Version) GetPDF(
 		logger.Error(method, "url", req.URL, "headers", req.Header, "body", buf.String(), "error", err)
 		return nil, "", "", fmt.Errorf("do %#v (%q): %w", req.URL.String(), buf.String(), err)
 	}
-	if resp.StatusCode > 299 {
+	var sr *io.SectionReader
+	if resp.Body != nil {
+		if sr, err = iohlp.MakeSectionReader(resp.Body, 1<<20); err != nil {
+			return nil, "", "", err
+		}
 		resp.Body.Close()
+	}
+
+	if resp.StatusCode > 299 {
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return nil, "", "", fmt.Errorf("%s: %w", resp.Status, ErrAuth)
 		}
-		logger.Error(method, "url", req.URL, "headers", req.Header, "body", buf.String(), "status", resp.Status)
+		var a [1024]byte
+		n, _ := sr.Read(a[:])
+		logger.Error(method, "url", req.URL, "headers", req.Header, "body", a[:n], "status", resp.Status)
 		return nil, "", "", fmt.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
 		var mr meResponse
-		var buf bytes.Buffer
-		if err := xml.NewDecoder(io.TeeReader(resp.Body, &buf)).Decode(&mr); err != nil {
-			_, _ = io.Copy(&buf, resp.Body)
-			resp.Body.Close()
-			return nil, "", "", fmt.Errorf("parse %q: %w", buf.String(), err)
+		if err := xml.NewDecoder(io.NewSectionReader(sr, 0, sr.Size())).Decode(&mr); err != nil {
+			b, _ := io.ReadAll(sr)
+			return nil, "", "", fmt.Errorf("parse %q: %w", string(b), err)
 		}
 		return nil, "", "", mr
 	}
-	if V == V3 || V == V3test {
+	if V == V3 {
 		if prefix, _, _ := strings.Cut(ct, ";"); prefix == "application/json" {
-			sr, err := iohlp.MakeSectionReader(resp.Body, 1<<20)
-			if err != nil {
-				return nil, "", "", err
+			if logger.Enabled(ctx, slog.LevelDebug) {
+				var a [1024]byte
+				n, _ := sr.Read(a[:])
+				b := a[:n]
+				logger.Debug("V3", "response", string(b))
 			}
-			var a [1024]byte
-			n, _ := sr.Read(a[:])
-			b := a[:n]
-			logger.Debug("V3", "response", string(b))
 			var v3resp V3Response
 			if err := json.NewDecoder(io.NewSectionReader(
 				sr, 0, sr.Size(),
@@ -474,9 +473,8 @@ func (V Version) GetPDF(
 	}
 
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
-		buf, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		return nil, "", "", fmt.Errorf("998: %s", buf)
+		b, _ := io.ReadAll(sr)
+		return nil, "", "", fmt.Errorf("998: %s", string(b))
 	}
 	var fn string
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
