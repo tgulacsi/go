@@ -96,15 +96,48 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 
 	return username, password,
 		map[string]testCase{
-			"daily": {Options: mevv.Options{
+			"dailyPDF": {Options: mevv.Options{
 				Address: "Érd, Fő u. 20.",
 				Lat:     47.08219889999999, Lng: 18.9232321,
 				Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
 				Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
 				ContractID: "TESZT",
-				NeedData:   true, NeedPDF: true,
+				NeedPDF:    true,
+			}},
+			"dailyData": {Options: mevv.Options{
+				Address: "Érd, Fő u. 20.",
+				Lat:     47.08219889999999, Lng: 18.9232321,
+				Since:           time.Date(2019, 05, 27, 0, 0, 0, 0, time.Local),
+				Till:            time.Date(2019, 05, 30, 0, 0, 0, 0, time.Local),
+				ContractID:      "TESZT",
+				NeedData:        true,
+				NeedIce:         true,
+				NeedRains:       true,
+				NeedThunders:    true,
+				NeedWinds:       true,
+				NeedTemperature: true,
 			},
+				Check: func(t *testing.T, data mevv.V3ResultData) {
+					v := data.Visibility
+					if !v.DailyIce || len(data.DailyListIce) == 0 {
+						t.Log(data.DailyListIce)
+						t.Error("wanted ice")
+					}
+					if !v.DailyPrecipitation || len(data.DailyListPrecipitation) == 0 {
+						t.Log(data.DailyListPrecipitation)
+						t.Error("wanted precip")
+					}
+					if !v.DailyTemperature || len(data.DailyListTemperature) == 0 {
+						t.Log(data.DailyListTemperature)
+						t.Error("wanted temperature")
+					}
+					if !v.DailyWind || len(data.DailyListWind) == 0 {
+						t.Log(data.DailyListWind)
+						t.Error("wanted wind")
+					}
+				},
 			},
+
 			"hourlyRains": {Options: mevv.Options{
 				Address: "Érd, Fő u. 20.",
 				Lat:     47.08219889999999, Lng: 18.9232321,

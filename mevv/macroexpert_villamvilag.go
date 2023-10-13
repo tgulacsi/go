@@ -225,32 +225,32 @@ type (
 		Successful  bool         `json:"isSuccessful"`
 	}
 	V3ResultData struct {
-		DateFrom                        time.Time         `json:"dateFrom"`
-		DateTo                          time.Time         `json:"dateTo"`
-		EventDate                       time.Time         `json:"eventDate"`
-		Address                         string            `json:"address"`
-		ReferenceNo                     string            `json:"referenceNo"`
-		DailyListWind                   []V3Measurement   `json:"dailyListWind"`
-		DailyListPrecipitation          []V3Measurement   `json:"dailyListPrecipitation"`
-		DailyListPrecipitationIntensity []V3Measurement   `json:"dailyListPrecipitationIntensity"`
-		DailyListIce                    []V3Measurement   `json:"dailyListIce"`
-		DailyListTemperature            []V3Measurement   `json:"dailyListTemperature"`
-		LightningList                   []V3Lightning     `json:"lightingList"`
-		ByStationList                   []V3Measurement   `json:"byStationList"`
-		ByStationPrecList               []V3MeasurePrecip `json:"byStationPrecList"`
-		ByStationTempList               []V3MeasureTemp   `json:"byStationTempList"`
-		ByStationWindList               []V3MeasureWind   `json:"byStationWindList"`
-		AgroFrostList                   []V3Measurement   `json:"agroFrostList"`
-		AgroExtendedList                []V3Measurement   `json:"agroFrostExtendedList"`
-		Drought                         []V3Drought       `json:"agroDroughtList"`
-		DroughtExtendedList             []V3Measurement   `json:"agroDroughtExtendedList"`
-		Statistics                      []V3Statistic     `json:"statisticsList"`
-		Raw                             json.RawMessage   `json:"-"`
-		Lat                             float64           `json:"locationLat"`
-		Lon                             float64           `json:"locationLon"`
-		Interval                        int               `json:"interval"`
-		LightningRadius                 int               `json:"lightningRadius"`
-		Visibility                      V3Visibility      `json:"visibility"`
+		DateFrom                        time.Time          `json:"dateFrom"`
+		DateTo                          time.Time          `json:"dateTo"`
+		EventDate                       time.Time          `json:"eventDate"`
+		Address                         string             `json:"address"`
+		ReferenceNo                     string             `json:"referenceNo"`
+		DailyListWind                   []V3DailyWind      `json:"dailyListWind"`
+		DailyListPrecipitation          []V3DailyPrecip    `json:"dailyListPrecipitation"`
+		DailyListPrecipitationIntensity []V3Measurement    `json:"dailyListPrecipitationIntensity"`
+		DailyListIce                    []V3DailyIce       `json:"dailyListIce"`
+		DailyListTemperature            []V3DailyTemp      `json:"dailyListTemperature"`
+		LightningList                   []V3DailyLightning `json:"lightingList"`
+		ByStationList                   []V3Measurement    `json:"byStationList"`
+		ByStationPrecList               []V3MeasurePrecip  `json:"byStationPrecList"`
+		ByStationTempList               []V3MeasureTemp    `json:"byStationTempList"`
+		ByStationWindList               []V3MeasureWind    `json:"byStationWindList"`
+		AgroFrostList                   []V3Measurement    `json:"agroFrostList"`
+		AgroExtendedList                []V3Measurement    `json:"agroFrostExtendedList"`
+		Drought                         []V3Drought        `json:"agroDroughtList"`
+		DroughtExtendedList             []V3Measurement    `json:"agroDroughtExtendedList"`
+		Statistics                      []V3Statistic      `json:"statisticsList"`
+		Raw                             json.RawMessage    `json:"-"`
+		Lat                             float64            `json:"locationLat"`
+		Lon                             float64            `json:"locationLon"`
+		Interval                        int                `json:"interval"`
+		LightningRadius                 int                `json:"lightningRadius"`
+		Visibility                      V3Visibility       `json:"visibility"`
 	}
 
 	V3Visibility struct {
@@ -277,14 +277,46 @@ type (
 	}
 	V3MeasureTemp struct {
 		V3Measurement
-		MinValue float64 `json:"minValue"`
-		MaxValue float64 `json:"maxValue"`
 	}
 	V3MeasureWind struct {
 		V3Measurement
 		Direction  string  `json:"directionCode"`
 		MaxGustKmH float64 `json:"maxGustKmH"`
 	}
+
+	V3DailyIce struct {
+		Date  string `json:"dateString"`
+		Value bool   `json:"value"`
+	}
+	V3DailyLightning struct {
+		EventDateUTC time.Time   `json:"eventDateUtc"`
+		EventDate    time.Time   `json:"eventDate"`
+		Zone         json.Number `json:"zone"`
+		// Type               json.Number `json:"lightningType"`
+		Index              int     `json:"index"`
+		Altitude           float64 `json:"altitude"`
+		CurrentIntensity   float64 `json:"currentIntensity"`
+		DistanceFromOrigin float64 `json:"distanceFromOrigin"`
+		Inaccuracy         float64 `json:"inaccuracy"`
+	}
+	V3DailyPrecip struct {
+		Date  string  `json:"dateString"`
+		Value float64 `json:"value"`
+	}
+	V3DailyTemp struct {
+		Date     string  `json:"dateString"`
+		MinValue float64 `json:"minValue"`
+		MaxValue float64 `json:"maxValue"`
+		Value    string  `json:"string"`
+	}
+	V3DailyWind struct {
+		Date     string  `json:"dateString"`
+		MinValue float64 `json:"minValue"`
+		MaxValue float64 `json:"maxValue"`
+		Value    string  `json:"string"`
+		Code     float64 `json:"code"`
+	}
+
 	V3Measurement struct {
 		Date               string          `json:"dateString"`
 		Hour               string          `json:"hour"`
@@ -296,20 +328,12 @@ type (
 		PrecipitationMax   float64         `json:"precipitationMax"`
 		TemperatureMin     float64         `json:"temperatureMin"`
 		TemperatureMax     float64         `json:"temperatureMax"`
+		MinValue           float64         `json:"minValue"`
+		MaxValue           float64         `json:"maxValue"`
 		DroughtIndex1      bool            `json:"droughtIndex"`
 		DroughtIndex2      bool            `json:"droughtIndex2"`
 	}
 
-	V3Lightning struct {
-		EventDateUTC       time.Time `json:"eventDateUtc"`
-		EventDate          time.Time `json:"eventDate"`
-		Zone               string
-		Type               string `json:"lightningType"`
-		Index              int
-		Altitude           float64 `json:"altitude"`
-		CurrentIntensity   float64 `json:"currentIntensity"`
-		DistanceFromOrigin float64 `json:"distanceFromOrigin"`
-	}
 	V3Drought struct {
 		FromDate       string
 		ToDate         string `json:"toDate"`
@@ -429,9 +453,6 @@ func (V Version) GetPDFData(
 				}
 				if opt.NeedRains {
 					params["operation"] = append(params["operation"], "QUERY_PRECIPITATION")
-				}
-				if opt.NeedRainsIntensity {
-					params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
 				}
 				if opt.NeedRainsIntensity {
 					params["operation"] = append(params["operation"], "QUERY_PRECIPITATION_INTENSITY")
