@@ -19,7 +19,6 @@ package mevv_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -44,19 +43,19 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 	} {
 		V, URL := V, URL
 		t.Run(string(V), func(t *testing.T) {
-			for i, tc := range cases {
-				i, tc := i, tc
-				t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			for nm, tc := range cases {
+				nm, tc := nm, tc
+				t.Run(nm, func(t *testing.T) {
 					t.Parallel()
 					ctx := zlog.NewSContext(ctx, zlog.NewT(t).SLog().
-						With("version", V, "case", i))
-					tc.Options.URL = URL
+						With("version", V, "case", nm))
+					tc.URL = URL
 					ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-					r, _, ct, err := V.GetPDF(ctx, username, password, tc.Options)
+					data, r, _, ct, err := V.GetPDFData(ctx, username, password, tc.Options)
 					cancel()
-					t.Logf("%d. ct=%q err=%v", i, ct, err)
-					if err != nil && !tc.ErrOK {
-						t.Errorf("%d. got [%s] %v.", i, ct, err)
+					t.Logf("ct=%q err=%v", ct, err)
+					if err != nil {
+						t.Errorf("got [%s] %v.", ct, err)
 						return
 					}
 					var buf bytes.Buffer
@@ -67,10 +66,12 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 							t.Errorf("read response: %+v", err)
 						}
 					}
-					// t.Log("response:", buf.String())
-					if err == nil && tc.ErrOK {
-						t.Errorf("%d. wanted error, got [%s] %q.", i, ct, buf.String())
+
+					if tc.Check != nil {
+						t.Log(string(data.Raw))
+						tc.Check(t, data)
 					}
+					// t.Log("response:", buf.String())
 				})
 			}
 		})
@@ -79,10 +80,10 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 
 type testCase struct {
 	mevv.Options
-	ErrOK bool
+	Check func(*testing.T, mevv.V3ResultData)
 }
 
-func testCases(t *testing.T) (string, string, []testCase) {
+func testCases(t *testing.T) (string, string, map[string]testCase) {
 	username, password := os.Getenv("MEVV_USERNAME"), os.Getenv("MEVV_PASSWORD")
 	if username == "" && password == "" {
 		t.Logf("Environment variables MEVV_USERNAME and MEVV_PASSWORD are empty, reading from .password")
@@ -94,26 +95,67 @@ func testCases(t *testing.T) (string, string, []testCase) {
 	}
 
 	return username, password,
-		[]testCase{
-			{mevv.Options{
+		map[string]testCase{
+			"daily": {Options: mevv.Options{
 				Address: "Érd, Fő u. 20.",
 				Lat:     47.08219889999999, Lng: 18.9232321,
 				Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
 				Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
 				ContractID: "TESZT",
 				NeedData:   true, NeedPDF: true,
-			}, false},
-			{mevv.Options{
+			},
+			},
+			"hourlyRains": {Options: mevv.Options{
 				Address: "Érd, Fő u. 20.",
 				Lat:     47.08219889999999, Lng: 18.9232321,
-				Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
-				Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
+				Since:      time.Date(2022, 01, 27, 0, 0, 0, 0, time.Local),
+				Till:       time.Date(2022, 01, 30, 0, 0, 0, 0, time.Local),
 				ContractID: "TESZT",
-				NeedData:   true, NeedPDF: true,
-				NeedThunders: true,
-				NeedWinds:    true,
-				NeedRains:    true, NeedRainsIntensity: true,
-			}, false},
+				NeedData:   true, NeedPDF: false,
+				Hourly:    true,
+				NeedRains: true,
+			},
+				Check: func(t *testing.T, data mevv.V3ResultData) {
+					t.Log(data.ByStationPrecList)
+					if !data.Visibility.ByStationPrecipitation || len(data.ByStationPrecList) == 0 {
+						t.Errorf("wanted precipitation, got %#v", data.ByStationPrecList)
+					}
+				},
+			},
+			"hourlyTemp": {Options: mevv.Options{
+				Address: "Érd, Fő u. 20.",
+				Lat:     47.08219889999999, Lng: 18.9232321,
+				Since:      time.Date(2022, 01, 27, 0, 0, 0, 0, time.Local),
+				Till:       time.Date(2022, 01, 30, 0, 0, 0, 0, time.Local),
+				ContractID: "TESZT",
+				NeedData:   true, NeedPDF: false,
+				Hourly:          true,
+				NeedTemperature: true,
+			},
+				Check: func(t *testing.T, data mevv.V3ResultData) {
+					t.Log(data.ByStationTempList)
+					if !data.Visibility.ByStationTemperature || len(data.ByStationTempList) == 0 {
+						t.Errorf("wanted temperature, got %#v", data.ByStationTempList)
+					}
+				},
+			},
+			"hourlyWind": {Options: mevv.Options{
+				Address: "Érd, Fő u. 20.",
+				Lat:     47.08219889999999, Lng: 18.9232321,
+				Since:      time.Date(2022, 01, 27, 0, 0, 0, 0, time.Local),
+				Till:       time.Date(2022, 01, 30, 0, 0, 0, 0, time.Local),
+				ContractID: "TESZT",
+				NeedData:   true, NeedPDF: false,
+				Hourly:    true,
+				NeedWinds: true,
+			},
+				Check: func(t *testing.T, data mevv.V3ResultData) {
+					t.Log(data.ByStationWindList)
+					if !data.Visibility.ByStationWind || len(data.ByStationWindList) == 0 {
+						t.Errorf("wanted winds, got %#v", data.ByStationWindList)
+					}
+				},
+			},
 		}
 }
 

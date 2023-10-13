@@ -66,16 +66,27 @@ type Options struct {
 	ExtendedLightning                bool      `json:"extendedRange"`
 	NeedPDF, NeedData                bool      `json:"-"`
 	WithStatistics                   bool      `json:"withStatistic"`
+	Hourly                           bool      `json:"-"`
 }
 
 func (opt Options) Prepare() Options {
 	var d time.Duration
-	if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
+	wasZero := opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero())
+	if wasZero {
 		d = opt.Till.Sub(opt.Since) / 2
 		opt.At = opt.Since.Add(d)
-		if opt.Interval == 0 {
-			opt.Interval = int(d/(24*time.Hour)) + 1
+	}
+	if opt.Hourly {
+		if opt.NeedRains {
+			opt.Interval = 3
+		} else {
+			opt.Interval = 1
 		}
+		return opt
+	}
+
+	if wasZero && opt.Interval == 0 {
+		opt.Interval = int(d/(24*time.Hour)) + 1
 	}
 	switch {
 	case opt.Interval < 15:
@@ -118,6 +129,16 @@ func (req V3Query) Prepare() V3Query {
 	}
 	if req.Options.NeedPDF || len(req.ResultTypes) == 0 {
 		req.ResultTypes = append(req.ResultTypes, "PDF")
+	}
+	if req.Options.Hourly {
+		if req.Options.NeedRains {
+			req.SelectedOperations = append(req.SelectedOperations, "QUERY_BY_STATION_PREC")
+		} else if req.Options.NeedWinds {
+			req.SelectedOperations = append(req.SelectedOperations, "QUERY_BY_STATION_WIND")
+		} else {
+			req.SelectedOperations = append(req.SelectedOperations, "QUERY_BY_STATION_TEMP")
+		}
+		return req
 	}
 	if req.Options.NeedRains {
 		req.SelectedOperations = append(req.SelectedOperations, "QUERY_PRECIPITATION")
@@ -216,6 +237,9 @@ type (
 		DailyListTemperature            []V3Measurement `json:"dailyListTemperature"`
 		LightningList                   []V3Lightning   `json:"lightingList"`
 		ByStationList                   []V3Measurement `json:"byStationList"`
+		ByStationPrecList               []V3Measurement `json:"byStationPrecList"`
+		ByStationTempList               []V3Measurement `json:"byStationTempList"`
+		ByStationWindList               []V3Measurement `json:"byStationWindList"`
 		AgroFrostList                   []V3Measurement `json:"agroFrostList"`
 		AgroExtendedList                []V3Measurement `json:"agroFrostExtendedList"`
 		Drought                         []V3Drought     `json:"agroDroughtList"`
@@ -226,6 +250,7 @@ type (
 		Interval                        int             `json:"interval"`
 		LightningRadius                 int             `json:"lightningRadius"`
 		Visibility                      V3Visibility    `json:"visibility"`
+		Raw                             json.RawMessage `json:"-"`
 	}
 
 	V3Visibility struct {
@@ -247,16 +272,23 @@ type (
 	}
 
 	V3Measurement struct {
-		Date             string          `json:"dateString"`
-		Hour             string          `json:"hour"`
-		Code             json.Number     `json:"code"`
-		Settlement       string          `json:"settlementText"`
-		Value            json.RawMessage `json:"value"`
-		TemperatureMin   float64         `json:"temperatureMin"`
-		TemperatureMax   float64         `json:"temperatureMax"`
-		PrecipitationMax float64         `json:"precipitationMax"`
-		DroughtIndex1    bool            `json:"droughtIndex"`
-		DroughtIndex2    bool            `json:"droughtIndex2"`
+		Date               string          `json:"dateString"`
+		Hour               string          `json:"hour"`
+		Altitude           float64         `json:"altitude"`
+		DistanceFromOrigin float64         `json:"distanceFromOrigin"`
+		Code               json.Number     `json:"code"`
+		Settlement         string          `json:"settlementText"`
+		Direction          string          `json:"directionCode"`
+		MinValue           float64         `json:"minValue"`
+		MaxValue           float64         `json:"maxValue"`
+		Value              json.RawMessage `json:"value"`
+		TemperatureMin     float64         `json:"temperatureMin"`
+		TemperatureMax     float64         `json:"temperatureMax"`
+		Precipitation      float64         `json:"precipitation"`
+		PrecipitationMax   float64         `json:"precipitationMax"`
+		MaxGustKmH         float64         `json:"maxGustKmH"`
+		DroughtIndex1      bool            `json:"droughtIndex"`
+		DroughtIndex2      bool            `json:"droughtIndex2"`
 	}
 
 	V3Lightning struct {
@@ -285,10 +317,10 @@ type (
 		Data        []byte `json:"data"`
 	}
 	V3Error struct {
-		Field   string      `json:"fieldName"`
-		Code    json.Number `json:"errorCode"`
-		Message string      `json:"errorMessage"`
-		Serious bool        `json:"isSerious"`
+		Field   string `json:"fieldName"`
+		Code    string `json:"errorCode"`
+		Message string `json:"errorMessage"`
+		Serious bool   `json:"isSerious"`
 	}
 )
 
@@ -320,6 +352,14 @@ func (V Version) GetPDF(
 	username, password string,
 	opt Options,
 ) (rc io.ReadCloser, fileName, mimeType string, err error) {
+	_, rc, fileName, mimeType, err = V.GetPDFData(ctx, username, password, opt)
+	return rc, fileName, mimeType, err
+}
+func (V Version) GetPDFData(
+	ctx context.Context,
+	username, password string,
+	opt Options,
+) (data V3ResultData, r io.ReadCloser, fileName, mimeType string, err error) {
 	logger := zlog.SFromContext(ctx)
 	meURL := opt.URL
 	if meURL == "" {
@@ -405,7 +445,7 @@ func (V Version) GetPDF(
 	req, err := http.NewRequestWithContext(ctx, method, meURL, body)
 	if err != nil {
 		logger.Error("NewRequest", "method", method, "url", meURL, "body", buf.String(), "error", err)
-		return nil, "", "", fmt.Errorf("%s %q: %w\nbody: %s", method, meURL, err, buf.String())
+		return V3ResultData{}, nil, "", "", fmt.Errorf("%s %q: %w\nbody: %s", method, meURL, err, buf.String())
 	}
 	// logger.Debug("MEVV", "username", username, "password", strings.Repeat("*", len(password)))
 	if V == V3 {
@@ -418,39 +458,39 @@ func (V Version) GetPDF(
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Error(method, "url", req.URL, "headers", req.Header, "body", buf.String(), "error", err)
-		return nil, "", "", fmt.Errorf("do %#v (%q): %w", req.URL.String(), buf.String(), err)
+		return V3ResultData{}, nil, "", "", fmt.Errorf("do %#v (%q): %w", req.URL.String(), buf.String(), err)
 	}
 	var sr *io.SectionReader
 	if resp.Body != nil {
 		if sr, err = iohlp.MakeSectionReader(resp.Body, 1<<20); err != nil {
-			return nil, "", "", err
+			return V3ResultData{}, nil, "", "", err
 		}
 		resp.Body.Close()
 	}
 
 	if resp.StatusCode > 299 {
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, "", "", fmt.Errorf("%s: %w", resp.Status, ErrAuth)
+			return V3ResultData{}, nil, "", "", fmt.Errorf("%s: %w", resp.Status, ErrAuth)
 		}
 		var a [1024]byte
-		n, _ := sr.Read(a[:])
+		n, _ := sr.ReadAt(a[:], 0)
 		logger.Error(method, "url", req.URL, "headers", req.Header, "body", a[:n], "status", resp.Status)
-		return nil, "", "", fmt.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
+		return V3ResultData{}, nil, "", "", fmt.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
 		var mr meResponse
 		if err := xml.NewDecoder(io.NewSectionReader(sr, 0, sr.Size())).Decode(&mr); err != nil {
 			b, _ := io.ReadAll(sr)
-			return nil, "", "", fmt.Errorf("parse %q: %w", string(b), err)
+			return V3ResultData{}, nil, "", "", fmt.Errorf("parse %q: %w", string(b), err)
 		}
-		return nil, "", "", mr
+		return V3ResultData{}, nil, "", "", mr
 	}
 	if V == V3 {
 		if prefix, _, _ := strings.Cut(ct, ";"); prefix == "application/json" {
 			if logger.Enabled(ctx, slog.LevelDebug) {
 				var a [1024]byte
-				n, _ := sr.Read(a[:])
+				n, _ := sr.ReadAt(a[:], 0)
 				b := a[:n]
 				logger.Debug("V3", "response", string(b))
 			}
@@ -458,14 +498,16 @@ func (V Version) GetPDF(
 			if err := json.NewDecoder(io.NewSectionReader(
 				sr, 0, sr.Size(),
 			)).Decode(&v3resp); err != nil {
-				return nil, "", "", err
+				return v3resp.Data, nil, "", "", err
 			}
+			b, _ := io.ReadAll(sr)
+			v3resp.Data.Raw = json.RawMessage(b)
 			if len(v3resp.Errors) != 0 {
-				return nil, "", "", &v3resp.Errors[0]
+				return v3resp.Data, nil, "", "", &v3resp.Errors[0]
 			}
 			f := v3resp.File
 			logger.Info("got", "file", f.Name, "length", len(f.Data), "ct", f.ContentType)
-			return struct {
+			return v3resp.Data, struct {
 				io.Reader
 				io.Closer
 			}{bytes.NewReader(f.Data), io.NopCloser(nil)}, f.Name, f.ContentType, nil
@@ -474,7 +516,7 @@ func (V Version) GetPDF(
 
 	if !strings.HasPrefix(ct, "application/") && !strings.HasPrefix(ct, "image/") {
 		b, _ := io.ReadAll(sr)
-		return nil, "", "", fmt.Errorf("998: %s", string(b))
+		return V3ResultData{}, nil, "", "", fmt.Errorf("998: %s", string(b))
 	}
 	var fn string
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
@@ -486,7 +528,7 @@ func (V Version) GetPDF(
 		fn = "macroexpert-villamvilag-" + url.QueryEscape(opt.Address) + ".pdf"
 	}
 
-	return resp.Body, fn, ct, nil
+	return V3ResultData{}, resp.Body, fn, ct, nil
 }
 
 type meResponse struct {
