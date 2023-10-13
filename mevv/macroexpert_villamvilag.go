@@ -69,7 +69,7 @@ type Options struct {
 	WithStatistics                   bool      `json:"withStatistic"`
 }
 
-func (opt *Options) Prepare() {
+func (opt Options) Prepare() Options {
 	var d time.Duration
 	if opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero()) {
 		d = opt.Till.Sub(opt.Since) / 2
@@ -96,6 +96,7 @@ func (opt *Options) Prepare() {
 	if opt.Interval <= 0 {
 		opt.Interval = 5
 	}
+	return opt
 }
 
 type V3Request struct {
@@ -109,8 +110,8 @@ type V3Query struct {
 	Options
 }
 
-func (req *V3Query) Prepare() {
-	(&req.Options).Prepare()
+func (req V3Query) Prepare() V3Query {
+	req.Options = req.Options.Prepare()
 	req.Options.At = req.Options.At.UTC()
 	req.ResultTypes = req.ResultTypes[:0]
 	if req.Options.NeedData {
@@ -137,6 +138,7 @@ func (req *V3Query) Prepare() {
 	if req.Options.NeedThunders || len(req.SelectedOperations) == 0 {
 		req.SelectedOperations = append(req.SelectedOperations, "QUERY_LIGHTNING")
 	}
+	return req
 }
 
 var client = &http.Client{Transport: httpinsecure.InsecureTransport}
@@ -326,8 +328,7 @@ func (V Version) GetPDF(
 	meURL := V.URL()
 	var body io.Reader
 	if V == V3 || V == V3test {
-		qry := V3Query{Options: opt}
-		qry.Prepare()
+		qry := V3Query{Options: opt}.Prepare()
 		req := V3Request{Query: qry, Username: username, Password: password}
 		b, marshalErr := json.Marshal(req)
 		if marshalErr != nil {
@@ -337,7 +338,7 @@ func (V Version) GetPDF(
 		logger.Debug("V3Request", "body", string(b))
 		body = bytes.NewReader(b)
 	} else {
-		opt.Prepare()
+		opt = opt.Prepare()
 		params := url.Values(map[string][]string{
 			"address":  {opt.Address},
 			V.LatKey(): {fmt.Sprintf("%.5f", opt.Lat)},

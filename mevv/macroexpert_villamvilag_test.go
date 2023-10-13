@@ -19,6 +19,7 @@ package mevv_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -29,6 +30,49 @@ import (
 )
 
 func TestMacroExpertVillamVilagPDF(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	username, password, cases := testCases(t)
+	for _, V := range []mevv.Version{mevv.V2, mevv.V3test} {
+		t.Run(string(V), func(t *testing.T) {
+			for i, tc := range cases {
+				i, tc := i, tc
+				t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+					t.Parallel()
+					ctx := zlog.NewSContext(ctx, zlog.NewT(t).SLog().
+						With("version", V, "case", i))
+					ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					r, _, ct, err := V.GetPDF(ctx, username, password, tc.Options)
+					cancel()
+					t.Logf("%d. ct=%q err=%v", i, ct, err)
+					if err != nil && !tc.ErrOK {
+						t.Errorf("%d. got [%s] %v.", i, ct, err)
+						return
+					}
+					var buf bytes.Buffer
+					if r != nil {
+						_, err = io.Copy(&buf, r)
+						r.Close()
+						if err != nil {
+							t.Errorf("read response: %+v", err)
+						}
+					}
+					// t.Log("response:", buf.String())
+					if err == nil && tc.ErrOK {
+						t.Errorf("%d. wanted error, got [%s] %q.", i, ct, buf.String())
+					}
+				})
+			}
+		})
+	}
+}
+
+type testCase struct {
+	mevv.Options
+	ErrOK bool
+}
+
+func testCases(t *testing.T) (string, string, []testCase) {
 	username, password := os.Getenv("MEVV_USERNAME"), os.Getenv("MEVV_PASSWORD")
 	testHost := os.Getenv("MEVV_HOST")
 	if username == "" && password == "" {
@@ -40,57 +84,30 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 		}
 	}
 
-	ctx := zlog.NewSContext(context.Background(), zlog.NewT(t).SLog())
-	var buf bytes.Buffer
-	for i, tc := range []struct {
-		mevv.Options
-		ErrOK bool
-	}{
-		{mevv.Options{
-			Address: "Érd, Fő u. 20.",
-			Lat:     47.08219889999999, Lng: 18.9232321,
-			Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
-			Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
-			ContractID: "TESZT",
-			NeedData:   true, NeedPDF: true,
-			Host: testHost,
-		}, false},
-		{mevv.Options{
-			Address: "Érd, Fő u. 20.",
-			Lat:     47.08219889999999, Lng: 18.9232321,
-			Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
-			Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
-			ContractID: "TESZT",
-			NeedData:   true, NeedPDF: true,
-			NeedThunders: true,
-			NeedWinds:    true,
-			NeedRains:    true, NeedRainsIntensity: true,
-			Host: testHost,
-		}, false},
-	} {
-
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		r, _, ct, err := mevv.V3test.GetPDF(ctx, username, password, tc.Options)
-		cancel()
-		t.Logf("%d. ct=%q err=%v", i, ct, err)
-		if err != nil && !tc.ErrOK {
-			t.Errorf("%d. got [%s] %v.", i, ct, err)
-			continue
+	return username, password,
+		[]testCase{
+			{mevv.Options{
+				Address: "Érd, Fő u. 20.",
+				Lat:     47.08219889999999, Lng: 18.9232321,
+				Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
+				Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
+				ContractID: "TESZT",
+				NeedData:   true, NeedPDF: true,
+				Host: testHost,
+			}, false},
+			{mevv.Options{
+				Address: "Érd, Fő u. 20.",
+				Lat:     47.08219889999999, Lng: 18.9232321,
+				Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
+				Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
+				ContractID: "TESZT",
+				NeedData:   true, NeedPDF: true,
+				NeedThunders: true,
+				NeedWinds:    true,
+				NeedRains:    true, NeedRainsIntensity: true,
+				Host: testHost,
+			}, false},
 		}
-		buf.Reset()
-		if r != nil {
-			_, err = io.Copy(&buf, r)
-			r.Close()
-			if err != nil {
-				t.Errorf("read response: %+v", err)
-			}
-		}
-		// t.Log("response:", buf.String())
-		if err == nil && tc.ErrOK {
-			t.Errorf("%d. wanted error, got [%s] %q.", i, ct, buf.String())
-			continue
-		}
-	}
 }
 
 // vim: set noet fileencoding=utf-8:
