@@ -107,33 +107,108 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 			"dailyData": {Options: mevv.Options{
 				Address: "Érd, Fő u. 20.",
 				Lat:     47.08219889999999, Lng: 18.9232321,
-				Since:           time.Date(2019, 05, 27, 0, 0, 0, 0, time.Local),
-				Till:            time.Date(2019, 05, 30, 0, 0, 0, 0, time.Local),
-				ContractID:      "TESZT",
-				NeedData:        true,
-				NeedIce:         true,
-				NeedRains:       true,
-				NeedThunders:    true,
-				NeedWinds:       true,
-				NeedTemperature: true,
+				Since:              time.Date(2019, 05, 27, 0, 0, 0, 0, time.Local),
+				Till:               time.Date(2019, 05, 30, 0, 0, 0, 0, time.Local),
+				ContractID:         "TESZT",
+				NeedData:           true,
+				NeedIce:            true,
+				NeedRains:          true,
+				NeedRainsIntensity: true,
+				NeedThunders:       true,
+				NeedWinds:          true,
+				NeedTemperature:    true,
+				WithStatistics:     true,
 			},
 				Check: func(t *testing.T, data mevv.V3ResultData) {
 					v := data.Visibility
+					t.Log("ice:", data.DailyListIce)
 					if !v.DailyIce || len(data.DailyListIce) == 0 {
-						t.Log(data.DailyListIce)
 						t.Error("wanted ice")
 					}
+					var found bool
+					for _, x := range data.DailyListIce {
+						if found = x.Date != "" && x.Value; found {
+							break
+						}
+					}
+					if !found {
+						t.Errorf("not found ice")
+					}
+
+					t.Log("lightning:", data.LightningList)
+					if !v.Lightning || len(data.LightningList) == 0 {
+						t.Error("wanted ice")
+					}
+					found = false
+					for _, x := range data.LightningList {
+						zone, _ := x.Zone.Float64()
+						if found = !x.EventDateUTC.IsZero() && zone != 0 && x.CurrentIntensity != 0 && x.DistanceFromOrigin != 0; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("lightning not found")
+					}
+
+					t.Log("precip:", data.DailyListPrecipitation)
 					if !v.DailyPrecipitation || len(data.DailyListPrecipitation) == 0 {
-						t.Log(data.DailyListPrecipitation)
 						t.Error("wanted precip")
 					}
+					found = false
+					for _, x := range data.DailyListPrecipitation {
+						if found = x.Date != "" && x.Value != 0; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("precip not found")
+					}
+
+					t.Log("precipIntensity:", data.DailyListPrecipitationIntensity)
+					if !v.DailyPrecipitationIntensity || len(data.DailyListPrecipitationIntensity) == 0 {
+						t.Error("wanted precipIntensity")
+					}
+					found = false
+					for _, x := range data.DailyListPrecipitationIntensity {
+						if found = x.Date != ""; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("precipIntensity not found")
+					}
+
+					t.Logf("temp: %+v", data.DailyListTemperature)
 					if !v.DailyTemperature || len(data.DailyListTemperature) == 0 {
-						t.Log(data.DailyListTemperature)
 						t.Error("wanted temperature")
 					}
+					found = false
+					for _, x := range data.DailyListTemperature {
+						if found = x.Date != "" && x.MinValue != 0 && x.MaxValue != 0 && x.Value != ""; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("temperature not found")
+					}
+
+					t.Logf("wind: %+v", data.DailyListWind)
 					if !v.DailyWind || len(data.DailyListWind) == 0 {
-						t.Log(data.DailyListWind)
 						t.Error("wanted wind")
+					}
+					found = false
+					for _, x := range data.DailyListWind {
+						if found = x.Date != "" && x.MinValue != 0 && x.MaxValue != 0 && x.Value != ""; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("wind not found")
+					}
+
+					if !v.Statistic || len(data.Statistics) == 0 {
+						t.Log(data.Statistics)
+						t.Error("wanted statistics")
 					}
 				},
 			},
@@ -149,9 +224,18 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 				NeedRains: true,
 			},
 				Check: func(t *testing.T, data mevv.V3ResultData) {
-					t.Log(data.ByStationPrecList)
-					if !data.Visibility.ByStationPrecipitation || len(data.ByStationPrecList) == 0 {
-						t.Errorf("wanted precipitation, got %#v", data.ByStationPrecList)
+					t.Logf("precip: %+v", data.ByStationPrecipList)
+					if !data.Visibility.ByStationPrecipitation || len(data.ByStationPrecipList) == 0 {
+						t.Errorf("wanted precipitation, got %#v", data.ByStationPrecipList)
+					}
+					var found bool
+					for _, x := range data.ByStationPrecipList {
+						if found = x.Date != "" && x.DistanceFromOrigin != 0 && x.Altitude != 0 && x.Settlement != ""; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("precip not found")
 					}
 				},
 			},
@@ -166,9 +250,18 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 				NeedTemperature: true,
 			},
 				Check: func(t *testing.T, data mevv.V3ResultData) {
-					t.Log(data.ByStationTempList)
+					t.Logf("temp: %+v", data.ByStationTempList)
 					if !data.Visibility.ByStationTemperature || len(data.ByStationTempList) == 0 {
 						t.Errorf("wanted temperature, got %#v", data.ByStationTempList)
+					}
+					var found bool
+					for _, x := range data.ByStationTempList {
+						if found = x.MinValue != 0 && x.MaxValue != 0 && x.Date != "" && x.DistanceFromOrigin != 0 && x.Altitude != 0 && x.Settlement != ""; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("temp not found")
 					}
 				},
 			},
@@ -183,9 +276,18 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 				NeedWinds: true,
 			},
 				Check: func(t *testing.T, data mevv.V3ResultData) {
-					t.Log(data.ByStationWindList)
+					t.Logf("wind: %+v", data.ByStationWindList)
 					if !data.Visibility.ByStationWind || len(data.ByStationWindList) == 0 {
 						t.Errorf("wanted winds, got %#v", data.ByStationWindList)
+					}
+					var found bool
+					for _, x := range data.ByStationWindList {
+						if found = x.Direction != "" && x.MaxGustKmH != 0 && x.Date != "" && x.DistanceFromOrigin != 0 && x.Altitude != 0 && x.Settlement != ""; found {
+							break
+						}
+					}
+					if !found {
+						t.Error("wind not found")
 					}
 				},
 			},
