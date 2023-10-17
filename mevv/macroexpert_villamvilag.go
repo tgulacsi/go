@@ -236,7 +236,6 @@ type (
 		DailyListIce                    []V3DailyBool      `json:"dailyListIce"`
 		DailyListTemperature            []V3DailyMinMax    `json:"dailyListTemperature"`
 		LightningList                   []V3DailyLightning `json:"lightingList"`
-		ByStationList                   []V3Measurement    `json:"byStationList"`
 		ByStationPrecipList             []V3HourlyPrecip   `json:"byStationPrecList"`
 		ByStationTempList               []V3HourlyTemp     `json:"byStationTempList"`
 		ByStationWindList               []V3HourlyWind     `json:"byStationWindList"`
@@ -375,6 +374,17 @@ type (
 		Serious bool   `json:"isSerious"`
 	}
 )
+
+func (h V3Hourly) Time() time.Time {
+	t, _ := time.ParseInLocation("2006.01.02.", h.Date, time.Local)
+	if t.IsZero() {
+		return t
+	}
+	if i, err := strconv.ParseInt(h.Hour, 10, 8); err == nil {
+		return t.Add(time.Duration(i) * time.Hour)
+	}
+	return t
+}
 
 var _ error = (*V3Error)(nil)
 

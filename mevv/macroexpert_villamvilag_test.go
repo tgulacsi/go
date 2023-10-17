@@ -184,7 +184,7 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 					}
 					found = false
 					for _, x := range data.DailyListTemperature {
-						if found = x.Date != "" && x.MinValue != 0 && x.MaxValue != 0 && x.Value != ""; found {
+						if found = x.Date != "" && x.MinValue != 0 && x.MaxValue != 0 && x.MinValue < x.MaxValue && x.Value != ""; found {
 							break
 						}
 					}
@@ -198,7 +198,7 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 					}
 					found = false
 					for _, x := range data.DailyListWind {
-						if found = x.Date != "" && x.MinValue != 0 && x.MaxValue != 0 && x.Value != ""; found {
+						if found = x.Date != "" && x.MinValue != 0 && x.MaxValue != 0 && x.MinValue < x.MaxValue && x.Value != ""; found {
 							break
 						}
 					}
@@ -230,7 +230,7 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 					}
 					var found bool
 					for _, x := range data.ByStationPrecipList {
-						if found = x.Date != "" && x.DistanceFromOrigin != 0 && x.Altitude != 0 && x.Settlement != ""; found {
+						if found = x.Date != "" && x.Hour != "" && x.DistanceFromOrigin != 0 && x.Altitude != 0 && x.Settlement != ""; found {
 							break
 						}
 					}
@@ -256,7 +256,7 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 					}
 					var found bool
 					for _, x := range data.ByStationTempList {
-						if found = x.MinValue != 0 && x.MaxValue != 0 && x.Date != "" && x.DistanceFromOrigin != 0 && x.Altitude != 0 && x.Settlement != ""; found {
+						if found = x.MinValue != 0 && x.MaxValue != 0 && x.MinValue < x.MaxValue && x.Date != "" && x.DistanceFromOrigin != 0 && x.Altitude != 0 && x.Settlement != ""; found {
 							break
 						}
 					}
