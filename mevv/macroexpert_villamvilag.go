@@ -110,9 +110,7 @@ func (opt Options) Prepare() Options {
 }
 
 type V3Request struct {
-	Username string  `json:"userName"`
-	Password string  `json:"password"`
-	Query    V3Query `json:"query"`
+	Query V3Query `json:"query"`
 }
 type V3Query struct {
 	ResultTypes        []string `json:"resultTypes"`
@@ -430,7 +428,7 @@ func (V Version) GetPDFData(
 	var body io.Reader
 	if V == V3 {
 		qry := V3Query{Options: opt}.Prepare()
-		req := V3Request{Query: qry, Username: username, Password: password}
+		req := V3Request{Query: qry}
 		b, marshalErr := json.Marshal(req)
 		if marshalErr != nil {
 			err = marshalErr
@@ -510,7 +508,8 @@ func (V Version) GetPDFData(
 	if V == V3 {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
-	} else if username != "" {
+	}
+	if username != "" {
 		req.SetBasicAuth(username, password)
 	}
 	logger.Debug(method, "url", req.URL, "headers", req.Header)
