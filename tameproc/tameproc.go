@@ -7,13 +7,16 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -31,24 +34,39 @@ func main() {
 }
 
 func Main() error {
-	flagTimeout := flag.Duration("t", 10*time.Second, "timeout for stop")
+	flagTimeout := flag.Duration("t", 60*time.Second, "timeout for stop")
 	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
-	flagSetName := flag.Bool("set-name", true, "set process name to tameproc-<prog>")
+	flagTouch := flag.Bool("touch", false, "no signal handling, one-off touch")
+	flagConnect := flag.String("connect", "", "connect to this unix-domain-socket (start with @ for abstract socket)")
+	flagListen := flag.String("listen", "", "listen on this unix-domain-socket (start with @ for abstract socket)")
 	flag.Parse()
 
 	prog := flag.Arg(0)
-	if *flagSetName {
-		executable, err := os.Executable()
-		if err != nil {
-			return err
+
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	sigCh := make(chan os.Signal, runtime.GOMAXPROCS(-1))
+	if *flagTouch {
+		if other, err := findProg(executable); err == nil {
+			proc, err := os.FindProcess(int(other))
+			if err == nil {
+				if err = proc.Signal(syscall.SIGCONT); err == nil {
+					return err
+				}
+			}
 		}
-		return syscall.Exec(executable,
+		go func() { sigCh <- syscall.SIGCONT }()
+	}
+	if wantName := filepath.Base(executable) + "-" + prog; prog != "" && filepath.Base(os.Args[0]) != wantName {
+		slog.Warn("exec", "want", wantName, "have", os.Args[0])
+		return syscall.Exec(
+			executable,
 			append(append(make([]string, 0, len(os.Args)),
-				filepath.Base(os.Args[0])+"-"+prog,
-				"-set-name=false"), os.Args[1:]...),
-			os.Environ(),
-		)
+				wantName), os.Args[1:]...),
+			os.Environ())
 	}
 
 	if *flagVerbose {
@@ -61,7 +79,47 @@ func Main() error {
 	defer cancel()
 	grp, ctx := errgroup.WithContext(ctx)
 
-	sigCh := make(chan os.Signal, runtime.GOMAXPROCS(-1))
+	if *flagConnect != "" {
+		network := "unixgram"
+		if (*flagConnect)[0] == '@' && strings.IndexByte(*flagConnect, ':') >= 0 {
+			network = "udp"
+		}
+
+		slog.Debug("connect", "to", network, "addr", *flagConnect)
+		conn, err := net.Dial(network, *flagConnect)
+		if err != nil {
+			return fmt.Errorf("connect to %s,%s: %w", network, *flagConnect, err)
+		}
+		n, err := conn.Write([]byte{'.'})
+		slog.Debug("wrote", "n", n, "error", err)
+		return conn.Close()
+	}
+
+	if *flagListen != "" {
+		lsnr, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Net: "unixgram", Name: *flagListen})
+		if err != nil {
+			return fmt.Errorf("listen on %s: %w", *flagListen, err)
+		}
+		sigCh <- syscall.SIGCONT
+		grp.Go(func() error {
+			for {
+				var a [16]byte
+				lsnr.SetReadDeadline(time.Now().Add(3 * time.Second))
+				n, _, err := lsnr.ReadFromUnix(a[:])
+				if err != nil {
+					if ctx.Err() != nil {
+						return nil
+					}
+					if !errors.Is(err, os.ErrDeadlineExceeded) {
+						slog.Warn("read", "error", err)
+					}
+					continue
+				}
+				slog.Debug("read", "n", n, "error", err)
+				sigCh <- syscall.SIGCONT
+			}
+		})
+	}
 	// USR1=CONT USR2=STOP
 	signal.Notify(sigCh, syscall.SIGCONT, syscall.SIGUSR1)
 
@@ -89,7 +147,7 @@ func Main() error {
 				if !ok {
 					return nil
 				}
-				slog.Warn("signal", "sig", sig)
+				slog.Info("signal", "sig", sig)
 
 				switch sig {
 				case syscall.SIGCONT: // CONT
@@ -98,10 +156,6 @@ func Main() error {
 					} else {
 						atomic.StoreUint32(&lastPID, uint32(pid))
 					}
-					stopTimer()
-					continue Loop
-
-				case syscall.SIGUSR1: // STOP
 					if timer == nil {
 						timer = time.AfterFunc(timeout, func() {
 							if pid, err := kill(prog, int(atomic.LoadUint32(&lastPID)), true, *flagStopDepth); err != nil {
@@ -114,6 +168,9 @@ func Main() error {
 					}
 					stopTimer()
 					timer.Reset(timeout)
+
+				case syscall.SIGUSR1: // STOP
+					stopTimer()
 				}
 			}
 
