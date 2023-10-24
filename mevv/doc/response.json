@@ -2,10 +2,10 @@
     "operationId": 3400,
     "isSuccessful": true,
     "errors": [{
-            "code": "",
+            "code": "Bad",
             "message": ""
         }
-    ]
+    ],
     "resultData": {
         "locationLat": 47.08219889999999,
         "locationLon": 18.9232321,
@@ -14,7 +14,7 @@
         "dateFrom": "2023-05-20T00:00:00+00:00",
         "dateTo": "2023-05-24T23:59:00+00:00",
         "interval": 5,
-        "eventDate": "Urc dátum",
+        "eventDate": "UTC dátum",
         "lightingRadius": 3,
         "visibility": {
             "hasDailyData": true,
@@ -32,7 +32,7 @@
             "hasAgroDrought": false,
             "hasAgroDroughtExtended": false,
             "hasStatistic": false
-        }
+        },
         "dailyListWind": [{
                 "dateString": "2023.05.20",
                 "value": "32.4 -  43.164",
@@ -69,45 +69,85 @@
                 "eventDateUtc": "2023-05-16T17:22:58.6549999Z",
                 "eventDate": "2023-05-16T19:22:58.6549999+00:00",
                 "altitude": 0,
-                "lightningType": "cG"
-                "currentIntensity": 12.1
-                "distanceFromOrigin": 2542.935120889431,
-                "currentIntensity": 12.1
+                "lightningType": "cG",
+                "currentIntensity": 12.1,
+                "distanceFromOrigin": 2542.935120889431
             }
         ],
-        "byStationList": [{
-                "date": "2023.04.26",
+        "ByStationPrecList ": [{
+                "precipitation": 0,
+                "settlementText": "Budapest belterület",
+                "dateString": "2022.05.15",
                 "hour": "01",
+                "altitude": 152.3,
+                "distanceFromOrigin": 6298.006387057096
+            },
+            {
+                "precipitation": 0,
                 "settlementText": "Budapest Zugliget",
-                "value": "5.6 C - 5.8 C"
-            }, {
-                "date": "2023.04.26",
+                "dateString": "2022.05.15",
                 "hour": "01",
-                "settlementText": "Budapest János-hegy",
-                "value": "2.6 C - 2.8 C"
+                "altitude": 420,
+                "distanceFromOrigin": 7902.319610906882
+            }
+        ],
+        "ByStationWindList ": [{
+                "maxgustKmh": 0,
+                "directionCode": "É",
+                "settlementText": "Budapest Zugliget",
+                "dateString": "2022.05.11",
+                "hour": "00",
+                "altitude": 420,
+                "distanceFromOrigin": 7902.319610906882
+            }, {
+                "maxgustKmh": 5.04,
+                "directionCode": "DNY",
+                "settlementText": "Budapest Lágymányos",
+                "dateString": "2022.05.11",
+                "hour": "01",
+                "altitude": 144.6,
+                "distanceFromOrigin": 2708.3708179011396
+            }
+        ],
+        "ByStationTempList ": [{
+                "minValue": 15.8,
+                "maxValue": 16.6,
+                "settlementText": "Budapest Lágymányos",
+                "dateString": "2022.05.11",
+                "hour": "00",
+                "altitude": 144.6,
+                "distanceFromOrigin": 2708.3708179011396
+            }, {
+                "minValue": 15.3,
+                "maxValue": 16.6,
+                "settlementText": "Budapest belterület",
+                "dateString": "2022.05.11",
+                "hour": "00",
+                "altitude": 152.3,
+                "distanceFromOrigin": 6298.006387057096
             }
         ],
         "agroFrostList": [{
                 "dateString": "2023.05.20",
-                "temperatureMin": -4
+                "temperatureMin": -4,
                 "value": true
             }, {
                 "dateString": "2023.05.22",
-                "temperatureMin": -3
+                "temperatureMin": -3,
                 "value": true
             }
         ],
         "agroFrostExtendedList": [{
                 "dateString": "2023.05.20",
-                "temperatureMin": -4
+                "temperatureMin": -4,
                 "value": true
             }, {
                 "dateString": "2023.05.21",
-                "temperatureMin": 3
+                "temperatureMin": 3,
                 "value": false
             }, {
                 "dateString": "2023.05.22",
-                "temperatureMin": -3
+                "temperatureMin": -3,
                 "value": true
             }
         ],

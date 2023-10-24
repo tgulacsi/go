@@ -10,13 +10,25 @@
 			"name": "QueryCivil Test",
 			"request": {
 				"auth": {
-					"type": "noauth"
+					"type": "basic",
+					"basic": [
+						{
+							"key": "username",
+							"value": "apiTest@macrometeo.hu",
+							"type": "string"
+						},
+						{
+							"key": "password",
+							"value": "ApI3579TesT",
+							"type": "string"
+						}
+					]
 				},
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"userName\": \"xxxx@yyyy.zz\",\r\n    \"password\": \"pwd123\",\r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"interval\": \"13\",\r\n        \"resultTypes\": [\r\n            \"PDF\", \"DATA\"\r\n        ],\r\n        \"eventDate\": \"2021-06-10T22:00:00Z\",\r\n        \"selectedOperations\": [\r\n            \"QUERY_WIND\",\"QUERY_TEMPERATURE\"\r\n        ]\r\n    },\r\n    \"withStatistic\": true,\r\n    \"extendedRange\": true\r\n}",
+					"raw": "{\r\n  \r\n        \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"kárszám\",\r\n        \"interval\": \"13\",\r\n        \"resultTypes\": [\r\n            \"PDF\", \"DATA\"\r\n        ],\r\n        \"eventDate\": \"2021-06-10T22:00:00Z\",\r\n        \"selectedOperations\": [\r\n            \"QUERY_WIND\",\"QUERY_TEMPERATURE\"\r\n        ]\r\n    },\r\n    \"withStatistic\": true,\r\n    \"extendedRange\": true\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -43,13 +55,25 @@
 			"name": "QueryCivil hourly Test",
 			"request": {
 				"auth": {
-					"type": "noauth"
+					"type": "basic",
+					"basic": [
+						{
+							"key": "username",
+							"value": "apiTest@macrometeo.hu",
+							"type": "string"
+						},
+						{
+							"key": "password",
+							"value": "ApI3579TesT",
+							"type": "string"
+						}
+					]
 				},
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"userName\": \"xxxx@yyyy.zz\",\r\n    \"password\": \"pwd123\",\r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"resultTypes\": [\r\n            \"PDF\",\r\n            \"DATA\"\r\n        ],\r\n        \"eventDate\": \"2022-05-10T22:00:00Z\",\r\n        \"selectedOperations\": [\r\n            \"QUERY_BY_STATION_PREC\"\r\n        ]\r\n    },\r\n    \"withStatistic\": true,\r\n    \"extendedRange\": true\r\n}",
+					"raw": "{\r\n\r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"resultTypes\": [\r\n            \"PDF\",\r\n            \"DATA\"\r\n        ],\r\n        \"eventDate\": \"2022-05-10T22:00:00Z\",\r\n        \"selectedOperations\": [\r\n            \"QUERY_BY_STATION_PREC\"\r\n        ]\r\n    },\r\n    \"withStatistic\": true,\r\n    \"extendedRange\": true\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -76,13 +100,25 @@
 			"name": "QueryAgro Test",
 			"request": {
 				"auth": {
-					"type": "noauth"
+					"type": "basic",
+					"basic": [
+						{
+							"key": "username",
+							"value": "apiTest@macrometeo.hu",
+							"type": "string"
+						},
+						{
+							"key": "password",
+							"value": "ApI3579TesT",
+							"type": "string"
+						}
+					]
 				},
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"userName\": \"xxxx@yyyy.zz\",\r\n    \"password\": \"pwd123\",\r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"year\": 2021,\r\n        \"resultTypes\": [\r\n            \"PDF\",\r\n            \"DATA\"\r\n        ],\r\n        \"selectedOperations\": [\r\n            \"QUERY_DROUGHT\"\r\n        ]\r\n    }\r\n}",
+					"raw": "{\r\n  \r\n    \"query\": {\r\n        \"locationLat\": null,\r\n        \"locationLon\": null,\r\n        \"address\": \"Tétényi út 126 Budapest\",\r\n        \"referenceNo\": \"string\",\r\n        \"year\": 2021,\r\n        \"resultTypes\": [\r\n            \"PDF\",\r\n            \"DATA\"\r\n        ],\r\n        \"selectedOperations\": [\r\n            \"QUERY_DROUGHT\"\r\n        ]\r\n    }\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
