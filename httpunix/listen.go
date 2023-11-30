@@ -23,6 +23,7 @@ package httpunix
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -78,6 +79,7 @@ func ListenAndServeSrv(ctx context.Context, addr string, srv *http.Server) error
 		addr = strings.TrimPrefix(addr[4:], "://")
 		addr = strings.TrimPrefix(addr, ":")
 		os.Remove(addr)
+		slog.Debug("Listen", "addr", addr)
 		var err error
 		if ln, err = net.Listen("unix", addr); err != nil {
 			return fmt.Errorf("%s: %w", addrU, err)

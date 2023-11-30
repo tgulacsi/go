@@ -56,6 +56,7 @@ func fileSize(fn string) int64 {
 // MergeFiles merges the given sources into dest.
 func MergeFiles(ctx context.Context, dest string, sources ...string) (err error) {
 	if len(sources) == 0 {
+		slog.Warn("MergeFiles", "sources", len(sources))
 		return nil
 	}
 
