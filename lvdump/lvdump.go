@@ -15,16 +15,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-// Log is used for logging.
-var Log = func(...interface{}) error { return nil }
-
 // Dump records.
 //
 // A record is encoded as +klen,dlen:key->data followed by a newline.
 // Here klen is the number of bytes in key and dlen is the number of bytes in data.
 // The end of data is indicated by an extra newline.
 func Dump(w io.Writer, src string) error {
-	//Log("msg","open src", "file", src)
+	//slog.Debug("open src", "file", src)
 	db, err := leveldb.OpenFile(src, &opt.Options{ReadOnly: true})
 	if err != nil {
 		return err
@@ -35,16 +32,13 @@ func Dump(w io.Writer, src string) error {
 	defer it.Release()
 	out := bufio.NewWriter(w)
 	defer out.Flush()
-	n := 0
 	for it.Next() {
 		fmt.Fprintf(out, "+%d,%d:%s->", len(it.Key()), len(it.Value()), it.Key())
 		if _, err := out.Write(it.Value()); err != nil {
 			return err
 		}
 		out.WriteByte('\n')
-		n++
 	}
-	Log("msg", "Finished.", "rows", n)
 	if err := out.WriteByte('\n'); err != nil {
 		return err
 	}
