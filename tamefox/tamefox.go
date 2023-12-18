@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rajveermalviya/go-wayland/wayland/client"
+	"github.com/rajveermalviya/go-wayland/wayland/staging/ext-idle-notify-v1"
 	"github.com/tgulacsi/go/globalctx"
 	"golang.org/x/sync/errgroup"
 )
@@ -57,6 +59,7 @@ func Main() error {
 	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
 	flagAC := flag.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
+	flagIdle := flag.Bool("idle", false, "use wayland idle notification")
 	flag.Parse()
 
 	if !*flagVerbose {
@@ -75,22 +78,55 @@ func Main() error {
 		return err
 	}
 
-	timeout := *flagTimeout
 	var timer *time.Timer
-	stopTimer := func() {
-		if timer != nil && !timer.Stop() {
-			select {
-			case <-timer.C:
-			default:
-			}
-		}
-	}
+	var timeout time.Duration
+	stopTimer := func() {}
 	var ff int
 	defer func() {
 		if ff != 0 {
 			kill(ff, false, 999)
 		}
 	}()
+
+	if *flagIdle {
+		disp, err := client.Connect("")
+		if err != nil {
+			return err
+		}
+		defer disp.Context().Close()
+		defer disp.Destroy()
+		// notif := ext_idle_notify.NewIdleNotifier(disp.Context())
+		// defer notif.Destroy()
+		seat := client.NewSeat(disp.Context())
+		// n, err := notif.GetIdleNotification(1000, seat)
+		n := ext_idle_notify.NewIdleNotification(disp.Context())
+		// if err != nil {
+		// log.Printf("ERROR: %+v", err)
+		// return err
+		// }
+		defer n.Destroy()
+		log.Println("seat:", seat, "n:", n)
+		n.SetIdledHandler(func(ext_idle_notify.IdleNotificationIdledEvent) {
+			log.Println("Idle")
+			kill(ff, true, *flagStopDepth)
+		})
+		n.SetResumedHandler(func(ext_idle_notify.IdleNotificationResumedEvent) {
+			log.Println("Resume")
+			kill(ff, false, 999)
+		})
+		n.Context().Register(n)
+	} else {
+		timeout = *flagTimeout
+		stopTimer = func() {
+			if timer != nil && !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		}
+	}
+
 	grp.Go(func() error {
 		dec := json.NewDecoder(pr)
 		for dec.More() {
@@ -103,9 +139,10 @@ func Main() error {
 				continue
 			}
 			if strings.EqualFold(change.Container.AppID, *flagProg) ||
+				(*flagProg == "vivaldi" &&
+					strings.EqualFold(change.Container.AppID, "vivaldi-stable")) ||
 				(*flagProg == "firefox" &&
-					(strings.EqualFold(change.Container.AppID, "firefox") ||
-						strings.EqualFold(change.Container.AppID, "firefox-esr"))) {
+					strings.EqualFold(change.Container.AppID, "firefox-esr")) {
 				ff = change.Container.PID
 				kill(ff, false, 999)
 				stopTimer()
@@ -124,14 +161,16 @@ func Main() error {
 					continue
 				}
 			}
-			if timer == nil {
+			if timer == nil && timeout != 0 {
 				timer = time.AfterFunc(timeout, func() {
 					kill(ff, true, *flagStopDepth)
 				})
 				continue
 			}
 			stopTimer()
-			timer.Reset(timeout)
+			if timer != nil {
+				timer.Reset(timeout)
+			}
 		}
 		return nil
 	})
