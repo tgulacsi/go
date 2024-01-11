@@ -20,7 +20,7 @@ require (
 	github.com/opentracing/basictracer-go v1.1.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/outcaste-io/badger/v3 v3.2202.0
-	github.com/pdfcpu/pdfcpu v0.5.0
+	github.com/pdfcpu/pdfcpu v0.6.0
 	github.com/rogpeppe/retry v0.1.0
 	github.com/rs/zerolog v1.29.0
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
@@ -33,7 +33,7 @@ require (
 	golang.org/x/sync v0.4.0
 	golang.org/x/sys v0.13.0
 	golang.org/x/term v0.13.0
-	golang.org/x/text v0.13.0
+	golang.org/x/text v0.14.0
 	golang.org/x/time v0.3.0
 	perkeep.org v0.0.0-20230124163929-44b1dbe0f64f
 )
@@ -79,7 +79,7 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go4.org v0.0.0-20201209231011-d4a079459e60 // indirect
-	golang.org/x/image v0.11.0 // indirect
+	golang.org/x/image v0.14.0 // indirect
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect

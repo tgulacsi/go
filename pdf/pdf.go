@@ -56,6 +56,7 @@ func fileSize(fn string) int64 {
 // MergeFiles merges the given sources into dest.
 func MergeFiles(ctx context.Context, dest string, sources ...string) (err error) {
 	if len(sources) == 0 {
+		slog.Warn("MergeFiles", "sources", len(sources))
 		return nil
 	}
 
@@ -78,7 +79,7 @@ func MergeFiles(ctx context.Context, dest string, sources ...string) (err error)
 		return destfh.CloseAtomicallyReplace()
 	}
 
-	if err = api.MergeAppendFile(sources, dest, config); err == nil {
+	if err = api.MergeAppendFile(sources, dest, false, config); err == nil {
 		size := fileSize(dest)
 		if size > 5 {
 			return nil
