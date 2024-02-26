@@ -2,11 +2,11 @@ module github.com/tgulacsi/go
 
 require (
 	github.com/BurntSushi/toml v1.2.1
-	github.com/UNO-SOFT/zlog v0.7.7
+	github.com/UNO-SOFT/zlog v0.8.1
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/go-kit/log v0.2.1
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.4.1
 	github.com/go-logr/zerologr v1.2.3
 	github.com/google/go-cmp v0.5.9
 	github.com/google/renameio/v2 v2.0.0
@@ -27,12 +27,12 @@ require (
 	github.com/sony/gobreaker v0.5.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210305035536-64b5b1c73954
 	github.com/valyala/quicktemplate v1.7.0
-	golang.org/x/crypto v0.14.0
-	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
-	golang.org/x/net v0.17.0
-	golang.org/x/sync v0.4.0
-	golang.org/x/sys v0.13.0
-	golang.org/x/term v0.13.0
+	golang.org/x/crypto v0.19.0
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
+	golang.org/x/net v0.21.0
+	golang.org/x/sync v0.6.0
+	golang.org/x/sys v0.17.0
+	golang.org/x/term v0.17.0
 	golang.org/x/text v0.14.0
 	golang.org/x/time v0.3.0
 	perkeep.org v0.0.0-20230124163929-44b1dbe0f64f
@@ -80,8 +80,8 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go4.org v0.0.0-20201209231011-d4a079459e60 // indirect
 	golang.org/x/image v0.14.0 // indirect
-	golang.org/x/mod v0.13.0 // indirect
-	golang.org/x/tools v0.14.0 // indirect
+	golang.org/x/mod v0.15.0 // indirect
+	golang.org/x/tools v0.18.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -103,6 +103,4 @@ require (
 	modernc.org/zappy v1.0.6 // indirect
 )
 
-go 1.21
-
-toolchain go1.22.0
+go 1.22.0
