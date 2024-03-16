@@ -8,19 +8,20 @@ package main
 
 import (
 	"flag"
+	"log/slog"
 	"os"
 
 	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/tgulacsi/go/lvdump"
 )
 
-var logger = zlog.New(os.Stderr)
+var logger = zlog.New(os.Stderr).SLog()
 
 func main() {
-	lvdump.Log = logger.WithGroup("lvdump").Log
+	slog.SetDefault(logger)
 
 	flag.Parse()
 	if err := lvdump.Dump(os.Stdout, flag.Arg(0)); err != nil {
-		logger.Log("msg", "Dump", "src", flag.Arg(0), "error", err)
+		logger.Error("Dump", "src", flag.Arg(0), "error", err)
 	}
 }

@@ -17,7 +17,7 @@ limitations under the License.
 package coord
 
 import (
-	"embed"
+	_ "embed"
 	"fmt"
 	"io"
 	"net/http"
@@ -128,16 +128,13 @@ func (in *Interactive) serveSet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//go:embed assets
-var statikFS embed.FS
+//go:embed assets/gmaps.html
+var gmapsHTML string
+
 var tmpl *template.Template
 
 func init() {
-	b, err := statikFS.ReadFile("gmaps.html")
-	if err != nil {
-		panic(err)
-	}
-	tmpl = template.Must(template.New("gmapsHTML").Parse(string(b)))
+	tmpl = template.Must(template.New("gmapsHTML").Parse(gmapsHTML))
 }
 
 func parseLatLng(latS, lngS string) (float64, float64, error) {
