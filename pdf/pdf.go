@@ -1,5 +1,5 @@
 /*
-  Copyright 2019, 2023 Tamás Gulácsi
+  Copyright 2019, 2024 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import (
 var config = model.NewDefaultConfiguration()
 
 func init() {
-	config.ValidationMode = model.ValidationNone
+	config.ValidationMode = model.ValidationRelaxed
 }
 
 var skipPdfunite, skipPdftk, skipGs int32

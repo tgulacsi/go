@@ -133,7 +133,7 @@ var statikFS embed.FS
 var tmpl *template.Template
 
 func init() {
-	b, err := statikFS.ReadFile("/gmaps.html")
+	b, err := statikFS.ReadFile("gmaps.html")
 	if err != nil {
 		panic(err)
 	}
