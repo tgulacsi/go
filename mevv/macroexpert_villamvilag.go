@@ -530,10 +530,20 @@ func (V Version) GetPDFData(
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return V3ResultData{}, nil, "", "", fmt.Errorf("%s: %w", resp.Status, ErrAuth)
 		}
-		var a [1024]byte
-		n, _ := sr.ReadAt(a[:], 0)
-		logger.Error(method, "url", req.URL, "headers", req.Header, "body", a[:n], "status", resp.Status)
-		return V3ResultData{}, nil, "", "", fmt.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
+		n := int(sr.Size())
+		if n > 1<<20 {
+			n = 1 << 20
+		}
+		b := make([]byte, n)
+		n, _ = sr.ReadAt(b, 0)
+		b = b[:n]
+		logger.Error(method, "url", req.URL, "headers", req.Header, "body", b, "status", resp.Status)
+		var re meRemoteError
+		if err := json.NewDecoder(io.NewSectionReader(sr, 0, sr.Size())).Decode(&re); err != nil {
+			logger.Warn("decode error response", "body", string(b), "error", err)
+			return V3ResultData{}, nil, "", "", fmt.Errorf("%s: egyĂŠb hiba (%s)", resp.Status, req.URL)
+		}
+		return V3ResultData{}, nil, "", "", fmt.Errorf("%s: egyeb hiba: %w", resp.Status, &re)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct == "application/xml" { // error
@@ -542,7 +552,7 @@ func (V Version) GetPDFData(
 			b, _ := io.ReadAll(sr)
 			return V3ResultData{}, nil, "", "", fmt.Errorf("parse %q: %w", string(b), err)
 		}
-		return V3ResultData{}, nil, "", "", mr
+		return V3ResultData{}, nil, "", "", &mr
 	}
 	if V == V3 {
 		if prefix, _, _ := strings.Cut(ct, ";"); prefix == "application/json" {
@@ -589,13 +599,38 @@ func (V Version) GetPDFData(
 	return V3ResultData{}, resp.Body, fn, ct, nil
 }
 
+type meRemoteError struct {
+	Type       string `json:"type"`
+	Message    string `json:"message"`
+	Detail     string `json:"detail"`
+	StackTrace string `json:"stackTrace"`
+}
+
+func (re *meRemoteError) Error() string {
+	if re == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s[%s]: %s\n%s", re.Type, re.Message, re.Detail, re.StackTrace)
+}
+
+func (re *meRemoteError) Format(f fmt.State, verb rune) {
+	if re == nil {
+		return
+	}
+	if f.Flag('+') {
+		fmt.Fprintf(f, "%s[%s]: %s\n%s", re.Type, re.Message, re.Detail, re.StackTrace)
+	} else {
+		fmt.Fprintf(f, "%s[%s]: %s", re.Type, re.Message, re.Detail)
+	}
+}
+
 type meResponse struct {
 	XMLName xml.Name `xml:"Response"`
 	Code    string   `xml:"ResponseCode"`
 	Text    string   `xml:"ResponseText"`
 }
 
-func (mr meResponse) ErrNum() int {
+func (mr *meResponse) ErrNum() int {
 	n, err := strconv.Atoi(strings.TrimPrefix("ERR_", mr.Code))
 	if err != nil {
 		return 9999
@@ -603,7 +638,7 @@ func (mr meResponse) ErrNum() int {
 	return n
 }
 
-func (mr meResponse) Error() string { return fmt.Sprintf("%s: %s", mr.Code, mr.Text) }
+func (mr *meResponse) Error() string { return fmt.Sprintf("%s: %s", mr.Code, mr.Text) }
 
 func (V Version) fmtDate(t time.Time) string {
 	if t.IsZero() {
