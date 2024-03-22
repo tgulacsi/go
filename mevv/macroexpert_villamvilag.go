@@ -120,6 +120,9 @@ type V3Query struct {
 
 func (req V3Query) Prepare() V3Query {
 	req.Options = req.Options.Prepare()
+	if req.Options.At.IsZero() && !req.Options.Since.IsZero() && !req.Options.Till.IsZero() {
+		req.Options.At = req.Options.Since.Add(req.Options.Till.Sub(req.Options.Since) / 2)
+	}
 	req.Options.At = req.Options.At.UTC()
 	req.ResultTypes = req.ResultTypes[:0]
 	if req.Options.NeedData {
@@ -537,7 +540,8 @@ func (V Version) GetPDFData(
 		b := make([]byte, n)
 		n, _ = sr.ReadAt(b, 0)
 		b = b[:n]
-		logger.Error(method, "url", req.URL, "headers", req.Header, "body", b, "status", resp.Status)
+		logger.Error(method, "url", req.URL, "headers", req.Header, "body", b, "status", resp.Status,
+			"request", buf.String())
 		var re meRemoteError
 		if err := json.NewDecoder(io.NewSectionReader(sr, 0, sr.Size())).Decode(&re); err != nil {
 			logger.Warn("decode error response", "body", string(b), "error", err)
