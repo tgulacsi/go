@@ -17,9 +17,8 @@ limitations under the License.
 package coord
 
 import (
+	"context"
 	"testing"
-
-	"golang.org/x/net/context"
 )
 
 func TestGetCoord(t *testing.T) {

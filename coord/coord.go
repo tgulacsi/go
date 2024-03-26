@@ -1,5 +1,5 @@
 /*
-Copyright 2019, 2022 Tamás Gulácsi
+Copyright 2019, 2024 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,21 +19,52 @@ limitations under the License.
 package coord
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/rogpeppe/retry"
 	"golang.org/x/time/rate"
 )
 
-const gmapsURL = `https://maps.googleapis.com/maps/api/geocode/json?key={{.APIKey}}&sensors=false&address={{.Address}}`
+type urlTemplate struct {
+	Base string
+	addressOrder
+}
+
+var rZipCity = regexp.MustCompile("^ *[0-9]{4,} +[^ ]+ +")
+
+func (ut urlTemplate) WithAddress(address string) string {
+	if ut.addressOrder == littleEndian {
+		if m := rZipCity.FindString(address); m != "" {
+			address = address[len(m):] + " " + strings.TrimSpace(m)
+		}
+	}
+	return strings.Replace(ut.Base, "{{.Address}}", url.QueryEscape(address), 1)
+}
+
+type addressOrder uint8
+
+const (
+	bigEndian addressOrder = iota
+	littleEndian
+)
+
+var (
+	gmapsURL     = urlTemplate{Base: `https://maps.googleapis.com/maps/api/geocode/json?key={{.APIKey}}&sensors=false&address={{.Address}}`}
+	nominatimURL = urlTemplate{Base: `https://nominatim.openstreetmap.org/search?format=json&q={{.Address}}`, addressOrder: littleEndian}
+)
 
 var (
 	ErrNotFound       = errors.New("not found")
@@ -60,18 +91,30 @@ var retryStrategy = retry.Strategy{
 }
 
 func Get(ctx context.Context, address string) (Location, error) {
-	var loc Location
 	select {
 	case <-ctx.Done():
-		return loc, ctx.Err()
+		return Location{}, ctx.Err()
 	default:
 	}
-	aURL := gmapsURL
-	aURL = strings.Replace(aURL, "{{.Address}}", url.QueryEscape(address), 1)
-	aURL = strings.Replace(aURL, "{{.APIKey}}", url.QueryEscape(APIKey), 1)
+	if APIKey != "" {
+		aURL := gmapsURL
+		gmapsURL.Base = strings.Replace(gmapsURL.Base, "{{.APIKey}}", url.QueryEscape(APIKey), 1)
+		loc, err := aURL.get(ctx, address)
+		if err == nil {
+			return loc, err
+		}
+	}
+	return nominatimURL.get(ctx, address)
+}
 
+func (ut urlTemplate) get(ctx context.Context, address string) (Location, error) {
+	aURL := ut.WithAddress(address)
+
+	logger := zlog.SFromContext(ctx)
+	var loc Location
 	var firstErr error
-	var data mapsResponse
+	var gData mapsResponse
+	var nData []nominatimResult
 	for iter := retryStrategy.Start(); ; {
 		if err := gmapsRateLimit.Wait(ctx); err != nil {
 			return loc, err
@@ -83,21 +126,39 @@ func Get(ctx context.Context, address string) (Location, error) {
 		if err = func() error {
 			resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 			if err != nil {
+				logger.Error("coord request", "url", aURL, "error", err)
 				return fmt.Errorf("%s: %w", aURL, err)
 			}
 			defer resp.Body.Close()
+			logger.Error("coord request", "url", aURL, "status", resp.Status)
 			if resp.StatusCode > 299 {
 				return fmt.Errorf("%s: %w", aURL, errors.New(resp.Status))
 			}
-
-			if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			b, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil && len(b) == 0 {
+				return fmt.Errorf("read response: %w", err)
+			}
+			var data any
+			if bytes.HasPrefix(b, []byte("[")) {
+				err = json.Unmarshal(b, &nData)
+				data = nData
+			} else {
+				err = json.Unmarshal(b, &gData)
+				data = gData
+				if err != nil {
+					if gData.Status != "OVER_QUERY_LIMIT" {
+						gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
+					} else {
+						gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() / 2)
+					}
+				}
+			}
+			if err != nil {
+				logger.Error("decode", "data", string(b), "error", err)
 				return fmt.Errorf("decode: %w", err)
 			}
-			if data.Status != "OVER_QUERY_LIMIT" {
-				gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
-			} else {
-				gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() / 2)
-			}
+			logger.Info("response", "data", data, "body", string(b))
 			return nil
 		}(); err == nil {
 			break
@@ -110,21 +171,35 @@ func Get(ctx context.Context, address string) (Location, error) {
 		}
 	}
 
-	switch data.Status {
+	if gData.Status == "" {
+		if len(nData) == 0 {
+			return loc, ErrNotFound
+		}
+		result := nData[0]
+		loc.Address = result.DisplayName
+		var err error
+		if loc.Lat, err = strconv.ParseFloat(result.Lat, 64); err == nil {
+			loc.Lng, err = strconv.ParseFloat(result.Lon, 64)
+		}
+		return loc, err
+
+	}
+
+	switch gData.Status {
 	case "OK":
 	case "ZERO_RESULTS":
 		return loc, ErrNotFound
 	default:
-		return loc, errors.New(data.Status)
+		return loc, errors.New(gData.Status)
 	}
-	switch len(data.Results) {
+	switch len(gData.Results) {
 	case 0:
 		return loc, ErrNotFound
 	case 1:
 	default:
 		return loc, ErrTooManyResults
 	}
-	result := data.Results[0]
+	result := gData.Results[0]
 	loc.Address = result.FormattedAddress
 	loc.Lat, loc.Lng = result.Geometry.Location.Lat, result.Geometry.Location.Lng
 	return loc, nil
@@ -133,6 +208,22 @@ func Get(ctx context.Context, address string) (Location, error) {
 type mapsResponse struct {
 	Status  string       `json:"status"`
 	Results []mapsResult `json:"results"`
+}
+type nominatimResult struct {
+	PlaceID     uint64   `json:"place_id"`
+	Licence     string   `json:"licence"`
+	OSMType     string   `json:"osm_type"`
+	OSMID       uint64   `json:"osm_id"`
+	Lat         string   `json:"lat"`
+	Lon         string   `json:"lon"`
+	Class       string   `json:"class"`
+	Type        string   `json:"type"`
+	PlaceRank   uint32   `json:"place_rank"`
+	Importance  float32  `json:"importance"`
+	AddressType string   `json:"addresstype"`
+	Name        string   `json:"name"`
+	DisplayName string   `json:"display_name"`
+	BoundingBox []string `json:"boundingbox"`
 }
 
 type mapsResult struct {
