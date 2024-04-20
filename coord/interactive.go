@@ -1,5 +1,5 @@
 /*
-Copyright 2019, 2020 Tamás Gulácsi
+Copyright 2019, 2024 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ func (in *Interactive) RenderHTML(w io.Writer, address, callbackURL string) erro
 		LocLat:         fmt.Sprintf("%+f", in.Location.Lat),
 		LocLng:         fmt.Sprintf("%+f", in.Location.Lng),
 		CallbackPath:   callbackURL,
-		APIKey:         APIKey,
+		APIKey:         GmapsAPIKey,
 	}
 	if err := tmpl.Execute(w, sp); err != nil {
 		return fmt.Errorf("with %#v: %w", sp, err)

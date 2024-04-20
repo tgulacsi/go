@@ -64,17 +64,22 @@ const (
 var (
 	gmapsURL     = urlTemplate{Base: `https://maps.googleapis.com/maps/api/geocode/json?key={{.APIKey}}&sensors=false&address={{.Address}}`}
 	nominatimURL = urlTemplate{Base: `https://nominatim.openstreetmap.org/search?format=json&q={{.Address}}`, addressOrder: littleEndian}
+	mapsCoURL    = urlTemplate{Base: `https://geocode.maps.co/search?format=json&api_key={{.APIKey}}&q={{.Address}}`}
 )
 
 var (
 	ErrNotFound       = errors.New("not found")
 	ErrTooManyResults = errors.New("too many results")
 
-	gmapsRateLimit = rate.NewLimiter(1, 1)
+	rateLimit = rate.NewLimiter(1, 1)
 
-	// APIKey is the API_KEY served too Google Maps services.
+	// GmapsAPIKey is the API_KEY served to Google Maps services.
 	// It is set by default to the contents of the GOOGLE_MAPS_API_KEY env var.
-	APIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
+	GmapsAPIKey = os.Getenv("GOOGLE_MAPS_API_KEY")
+
+	// MapsCoAPIKey isd the API_Key served to maps.co
+	// It is set by default to the contents of the MAPSCO_API_KEY env var.
+	MapsCoAPIKey = os.Getenv("MAPSCO_API_KEY")
 )
 
 type Location struct {
@@ -96,11 +101,17 @@ func Get(ctx context.Context, address string) (Location, error) {
 		return Location{}, ctx.Err()
 	default:
 	}
-	if APIKey != "" {
-		aURL := gmapsURL
-		gmapsURL.Base = strings.Replace(gmapsURL.Base, "{{.APIKey}}", url.QueryEscape(APIKey), 1)
-		loc, err := aURL.get(ctx, address)
-		if err == nil {
+	F := func(aURL urlTemplate, key string) (Location, error) {
+		aURL.Base = strings.Replace(aURL.Base, "{{.APIKey}}", url.QueryEscape(key), 1)
+		return aURL.get(ctx, address)
+	}
+	if GmapsAPIKey != "" {
+		if loc, err := F(gmapsURL, GmapsAPIKey); err == nil {
+			return loc, err
+		}
+	}
+	if MapsCoAPIKey != "" {
+		if loc, err := F(mapsCoURL, MapsCoAPIKey); err != nil {
 			return loc, err
 		}
 	}
@@ -116,7 +127,7 @@ func (ut urlTemplate) get(ctx context.Context, address string) (Location, error)
 	var gData mapsResponse
 	var nData []nominatimResult
 	for iter := retryStrategy.Start(); ; {
-		if err := gmapsRateLimit.Wait(ctx); err != nil {
+		if err := rateLimit.Wait(ctx); err != nil {
 			return loc, err
 		}
 		req, err := http.NewRequest("GET", aURL, nil)
@@ -130,10 +141,11 @@ func (ut urlTemplate) get(ctx context.Context, address string) (Location, error)
 				return fmt.Errorf("%s: %w", aURL, err)
 			}
 			defer resp.Body.Close()
-			logger.Error("coord request", "url", aURL, "status", resp.Status)
 			if resp.StatusCode > 299 {
+				logger.Error("coord request", "url", aURL, "status", resp.Status)
 				return fmt.Errorf("%s: %w", aURL, errors.New(resp.Status))
 			}
+			logger.Info("coord request", "url", aURL, "status", resp.Status)
 			b, err := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if err != nil && len(b) == 0 {
@@ -148,9 +160,9 @@ func (ut urlTemplate) get(ctx context.Context, address string) (Location, error)
 				data = gData
 				if err != nil {
 					if gData.Status != "OVER_QUERY_LIMIT" {
-						gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() * 1.1)
+						rateLimit.SetLimit(rateLimit.Limit() * 1.1)
 					} else {
-						gmapsRateLimit.SetLimit(gmapsRateLimit.Limit() / 2)
+						rateLimit.SetLimit(rateLimit.Limit() / 2)
 					}
 				}
 			}
@@ -205,10 +217,6 @@ func (ut urlTemplate) get(ctx context.Context, address string) (Location, error)
 	return loc, nil
 }
 
-type mapsResponse struct {
-	Status  string       `json:"status"`
-	Results []mapsResult `json:"results"`
-}
 type nominatimResult struct {
 	PlaceID     uint64   `json:"place_id"`
 	Licence     string   `json:"licence"`
@@ -226,6 +234,10 @@ type nominatimResult struct {
 	BoundingBox []string `json:"boundingbox"`
 }
 
+type mapsResponse struct {
+	Status  string       `json:"status"`
+	Results []mapsResult `json:"results"`
+}
 type mapsResult struct {
 	FormattedAddress string       `json:"formatted_address"`
 	Geometry         mapsGeometry `json:"geometry"`

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 Tamás Gulácsi
+Copyright 2015, 2024 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ func TestGetCoord(t *testing.T) {
 		WantErr bool
 	}{
 		{"Telepy utca 24, Budapest, HUNGARY", false},
+		{"1096 Budapest, Telepy utca 24", false},
 		{"XXXXXXX utca", true},
 	} {
 
