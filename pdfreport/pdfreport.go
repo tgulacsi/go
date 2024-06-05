@@ -122,14 +122,15 @@ func (t Table) Row(values []string) {
 	if n := len(t.widths) - len(values); n > 0 {
 		values = append(values, make([]string, n)...)
 	}
-	y := t.report.GetY()
 	t.report.SetFontSize(t.bodySize)
+	y := t.report.GetY()
 	if y+2*t.report.Ht > t.report.Bottom {
 		t.report.AddPage()
+		y = t.report.GetY()
 	}
 	for i, v := range values {
 		x := t.report.GetX()
-		t.report.MultiCell(t.widths[i], 2*t.report.Ht, t.report.Encode(v), "1", "", false)
+		t.report.MultiCell(t.widths[i], 3*t.report.Ht/2, t.report.Encode(v), "1", "", false)
 		if i != len(values)-1 {
 			t.report.SetXY(x+t.widths[i], y)
 		}
