@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/godbus/dbus/v5"
 	"github.com/tgulacsi/go/globalctx"
 	"golang.org/x/sync/errgroup"
 )
@@ -61,6 +62,17 @@ func Main() error {
 
 	if !*flagVerbose {
 		log.SetOutput(io.Discard)
+	}
+
+	iic, err := newIdleInhibitChecker()
+	if err != nil {
+		return err
+	}
+	defer iic.Close()
+	if ok, err := iic.isInhibited(); err != nil {
+		log.Printf("error isInhibited: %+v", err)
+	} else {
+		log.Printf("idle inhibited: %t", ok)
 	}
 
 	ctx, cancel := globalctx.Wrap(context.Background())
@@ -126,7 +138,13 @@ func Main() error {
 			}
 			if timer == nil {
 				timer = time.AfterFunc(timeout, func() {
-					kill(ff, true, *flagStopDepth)
+					if inhibited, err := iic.isInhibited(); err != nil {
+						log.Printf("error isInhibited: %+v", err)
+					} else if inhibited {
+						log.Printf("idle is inhibited, skip stop")
+					} else {
+						kill(ff, true, *flagStopDepth)
+					}
 				})
 				continue
 			}
@@ -233,4 +251,40 @@ func getPPid(pid int) (int, error) {
 		b = b[:i]
 	}
 	return strconv.Atoi(string(bytes.TrimSpace(b)))
+}
+
+type idleInhibitChecker struct {
+	dbusConn *dbus.Conn
+}
+
+func newIdleInhibitChecker() (*idleInhibitChecker, error) {
+	conn, err := dbus.ConnectSessionBus()
+	if err != nil {
+		return nil, err
+	}
+
+	return &idleInhibitChecker{dbusConn: conn}, nil
+}
+
+func (i *idleInhibitChecker) Close() error {
+	conn := i.dbusConn
+	i.dbusConn = nil
+	if conn != nil {
+		return conn.Close()
+	}
+	return nil
+}
+
+func (i *idleInhibitChecker) isInhibited() (bool, error) {
+	const listNames = "org.freedesktop.login1.ListInhibitors"
+	var activeNames []dbus.Sender
+	if err := i.dbusConn.BusObject().
+		Call(listNames, 0).
+		Store(
+			&activeNames,
+		); err != nil {
+		log.Printf("calling %q: %+v", listNames, err)
+	}
+	log.Println("inhibitors:", activeNames)
+	return len(activeNames) != 0, nil
 }
