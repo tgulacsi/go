@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/mail"
+	"regexp"
 	"strings"
 
 	"github.com/emersion/go-message"
@@ -34,16 +35,41 @@ func ScanForAddrs(r io.Reader) ([]mail.Address, error) {
 		ff := msg.Header.FieldsByKey(k)
 		for ff.Next() {
 			if f, _ := ff.Text(); f != "" {
-				aa, err := mail.ParseAddressList(f)
+				aa, err := ParseAddressList(f)
+				addrs = append(addrs, aa...)
 				if err != nil {
 					slog.Warn("parse", "k", k, "v", f, "error", err)
-					continue
-				}
-				for _, a := range aa {
-					addrs = append(addrs, *a)
 				}
 			}
 		}
 	}
 	return addrs, nil
+}
+
+func ParseAddressList(text string) ([]mail.Address, error) {
+	aa, err := mail.ParseAddressList(text)
+	if err != nil {
+		aa, err = mail.ParseAddressList(cleanAddress(text))
+	}
+	addrs := make([]mail.Address, len(aa))
+	for i, a := range aa {
+		addrs[i] = *a
+	}
+	return addrs, err
+}
+
+var rEmailAddr = regexp.MustCompile("<?[^@ <]+@[^@ >]+>?")
+
+func cleanAddress(text string) string {
+	text = strings.TrimSpace(text)
+	return rEmailAddr.ReplaceAllStringFunc(text, func(s string) string {
+		if s == text {
+			return s
+		}
+		// slog.Info("replace", "s", s)
+		if s[0] == '<' && s[len(s)-1] == '>' {
+			return s
+		}
+		return strings.ReplaceAll(s, "@", "_at_")
+	})
 }
