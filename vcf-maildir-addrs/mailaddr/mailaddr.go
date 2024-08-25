@@ -5,6 +5,7 @@
 package mailaddr
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -47,18 +48,46 @@ func ScanForAddrs(r io.Reader) ([]mail.Address, error) {
 }
 
 func ParseAddressList(text string) ([]mail.Address, error) {
-	aa, err := mail.ParseAddressList(text)
-	if err != nil {
-		aa, err = mail.ParseAddressList(cleanAddress(text))
+	if strings.IndexByte(text, '@') < 0 {
+		return nil, nil
 	}
-	addrs := make([]mail.Address, len(aa))
-	for i, a := range aa {
-		addrs[i] = *a
+	if aa, err := mail.ParseAddressList(text); err == nil {
+		addrs := make([]mail.Address, len(aa))
+		for i, a := range aa {
+			addrs[i] = *a
+		}
+		return addrs, err
 	}
-	return addrs, err
+	// aa, err = mail.ParseAddressList(cleanAddress(text))
+	var addrs []mail.Address
+	var errs []error
+	for _, s := range strings.SplitAfter(text, ">,") {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if s[len(s)-1] == ',' {
+			s = s[:len(s)-1]
+		}
+		s = cleanAddress(s)
+		// if n := strings.Count(s, "@"); n > 1 {
+		// 	s = strings.Replace(s, "@", "_at_", n-1)
+		// }
+		if i := strings.LastIndexByte(s, '<'); i >= 0 && s[0] != '"' {
+			if prefix := strings.TrimRight(s[:i], " "); !strings.HasSuffix(prefix, `"`) {
+				s = `"` + prefix + `" ` + s[i:]
+			}
+		}
+		if a, err := mail.ParseAddress(s); err != nil {
+			errs = append(errs, fmt.Errorf("parse %q: %w", s, err))
+		} else {
+			addrs = append(addrs, *a)
+		}
+	}
+	return addrs, errors.Join(errs...)
 }
 
-var rEmailAddr = regexp.MustCompile("<?[^@ <]+@[^@ >]+>?")
+var rEmailAddr = regexp.MustCompile("<[^@<]+@[^>@]+>|<?[^@ <]+@[^@ >]+>?")
 
 func cleanAddress(text string) string {
 	text = strings.TrimSpace(text)
@@ -66,6 +95,7 @@ func cleanAddress(text string) string {
 		if s == text {
 			return s
 		}
+		s = strings.ReplaceAll(s, " ", "")
 		// slog.Info("replace", "s", s)
 		if s[0] == '<' && s[len(s)-1] == '>' {
 			return s
