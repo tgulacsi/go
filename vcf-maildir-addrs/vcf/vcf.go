@@ -7,6 +7,7 @@ package vcf
 import (
 	"errors"
 	"io"
+	// "log/slog"
 	"net/mail"
 	"strings"
 
@@ -25,6 +26,7 @@ func ScanForAddrs(r io.Reader) ([]mail.Address, error) {
 			}
 			return addrs, err
 		}
+		// slog.Info("scan", "card", card, "email", card.Value(vcard.FieldEmail))
 		if email := card.Value(vcard.FieldEmail); email != "" {
 			var nm string
 			if name := card.Name(); name != nil {
@@ -40,5 +42,6 @@ func ScanForAddrs(r io.Reader) ([]mail.Address, error) {
 			addrs = append(addrs, mail.Address{Name: nm, Address: email})
 		}
 	}
+	// slog.Info("addrs", "addrs", addrs)
 	return addrs, nil
 }

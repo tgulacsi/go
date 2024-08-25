@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -44,8 +45,35 @@ func Main() error {
 			}
 			var (
 				addrsMu sync.Mutex
-				addrs   []mail.Address
+				addrs   = make([]mail.Address, 0, 4096)
 			)
+			A := func(aa []mail.Address) {
+				if len(aa) == 0 {
+					return
+				}
+				for i, a := range aa {
+					if a.Name != "" && a.Name[0] == '\'' {
+						a.Name = strings.Trim(a.Name, "' ")
+						aa[i] = a
+					}
+				}
+				addrsMu.Lock()
+				defer addrsMu.Unlock()
+				if len(addrs) == 0 {
+					addrs = append(addrs, aa[0])
+					aa = aa[1:]
+					if len(aa) == 0 {
+						return
+					}
+				}
+				for _, a := range aa {
+					if i, found := slices.BinarySearchFunc(addrs, a, func(a, b mail.Address) int {
+						return strings.Compare(strings.ToLower(a.Address), strings.ToLower(b.Address))
+					}); !found {
+						addrs = slices.Insert(addrs, i, a)
+					}
+				}
+			}
 			grp.SetLimit(*flagConcurrency)
 			grp.Go(func() error {
 				return filepath.WalkDir(
@@ -61,12 +89,14 @@ func Main() error {
 						if !(di.Type().IsRegular() && strings.HasSuffix(di.Name(), ".vcf")) {
 							return nil
 						}
+						// slog.Info(path)
 						grp.Go(func() error {
 							fh, err := os.Open(path)
 							if err != nil {
-								return err
+								return fmt.Errorf("open %q: %w", fh.Name(), err)
 							}
 							aa, err := vcf.ScanForAddrs(fh)
+							// slog.Info("scan", "aa", aa, "error", err)
 							fh.Close()
 							if len(aa) == 0 {
 								if err != nil {
@@ -74,9 +104,7 @@ func Main() error {
 								}
 								return err
 							}
-							addrsMu.Lock()
-							addrs = append(addrs, aa...)
-							addrsMu.Unlock()
+							A(aa)
 							return nil
 						})
 						return nil
@@ -110,15 +138,17 @@ func Main() error {
 								}
 								return err
 							}
-							addrsMu.Lock()
-							addrs = append(addrs, aa...)
-							addrsMu.Unlock()
+							A(aa)
 							return nil
 						})
 						return nil
 					})
 			})
-			return grp.Wait()
+			err := grp.Wait()
+			for _, a := range addrs {
+				fmt.Printf("%s\t%s\n", a.Address, a.Name)
+			}
+			return err
 		},
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
