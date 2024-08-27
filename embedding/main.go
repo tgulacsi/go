@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"flag"
@@ -66,40 +67,67 @@ func Main() error {
 
 	var buf strings.Builder
 	var ss []string
-	scanner := sentences.NewScanner(os.Stdin)
 	var rem []string
-	for scanner.Scan() {
-		log.Println("sentence:", scanner.Text())
-		if len(bytes.TrimSpace(scanner.Bytes())) <= *flagBatchSize {
-			if s := strings.TrimSpace(scanner.Text()); s != "" {
-				if len(rem) != 0 {
-					s = strings.TrimSpace(strings.Join(append(rem, s), " "))
-					rem = rem[:0]
+	paragrapher := bufio.NewScanner(os.Stdin)
+	paragrapher.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		if i := bytes.IndexByte(data, '\n'); i >= 0 {
+			for j := i + 1; j < len(data); j++ {
+				if data[j] == ' ' {
+					continue
+				} else if data[j] == '\n' {
+					return j + 1, bytes.TrimSpace(data[:j]), nil
 				}
-				if len(s) <= 2 || strings.IndexByte(s, ' ') < 0 {
-					rem = append(rem, s)
-				} else if strings.Count(s, " ") >= *flagMinWords {
-					ss = append(ss, s)
-				}
+			}
+		}
+		if atEOF {
+			return len(data), bytes.TrimSpace(data), nil
+		}
+		return 0, nil, nil
+	})
+	for paragrapher.Scan() {
+		if b := paragrapher.Bytes(); len(b) <= *flagBatchSize {
+			if bytes.Count(b, []byte(" ")) >= *flagMinWords {
+				ss = append(ss, string(bytes.ReplaceAll(paragrapher.Bytes(), []byte("\n"), []byte(" "))))
 			}
 			continue
 		}
-		buf.Reset()
-		for _, s := range rem {
-			buf.WriteString(s)
-		}
-		rem = rem[:0]
-		segments := phrases.NewSegmenter(scanner.Bytes())
-		for segments.Next() {
-			buf.Write(segments.Bytes())
-			if buf.Len() >= *flagBatchSize {
-				ss = append(ss, strings.TrimSpace(buf.String()))
-				buf.Reset()
+
+		sentencer := sentences.NewSegmenter(paragrapher.Bytes())
+		for sentencer.Next() {
+			if len(bytes.TrimSpace(sentencer.Bytes())) <= *flagBatchSize {
+				if s := strings.TrimSpace(sentencer.Text()); s != "" {
+					if len(rem) != 0 {
+						s = strings.TrimSpace(strings.Join(append(rem, s), " "))
+						rem = rem[:0]
+					}
+					if len(s) <= 2 || strings.IndexByte(s, ' ') < 0 {
+						rem = append(rem, s)
+					} else if strings.Count(s, " ") >= *flagMinWords {
+						ss = append(ss, s)
+					}
+				}
+				continue
 			}
-		}
-		if buf.Len() != 0 {
-			if s := strings.TrimSpace(buf.String()); len(s) > 2 {
-				ss = append(ss, s)
+			buf.Reset()
+			for _, s := range rem {
+				buf.WriteString(s)
+			}
+			rem = rem[:0]
+			phraser := phrases.NewSegmenter(sentencer.Bytes())
+			for phraser.Next() {
+				buf.Write(phraser.Bytes())
+				if buf.Len() >= *flagBatchSize {
+					ss = append(ss, strings.TrimSpace(buf.String()))
+					buf.Reset()
+				}
+			}
+			if buf.Len() != 0 {
+				if s := strings.TrimSpace(buf.String()); len(s) > 2 {
+					ss = append(ss, s)
+				}
 			}
 		}
 	}

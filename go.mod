@@ -3,12 +3,13 @@ module github.com/tgulacsi/go
 require (
 	github.com/BurntSushi/toml v1.2.1
 	github.com/UNO-SOFT/zlog v0.7.7
+	github.com/clipperhouse/uax29 v1.14.0
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/emersion/go-message v0.18.1
 	github.com/emersion/go-vcard v0.0.0-20230815062825-8fda7d206ec9
 	github.com/go-kit/log v0.2.1
-	github.com/go-logr/logr v1.2.4
+	github.com/go-logr/logr v1.4.1
 	github.com/go-logr/zerologr v1.2.3
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/google/go-cmp v0.6.0
@@ -17,7 +18,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/jacobsa/fuse v0.0.0-20230509090321-7263f3a2b474
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/klauspost/compress v1.15.15
+	github.com/klauspost/compress v1.17.6
 	github.com/kylelemons/godebug v1.1.0
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
 	github.com/opentracing/basictracer-go v1.1.0
@@ -26,10 +27,11 @@ require (
 	github.com/pdfcpu/pdfcpu v0.7.0
 	github.com/peterbourgon/ff/v3 v3.4.0
 	github.com/rogpeppe/retry v0.1.0
-	github.com/rs/zerolog v1.29.0
+	github.com/rs/zerolog v1.31.0
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
 	github.com/sony/gobreaker v0.5.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210305035536-64b5b1c73954
+	github.com/tmc/langchaingo v0.1.12
 	github.com/valyala/quicktemplate v1.7.0
 	golang.org/x/crypto v0.26.0
 	golang.org/x/exp v0.0.0-20240314144324-c7f7c6466f7f
@@ -43,8 +45,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute v1.18.0 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
@@ -55,10 +56,10 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/flatbuffers v23.1.21+incompatible // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/google/flatbuffers v23.5.26+incompatible // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
@@ -105,6 +106,6 @@ require (
 	modernc.org/zappy v1.0.6 // indirect
 )
 
-go 1.21
+go 1.22.0
 
-toolchain go1.22.0
+toolchain go1.22.6
