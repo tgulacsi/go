@@ -180,7 +180,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		return nil, fmt.Errorf("%s: %w", string(b), err)
 	}
 	if logger.Enabled(ctx, slog.LevelDebug) {
-		logger.Debug("msg", "calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
+		logger.Debug("calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
 	}
 	return resp.Body, nil
 }
