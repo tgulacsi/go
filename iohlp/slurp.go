@@ -81,7 +81,7 @@ func slurp(r io.Reader, threshold int) (*ReaderAt, func(), error) {
 	buf.Truncate(0)
 	_, err = io.Copy(fh, r)
 	if err != nil {
-		err = fmt.Errorf("copy to temp file: %w", err)
+		err = fmt.Errorf("copy to temp file(%q): %w", fh.Name(), err)
 	}
 	rat, mmapErr := Mmap(fh)
 	if mmapErr != nil && err == nil {

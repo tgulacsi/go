@@ -1,5 +1,5 @@
 /*
-  Copyright 2019, 2022 Tamás Gulácsi
+  Copyright 2019, 2024 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,16 +23,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 
+	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/kylewolfe/soaptrip"
 	bp "github.com/tgulacsi/go/bufpool"
 )
-
-// DefaultLog is the logging function in use.
-var DefaultLog = func(...interface{}) error { return nil }
 
 var ErrBodyNotFound = errors.New("body not found")
 
@@ -41,14 +40,10 @@ type Caller interface {
 	Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error)
 }
 
-// WithLog returns the context with the "Log" value set to the given Log.
-func WithLog(ctx context.Context, Log func(...interface{}) error) context.Context {
-	return context.WithValue(ctx, logKey, Log)
+// WithLogger returns the context with the "Logger" value set to the given Log.
+func WithLogger(ctx context.Context, logger *slog.Logger) context.Context {
+	return zlog.NewSContext(ctx, logger)
 }
-
-type contextKey string
-
-const logKey = contextKey("Log")
 
 // NewClient returns a new client for the given endpoint.
 func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
@@ -143,8 +138,8 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
 	buf := s.bufpool.Get()
 	defer s.bufpool.Put(buf)
-	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>
-<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+	buf.WriteString(xml.Header)
+	buf.WriteString(`<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
   <Body xmlns="http://schemas.xmlsoap.org/soap/envelope/">
 `)
 	_, err := io.Copy(buf, body)
@@ -159,14 +154,16 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 	req.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	req.Header.Set("SOAPAction", soapAction)
 	req.Header.Set("Content-Type", "text/xml")
-	Log := GetLog(ctx)
-	Log("msg", "calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
+	logger := GetLogger(ctx)
 	resp, err := s.Client.Do(req.WithContext(ctx))
 	if err != nil {
+		logger.Error("Do", "url", req.URL, "body", buf.String(), "error", err)
 		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
 		}
-		if urlErr, ok := err.(*url.Error); ok {
+
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
 			if fault, ok := urlErr.Err.(*soaptrip.SoapFault); ok {
 				return nil, &Fault{SoapFault: *fault}
 			}
@@ -174,6 +171,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		return nil, err
 	}
 	if resp.StatusCode > 299 {
+		logger.Error("Do", "url", req.URL, "status", resp.Status, "body", buf.String(), "error", err)
 		err := errors.New(resp.Status)
 		b, _ := io.ReadAll(resp.Body)
 		if len(b) == 0 {
@@ -181,15 +179,15 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		}
 		return nil, fmt.Errorf("%s: %w", string(b), err)
 	}
+	if logger.Enabled(ctx, slog.LevelDebug) {
+		logger.Debug("msg", "calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
+	}
 	return resp.Body, nil
 }
 
-// GetLog returns the Log function from the Context.
-func GetLog(ctx context.Context) func(keyvalue ...interface{}) error {
-	if Log, _ := ctx.Value(logKey).(func(...interface{}) error); Log != nil {
-		return Log
-	}
-	return DefaultLog
+// GetLogger returns the Log function from the Context.
+func GetLogger(ctx context.Context) *slog.Logger {
+	return zlog.SFromContext(ctx)
 }
 
 type Fault struct {
