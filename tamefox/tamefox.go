@@ -1,4 +1,4 @@
-// Copyright 2020, 2023 Tamás Gulácsi. All rights reserved.
+// Copyright 2020, 2025 Tamás Gulácsi. All rights reserved.
 
 package main
 
@@ -12,8 +12,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -54,7 +54,7 @@ var self = os.Getpid()
 
 func Main() error {
 	flagTimeout := flag.Duration("t", 10*time.Second, "timeout for stop")
-	flagProg := flag.String("prog", "firefox", "name of the program")
+	flagProg := flag.String("prog", "^(firefox(-esr)?|LibreWolf|vivaldi(-stable)?)$", "name of the program, as regexp")
 	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
 	flagAC := flag.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
@@ -63,6 +63,8 @@ func Main() error {
 	if !*flagVerbose {
 		log.SetOutput(io.Discard)
 	}
+
+	rProg := regexp.MustCompile(*flagProg)
 
 	iic, err := newIdleInhibitChecker()
 	if err != nil {
@@ -114,10 +116,7 @@ func Main() error {
 			if change.Change != "focus" {
 				continue
 			}
-			if strings.EqualFold(change.Container.AppID, *flagProg) ||
-				(*flagProg == "firefox" &&
-					(strings.EqualFold(change.Container.AppID, "firefox") ||
-						strings.EqualFold(change.Container.AppID, "firefox-esr"))) {
+			if rProg.MatchString(change.Container.AppID) {
 				ff = change.Container.PID
 				kill(ff, false, 999)
 				stopTimer()
@@ -276,10 +275,10 @@ func (i *idleInhibitChecker) Close() error {
 }
 
 func (i *idleInhibitChecker) isInhibited() (bool, error) {
-	const listNames = "org.freedesktop.login1.ListInhibitors"
+	const listNames = "org.freedesktop.ScreenSaver"
 	var activeNames []dbus.Sender
 	if err := i.dbusConn.BusObject().
-		Call(listNames, 0).
+		Call(listNames, dbus.Flags(dbus.NameFlagDoNotQueue)).
 		Store(
 			&activeNames,
 		); err != nil {
