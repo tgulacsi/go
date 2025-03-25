@@ -26,7 +26,7 @@ func TestVCFMIMEReader(t *testing.T) {
 	// 	t.Fatal(err)
 	// }
 	// t.Log(h)
-	addrs, err := vcf.ScanVCFForAddrs(gr)
+	addrs, err := vcf.ScanForAddrs(gr)
 	if err != nil {
 		t.Error(err)
 	}

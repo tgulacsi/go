@@ -46,7 +46,13 @@ func (htw *HeadTailKeeper) Write(p []byte) (int, error) {
 	}
 	return length, nil
 }
-func (htw *HeadTailKeeper) Reset()        { htw.head = htw.head[:0]; htw.tail = htw.tail[:0]; htw.hsh.Reset() }
+func (htw *HeadTailKeeper) Reset() {
+	htw.head = htw.head[:0]
+	htw.tail = htw.tail[:0]
+	if htw.hsh != nil {
+		htw.hsh.Reset()
+	}
+}
 func (htw *HeadTailKeeper) Head() []byte  { return htw.head }
 func (htw *HeadTailKeeper) Tail() []byte  { return htw.tail }
 func (htw *HeadTailKeeper) Sum64() uint64 { return htw.hsh.Sum64() }
@@ -58,8 +64,10 @@ func (htw *HeadTailKeeper) String() string {
 	buf.Grow(len(htw.head) + 3 + 19 + 3 + len(htw.tail))
 	buf.Write(htw.head)
 	buf.WriteString("...")
-	fmt.Fprintf(&buf, "%x", htw.hsh.Sum64())
-	buf.WriteString("...")
+	if htw.hsh != nil {
+		fmt.Fprintf(&buf, "%x", htw.hsh.Sum64())
+		buf.WriteString("...")
+	}
 	buf.Write(htw.tail)
 	return buf.String()
 }
