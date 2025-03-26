@@ -1,5 +1,5 @@
 /*
-  Copyright 2019, 2024 Tamás Gulácsi
+  Copyright 2019, 2025 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ import (
 	"strconv"
 
 	"github.com/UNO-SOFT/zlog/v2"
-	"github.com/kylewolfe/soaptrip"
 	bp "github.com/tgulacsi/go/bufpool"
+	"github.com/valyala/quicktemplate"
 )
 
 var ErrBodyNotFound = errors.New("body not found")
@@ -53,7 +53,6 @@ func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
 	if cl.Transport == nil {
 		cl.Transport = http.DefaultTransport
 	}
-	cl.Transport = soaptrip.New(cl.Transport)
 	return &soapClient{
 		Client:         cl,
 		URL:            endpointURL,
@@ -71,38 +70,49 @@ type soapClient struct {
 
 var bufpool = bp.New(1024)
 
-func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
+type envelope struct {
+	XMLName xml.Name `xml:"Envelope"`
+	Header  string   `xml:",innerxml"`
+}
+
+func FindBody(w io.Writer, r io.Reader) (header string, d *xml.Decoder, err error) {
 	buf := bufpool.Get()
 	defer bufpool.Put(buf)
 
-	d := xml.NewDecoder(io.TeeReader(r, buf))
+	d = xml.NewDecoder(io.TeeReader(r, buf))
+	var env envelope
 	var n int
 	for {
 		tok, err := d.Token()
 		if err != nil {
 			if err == io.EOF {
 				if buf.Len() == 0 {
-					return nil, err
+					return env.Header, nil, err
 				}
 				break
 			}
-			return nil, fmt.Errorf("%s: %w", buf.String(), err)
+			return env.Header, nil, fmt.Errorf("%s: %w", buf.String(), err)
 		}
 		n++
 		switch x := tok.(type) {
 		case xml.StartElement:
-			if x.Name.Local == "Body" &&
+			if x.Name.Local == "Header" &&
+				(x.Name.Space == "" ||
+					x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/" ||
+					x.Name.Space == "http://www.w3.org/2003/05/soap-envelope") {
+				d.DecodeElement(&env, &x)
+			} else if x.Name.Local == "Body" &&
 				(x.Name.Space == "" ||
 					x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/" ||
 					x.Name.Space == "http://www.w3.org/2003/05/soap-envelope") {
 				start := d.InputOffset()
 				if err = d.Skip(); err != nil {
-					return nil, fmt.Errorf("%s: %w", buf.String(), err)
+					return env.Header, nil, fmt.Errorf("%s: %w", buf.String(), err)
 				}
 				end := d.InputOffset()
 				//Log("start", start, "end", end, "bytes", start, end, buf.Len())
 				if _, err = w.Write(buf.Bytes()[start:end]); err != nil {
-					return nil, err
+					return env.Header, nil, err
 				}
 				// Must copy the bytes to a new slice to allow buf reuse!
 				d := xml.NewDecoder(bytes.NewReader(append(
@@ -112,11 +122,11 @@ func FindBody(w io.Writer, r io.Reader) (*xml.Decoder, error) {
 				for i := 0; i < n; i++ {
 					d.Token()
 				}
-				return d, nil
+				return env.Header, d, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("%s: %w", buf.String(), ErrBodyNotFound)
+	return env.Header, nil, fmt.Errorf("%s: %w", buf.String(), ErrBodyNotFound)
 }
 
 func (s soapClient) Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error) {
@@ -133,7 +143,8 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 		}
 		return nil, err
 	}
-	return FindBody(w, rc)
+	_, dec, err := FindBody(w, rc)
+	return dec, err
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
 	buf := s.bufpool.Get()
@@ -164,8 +175,8 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 
 		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
-			if fault, ok := urlErr.Err.(*soaptrip.SoapFault); ok {
-				return nil, &Fault{SoapFault: *fault}
+			if fault, ok := urlErr.Err.(*Fault); ok {
+				return nil, fault
 			}
 		}
 		return nil, err
@@ -191,10 +202,31 @@ func GetLogger(ctx context.Context) *slog.Logger {
 }
 
 type Fault struct {
-	soaptrip.SoapFault
+	XMLName xml.Name `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault"`
+
+	Code   string `xml:"faultcode,omitempty"`
+	Reason string `xml:"faultstring,omitempty"`
+	Actor  string `xml:"faultactor,omitempty"`
+	Detail string `xml:"detail,omitempty"`
+
+	Response *http.Response `xml:"-"`
 }
 
-func (f *Fault) Error() string            { return f.SoapFault.Error() }
-func (f *Fault) FaultCode() string        { return f.SoapFault.FaultCode }
-func (f *Fault) FaultString() string      { return f.SoapFault.FaultString }
-func (f *Fault) Response() *http.Response { return f.SoapFault.Response }
+func (f Fault) StreamXML(W *quicktemplate.Writer) {
+	xml.NewEncoder(W.N()).Encode(f)
+}
+
+func (f Fault) WriteResponse(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/xml")
+	xml.NewEncoder(w).Encode(struct {
+		XMLName xml.Name `xml:"Envelope"`
+		Fault   Fault
+	}{Fault: f})
+}
+
+func Error(w http.ResponseWriter, err error) {
+	Fault{Code: err.Error()}.WriteResponse(w)
+}
+func FaultFromError(err error) Fault {
+	return Fault{Code: err.Error()}
+}

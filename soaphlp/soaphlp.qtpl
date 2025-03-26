@@ -1,0 +1,18 @@
+{% package soaphlp %}
+{% import "encoding/xml" %}
+{% import "github.com/valyala/quicktemplate" %}
+
+{% stripspace %}
+{% func Envelope(hdr, body interface { StreamXML(*quicktemplate.Writer) }) %}{%s=
+	xml.Header %}
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+{% if hdr != nil %}<soapenv:Header>
+	{%= hdr.XML() %}
+</soapenv:Header>{% endif %}
+<soapenv:Body>
+	{%= body.XML() %}
+</soapenv:Body>
+</soapenv:Envelope>
+{% endfunc %}
+
+{% endstripspace %}
