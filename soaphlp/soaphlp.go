@@ -68,21 +68,25 @@ type soapClient struct {
 	SOAPActionBase string
 }
 
-type envelope struct {
-	XMLName xml.Name `xml:"Header"`
-	Header  string   `xml:",innerxml"`
-}
-
-func FindBody(r io.Reader) (header string, d *xml.Decoder, err error) {
-	d = xml.NewDecoder(r)
-	var env envelope
+// FindBody finds the soapenv:Body, parses soapenv:Header into hdr (if not nil),
+// and returns the decoder right after that Body.
+//
+// For hdr,
+//
+//	    var hdr struct {
+//		        Header string `xml:",innerxml"`
+//	    }
+//
+// may work as a general "catch-all" type.
+func FindBody(hdr any, r io.Reader) (*xml.Decoder, error) {
+	d := xml.NewDecoder(r)
 	for {
 		tok, err := d.Token()
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			return env.Header, nil, fmt.Errorf("token: %w", err)
+			return nil, fmt.Errorf("token: %w", err)
 		}
 		switch x := tok.(type) {
 		case xml.StartElement:
@@ -90,16 +94,21 @@ func FindBody(r io.Reader) (header string, d *xml.Decoder, err error) {
 				(x.Name.Space == "" ||
 					x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/" ||
 					x.Name.Space == "http://www.w3.org/2003/05/soap-envelope") {
-				d.DecodeElement(&env, &x)
+				if hdr != nil {
+					fmt.Printf("parsing %#v into %#v\n", x, hdr)
+					if err := d.DecodeElement(hdr, &x); err != nil {
+						return nil, fmt.Errorf("parse header: %w", err)
+					}
+				}
 			} else if x.Name.Local == "Body" &&
 				(x.Name.Space == "" ||
 					x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/" ||
 					x.Name.Space == "http://www.w3.org/2003/05/soap-envelope") {
-				return env.Header, d, nil
+				return d, nil
 			}
 		}
 	}
-	return env.Header, nil, fmt.Errorf("%w", ErrBodyNotFound)
+	return nil, fmt.Errorf("%w", ErrBodyNotFound)
 }
 
 func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, error) {
@@ -116,7 +125,7 @@ func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.R
 		}
 		return nil, err
 	}
-	_, dec, err := FindBody(rc)
+	dec, err := FindBody(nil, rc)
 	return dec, err
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {

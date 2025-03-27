@@ -31,12 +31,15 @@ func TestFindBody(t *testing.T) {
 </UploadRequest>
 </soapenv:Body>
 </soapenv:Envelope>`
-	hdrS, dec, err := soaphlp.FindBody(strings.NewReader(reqText))
+	var hdr struct {
+		Header string `xml:",innerxml"`
+	}
+	dec, err := soaphlp.FindBody(&hdr, strings.NewReader(reqText))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("header=%q", hdrS)
-	if strings.TrimSpace(hdrS) == "" || !strings.Contains(hdrS, "tran-sact-ion-id") {
+	t.Logf("header=%q", hdr)
+	if strings.TrimSpace(hdr.Header) == "" || !strings.Contains(hdr.Header, "tran-sact-ion-id") {
 		t.Error("empty header")
 	}
 	var upReq struct {
