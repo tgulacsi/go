@@ -37,7 +37,7 @@ var ErrBodyNotFound = errors.New("body not found")
 
 // Caller is the client interface.
 type Caller interface {
-	Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error)
+	Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, error)
 }
 
 // WithLogger returns the context with the "Logger" value set to the given Log.
@@ -68,32 +68,22 @@ type soapClient struct {
 	SOAPActionBase string
 }
 
-var bufpool = bp.New(1024)
-
 type envelope struct {
-	XMLName xml.Name `xml:"Envelope"`
+	XMLName xml.Name `xml:"Header"`
 	Header  string   `xml:",innerxml"`
 }
 
-func FindBody(w io.Writer, r io.Reader) (header string, d *xml.Decoder, err error) {
-	buf := bufpool.Get()
-	defer bufpool.Put(buf)
-
-	d = xml.NewDecoder(io.TeeReader(r, buf))
+func FindBody(r io.Reader) (header string, d *xml.Decoder, err error) {
+	d = xml.NewDecoder(r)
 	var env envelope
-	var n int
 	for {
 		tok, err := d.Token()
 		if err != nil {
 			if err == io.EOF {
-				if buf.Len() == 0 {
-					return env.Header, nil, err
-				}
 				break
 			}
-			return env.Header, nil, fmt.Errorf("%s: %w", buf.String(), err)
+			return env.Header, nil, fmt.Errorf("token: %w", err)
 		}
-		n++
 		switch x := tok.(type) {
 		case xml.StartElement:
 			if x.Name.Local == "Header" &&
@@ -105,37 +95,20 @@ func FindBody(w io.Writer, r io.Reader) (header string, d *xml.Decoder, err erro
 				(x.Name.Space == "" ||
 					x.Name.Space == "http://schemas.xmlsoap.org/soap/envelope/" ||
 					x.Name.Space == "http://www.w3.org/2003/05/soap-envelope") {
-				start := d.InputOffset()
-				if err = d.Skip(); err != nil {
-					return env.Header, nil, fmt.Errorf("%s: %w", buf.String(), err)
-				}
-				end := d.InputOffset()
-				//Log("start", start, "end", end, "bytes", start, end, buf.Len())
-				if _, err = w.Write(buf.Bytes()[start:end]); err != nil {
-					return env.Header, nil, err
-				}
-				// Must copy the bytes to a new slice to allow buf reuse!
-				d := xml.NewDecoder(bytes.NewReader(append(
-					make([]byte, 0, buf.Len()),
-					buf.Bytes()...)))
-				// Restart from the beginning, and consume n tokens (till the Skipped).
-				for i := 0; i < n; i++ {
-					d.Token()
-				}
 				return env.Header, d, nil
 			}
 		}
 	}
-	return env.Header, nil, fmt.Errorf("%s: %w", buf.String(), ErrBodyNotFound)
+	return env.Header, nil, fmt.Errorf("%w", ErrBodyNotFound)
 }
 
-func (s soapClient) Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error) {
+func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, error) {
 	if s.SOAPActionBase != "" {
 		method = s.SOAPActionBase + "/" + method
 	}
-	return s.CallAction(ctx, w, method, body)
+	return s.CallAction(ctx, method, body)
 }
-func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction string, body io.Reader) (*xml.Decoder, error) {
+func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.Reader) (*xml.Decoder, error) {
 	rc, err := s.CallActionRaw(ctx, soapAction, body)
 	if err != nil {
 		if rc != nil {
@@ -143,7 +116,7 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 		}
 		return nil, err
 	}
-	_, dec, err := FindBody(w, rc)
+	_, dec, err := FindBody(rc)
 	return dec, err
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
