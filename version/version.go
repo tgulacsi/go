@@ -26,9 +26,9 @@ func Main() string {
 	}
 	if vcsModified == "false" {
 		if info.Main.Version != "(devel)" || vcsRev == "" {
-			return info.Main.Path + "@" + info.Main.Version
+			return info.Path + "@" + info.Main.Version
 		}
-		return info.Main.Path + "@" + vcsRev
+		return info.Path + "@" + vcsRev
 	}
-	return info.Main.Path + "@" + vcsRev + "-" + vcsTime
+	return info.Path + "@" + vcsRev + "-" + vcsTime
 }
