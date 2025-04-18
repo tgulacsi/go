@@ -1,4 +1,4 @@
-// Copyright 2018, 2021 Tamás Gulácsi
+// Copyright 2018, 2025 Tamás Gulácsi
 //
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,13 +23,13 @@ import (
 	"path"
 	"strings"
 
-	"github.com/jung-kurt/gofpdf"
+	gofpdf "codeberg.org/go-pdf/fpdf"
 )
 
-//go:generate sh -c "set -x; if [ -e $GOPATH/src/go.googlesource.com/image ]; then cd $GOPATH/src/go.googlesource.com/image && git pull; else mkdir -p $GOPATH/src/go.googlesource.com && cd $GOPATH/src/go.googlesource.com && git clone https://go.googlesource.com/image; fi"
-//go:generate go build -o ./makefont github.com/jung-kurt/gofpdf/makefont
-//go:generate mkdir -p assets/font
-//go:generate sh -c "./makefont --embed --enc=$GOPATH/src/github.com/jung-kurt/gofpdf/font/cp1250.map --dst=./assets/font $GOPATH/src/go.googlesource.com/image/font/gofont/ttfs/*.ttf"
+//go:generate mkdir -p assets/font assets/go-image-font-gofont-ttfs
+//go:generate sh -c "curl https://go.googlesource.com/image/+archive/refs/heads/master/font/gofont/ttfs.tar.gz | tar xvzf - -C assets/go-image-font-gofont-ttfs"
+//go:generate curl -o assets/cp1250.map https://codeberg.org/go-pdf/fpdf/src/branch/main/font/cp1252.map
+//go:generate sh -c "go tool makefont --embed --enc=assets/cp1250.map --dst=./assets/font assets/go-image-font-gofont-ttfs/*.ttf"
 
 //go:embed assets
 var statikFS embed.FS

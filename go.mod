@@ -1,6 +1,7 @@
 module github.com/tgulacsi/go
 
 require (
+	codeberg.org/go-pdf/fpdf v0.11.0
 	github.com/BurntSushi/toml v1.2.1
 	github.com/UNO-SOFT/zlog v0.7.7
 	github.com/clipperhouse/uax29 v1.14.0
@@ -109,3 +110,8 @@ require (
 go 1.22.0
 
 toolchain go1.22.6
+
+tool (
+	codeberg.org/go-pdf/fpdf/makefont
+	github.com/tgulacsi/go/pdfreport
+)
