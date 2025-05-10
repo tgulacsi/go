@@ -30,6 +30,7 @@ import (
 
 	"github.com/UNO-SOFT/zlog/v2"
 	bp "github.com/tgulacsi/go/bufpool"
+	"github.com/tgulacsi/go/iohlp"
 	"github.com/valyala/quicktemplate"
 )
 
@@ -37,7 +38,7 @@ var ErrBodyNotFound = errors.New("body not found")
 
 // Caller is the client interface.
 type Caller interface {
-	Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, error)
+	Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error)
 }
 
 // WithLogger returns the context with the "Logger" value set to the given Log.
@@ -111,21 +112,30 @@ func FindBody(hdr any, r io.Reader) (*xml.Decoder, error) {
 	return nil, fmt.Errorf("%w", ErrBodyNotFound)
 }
 
-func (s soapClient) Call(ctx context.Context, method string, body io.Reader) (*xml.Decoder, error) {
+func (s soapClient) Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error) {
 	if s.SOAPActionBase != "" {
 		method = s.SOAPActionBase + "/" + method
 	}
-	return s.CallAction(ctx, method, body)
+	return s.CallAction(ctx, w, method, body)
 }
-func (s soapClient) CallAction(ctx context.Context, soapAction string, body io.Reader) (*xml.Decoder, error) {
+func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction string, body io.Reader) (*xml.Decoder, error) {
 	rc, err := s.CallActionRaw(ctx, soapAction, body)
-	if err != nil {
-		if rc != nil {
-			rc.Close()
+	var sr *io.SectionReader
+	if rc != nil {
+		// to be able to close rc (resp.Body), we must read it fully first
+		var readErr error
+		if sr, readErr = iohlp.MakeSectionReader(rc, 1<<20); readErr != nil && err == nil {
+			err = readErr
 		}
+		rc.Close()
+	}
+	if w != nil && w != io.Discard && sr != nil {
+		go io.Copy(w, io.NewSectionReader(sr, 0, sr.Size()))
+	}
+	if err != nil {
 		return nil, err
 	}
-	dec, err := FindBody(nil, rc)
+	dec, err := FindBody(nil, sr)
 	return dec, err
 }
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {

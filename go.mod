@@ -3,14 +3,14 @@ module github.com/tgulacsi/go
 require (
 	codeberg.org/go-pdf/fpdf v0.11.0
 	github.com/BurntSushi/toml v1.2.1
-	github.com/UNO-SOFT/zlog v0.7.7
+	github.com/UNO-SOFT/zlog v0.8.6
 	github.com/clipperhouse/uax29 v1.14.0
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/emersion/go-message v0.18.1
 	github.com/emersion/go-vcard v0.0.0-20230815062825-8fda7d206ec9
 	github.com/go-kit/log v0.2.1
-	github.com/go-logr/logr v1.4.1
+	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zerologr v1.2.3
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/google/go-cmp v0.6.0
@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/jacobsa/fuse v0.0.0-20230509090321-7263f3a2b474
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/klauspost/compress v1.17.6
+	github.com/klauspost/compress v1.17.9
 	github.com/kylelemons/godebug v1.1.0
 	github.com/kylewolfe/soaptrip v0.0.0-20160108184655-f6f12afc06a9
 	github.com/opentracing/basictracer-go v1.1.0
@@ -33,14 +33,14 @@ require (
 	github.com/sony/gobreaker v0.5.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210305035536-64b5b1c73954
 	github.com/tmc/langchaingo v0.1.12
-	github.com/valyala/quicktemplate v1.7.0
-	golang.org/x/crypto v0.26.0
-	golang.org/x/exp v0.0.0-20240314144324-c7f7c6466f7f
-	golang.org/x/net v0.28.0
-	golang.org/x/sync v0.8.0
-	golang.org/x/sys v0.23.0
-	golang.org/x/term v0.23.0
-	golang.org/x/text v0.17.0
+	github.com/valyala/quicktemplate v1.8.0
+	golang.org/x/crypto v0.38.0
+	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6
+	golang.org/x/net v0.40.0
+	golang.org/x/sync v0.14.0
+	golang.org/x/sys v0.33.0
+	golang.org/x/term v0.32.0
+	golang.org/x/text v0.25.0
 	golang.org/x/time v0.5.0
 	perkeep.org v0.0.0-20230124163929-44b1dbe0f64f
 )
@@ -84,8 +84,8 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go4.org v0.0.0-20201209231011-d4a079459e60 // indirect
 	golang.org/x/image v0.19.0 // indirect
-	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
+	golang.org/x/mod v0.24.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -107,9 +107,9 @@ require (
 	modernc.org/zappy v1.0.6 // indirect
 )
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.22.6
+toolchain go1.24.2
 
 tool (
 	codeberg.org/go-pdf/fpdf/makefont
