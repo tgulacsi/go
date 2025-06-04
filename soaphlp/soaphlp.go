@@ -129,11 +129,13 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 		}
 		rc.Close()
 	}
-	if w != nil && w != io.Discard && sr != nil {
+	if sr != nil && w != nil && w != io.Discard && sr.Size() != 0 {
 		go io.Copy(w, io.NewSectionReader(sr, 0, sr.Size()))
 	}
 	if err != nil {
 		return nil, err
+	} else if sr.Size() == 0 {
+		return nil, io.EOF
 	}
 	dec, err := FindBody(nil, sr)
 	return dec, err
