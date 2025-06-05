@@ -5,6 +5,7 @@
 package version
 
 import (
+	"log/slog"
 	"runtime/debug"
 )
 
@@ -23,6 +24,9 @@ func Main() string {
 		case "vcs.modified":
 			vcsModified = kv.Value
 		}
+	}
+	if vcsRev == "" && vcsTime == "" && vcsModified == "" {
+		slog.Warn("version.Main no vcs info", "info", info, "settings", info.Settings)
 	}
 	if vcsModified == "false" {
 		if info.Main.Version != "(devel)" || vcsRev == "" {
