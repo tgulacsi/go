@@ -88,7 +88,7 @@ func MergeFiles(ctx context.Context, dest string, sources ...string) (err error)
 	slog.Warn("MergeAppendFile", "error", err)
 
 	if err := mergePDFFiles(ctx, destfh, sources...); err != nil {
-		return err
+		return fmt.Errorf("mergePDFFiles: %w", err)
 	}
 	return destfh.CloseAtomicallyReplace()
 }
@@ -247,7 +247,9 @@ func Split(ctx context.Context, destDir, fn string) error {
 			err = fmt.Errorf("PANIC: %+v", r)
 		}
 	}()
-	err = api.SplitFile(fn, destDir, 1, config)
+	if err = api.SplitFile(fn, destDir, 1, config); err != nil {
+		err = fmt.Errorf("SplitFile: %w", err)
+	}
 	return err
 }
 
@@ -270,7 +272,9 @@ func PageNum(ctx context.Context, fn string) (int, error) {
 	if pdf.PageCount != 0 {
 		return pdf.PageCount, nil
 	}
-	err = pdfcpu.OptimizeXRefTable(pdf)
+	if err = pdfcpu.OptimizeXRefTable(pdf); err != nil {
+		err = fmt.Errorf("Optimize: %w", err)
+	}
 	return pdf.PageCount, err
 }
 
