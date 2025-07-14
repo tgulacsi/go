@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -54,7 +56,7 @@ var self = os.Getpid()
 
 func Main() error {
 	flagTimeout := flag.Duration("t", 10*time.Second, "timeout for stop")
-	flagProg := flag.String("prog", "^(firefox(-esr)?|LibreWolf|vivaldi(-stable)?)$", "name of the program, as regexp")
+	flagProg := flag.String("prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
 	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
 	flagAC := flag.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
 	flagVerbose := flag.Bool("v", false, "verbose logging")
@@ -99,10 +101,13 @@ func Main() error {
 			}
 		}
 	}
-	var ff int
+	var mu sync.RWMutex
+	var ff []int
 	defer func() {
-		if ff != 0 {
-			kill(ff, false, 999)
+		mu.RLock()
+		defer mu.RUnlock()
+		for _, pid := range ff {
+			kill(pid, false, 999)
 		}
 	}()
 	grp.Go(func() error {
@@ -116,9 +121,13 @@ func Main() error {
 			if change.Change != "focus" {
 				continue
 			}
-			if rProg.MatchString(change.Container.AppID) {
-				ff = change.Container.PID
-				kill(ff, false, 999)
+			if rProg.MatchString(cmp.Or(
+				change.Container.AppID, change.Container.Name,
+			)) {
+				mu.Lock()
+				ff = append(ff, change.Container.PID)
+				mu.Unlock()
+				kill(change.Container.PID, false, 999)
 				stopTimer()
 				continue
 			}
@@ -142,7 +151,14 @@ func Main() error {
 					} else if inhibited {
 						log.Printf("idle is inhibited, skip stop")
 					} else {
-						kill(ff, true, *flagStopDepth)
+						mu.RLock()
+						for _, pid := range ff {
+							kill(pid, true, *flagStopDepth)
+						}
+						mu.RUnlock()
+						mu.Lock()
+						ff = ff[:0]
+						mu.Unlock()
 					}
 				})
 				continue
@@ -174,6 +190,7 @@ type Change struct {
 	Container Container `json:"container"`
 }
 type Container struct {
+	Name  string `json:"name"`
 	AppID string `json:"app_id"`
 	PID   int    `json:"pid"`
 }
