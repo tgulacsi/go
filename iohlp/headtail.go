@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash"
 	"hash/fnv"
+	"io"
 	"strings"
 )
 
@@ -56,6 +57,26 @@ func (htw *HeadTailKeeper) Reset() {
 func (htw *HeadTailKeeper) Head() []byte  { return htw.head }
 func (htw *HeadTailKeeper) Tail() []byte  { return htw.tail }
 func (htw *HeadTailKeeper) Sum64() uint64 { return htw.hsh.Sum64() }
+func (htw *HeadTailKeeper) WriteTo(w io.Writer) (int64, error) {
+	var n int64
+	m, err := w.Write(htw.head)
+	n += int64(m)
+	if err != nil || len(htw.tail) == 0 {
+		return n, err
+	}
+	m, err = io.WriteString(w, "...")
+	n += int64(m)
+	if err != nil {
+		return n, err
+	}
+	m, err = fmt.Fprintf(w, "%x...", htw.hsh.Sum64())
+	n += int64(m)
+	if err != nil {
+		return n, err
+	}
+	m, err = w.Write(htw.tail)
+	return n + int64(m), err
+}
 func (htw *HeadTailKeeper) String() string {
 	if len(htw.tail) == 0 {
 		return string(htw.head)
@@ -65,8 +86,7 @@ func (htw *HeadTailKeeper) String() string {
 	buf.Write(htw.head)
 	buf.WriteString("...")
 	if htw.hsh != nil {
-		fmt.Fprintf(&buf, "%x", htw.hsh.Sum64())
-		buf.WriteString("...")
+		fmt.Fprintf(&buf, "%x...", htw.hsh.Sum64())
 	}
 	buf.Write(htw.tail)
 	return buf.String()
