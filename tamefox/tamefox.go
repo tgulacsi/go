@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/godbus/dbus/v5"
+	// "github.com/godbus/dbus/v5"
 	"github.com/tgulacsi/go/globalctx"
 	"golang.org/x/sync/errgroup"
 )
@@ -68,16 +68,16 @@ func Main() error {
 
 	rProg := regexp.MustCompile(*flagProg)
 
-	iic, err := newIdleInhibitChecker()
-	if err != nil {
-		return err
-	}
-	defer iic.Close()
-	if ok, err := iic.isInhibited(); err != nil {
-		log.Printf("error isInhibited: %+v", err)
-	} else {
-		log.Printf("idle inhibited: %t", ok)
-	}
+	// iic, err := newIdleInhibitChecker()
+	// if err != nil {
+	// 	return err
+	// }
+	// defer iic.Close()
+	// if ok, err := iic.isInhibited(); err != nil {
+	// 	log.Printf("error isInhibited: %+v", err)
+	// } else {
+	// 	log.Printf("idle inhibited: %t", ok)
+	// }
 
 	ctx, cancel := globalctx.Wrap(context.Background())
 	defer cancel()
@@ -146,20 +146,20 @@ func Main() error {
 			}
 			if timer == nil {
 				timer = time.AfterFunc(timeout, func() {
-					if inhibited, err := iic.isInhibited(); err != nil {
-						log.Printf("error isInhibited: %+v", err)
-					} else if inhibited {
-						log.Printf("idle is inhibited, skip stop")
-					} else {
-						mu.RLock()
-						for _, pid := range ff {
-							kill(pid, true, *flagStopDepth)
-						}
-						mu.RUnlock()
-						mu.Lock()
-						ff = ff[:0]
-						mu.Unlock()
+					// if inhibited, err := iic.isInhibited(); err != nil {
+					// 	log.Printf("error isInhibited: %+v", err)
+					// } else if inhibited {
+					// 	log.Printf("idle is inhibited, skip stop")
+					// } else {
+					mu.RLock()
+					for _, pid := range ff {
+						kill(pid, true, *flagStopDepth)
 					}
+					mu.RUnlock()
+					mu.Lock()
+					ff = ff[:0]
+					mu.Unlock()
+					// }
 				})
 				continue
 			}
@@ -269,12 +269,13 @@ func getPPid(pid int) (int, error) {
 	return strconv.Atoi(string(bytes.TrimSpace(b)))
 }
 
+/*
 type idleInhibitChecker struct {
 	dbusConn *dbus.Conn
 }
 
 func newIdleInhibitChecker() (*idleInhibitChecker, error) {
-	conn, err := dbus.ConnectSessionBus()
+	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		return nil, err
 	}
@@ -292,15 +293,38 @@ func (i *idleInhibitChecker) Close() error {
 }
 
 func (i *idleInhibitChecker) isInhibited() (bool, error) {
-	const listNames = "org.freedesktop.ScreenSaver"
-	var activeNames []dbus.Sender
-	if err := i.dbusConn.BusObject().
-		Call(listNames, dbus.Flags(dbus.NameFlagDoNotQueue)).
-		Store(
-			&activeNames,
-		); err != nil {
-		log.Printf("calling %q: %+v", listNames, err)
+	// auto reply = g_dbus_connection_call_with_unix_fd_list_sync(
+	//      bus.get(), "org.freedesktop.login1", "/org/freedesktop/login1",
+	//      "org.freedesktop.login1.Manager", "Inhibit",
+	//      g_variant_new("(ssss)", inhibitors.c_str(), "waybar", "Asked by user", "block"),
+	//      G_VARIANT_TYPE("(h)"), G_DBUS_CALL_FLAGS_NONE, -1, nullptr, &fd_list, nullptr, &error);
+
+	// ListInhibitors(out a(ssssuu) inhibitors);
+	//ListInhibitors() lists all currently active inhibitors. It returns an array of structures consisting of what, who, why, mode, uid (user ID), and pid (process ID).
+	var inhibitors []struct {
+		What, Who, Why, Mode string
+		UID, PID             uint
 	}
-	log.Println("inhibitors:", activeNames)
-	return len(activeNames) != 0, nil
+	obj := i.dbusConn.Object("org.freedesktop.login1", "/org/freedesktop/login1")
+	if v, err := obj.GetProperty("org.freedesktop.login1.Manager.BlockInhibited"); err != nil {
+		log.Printf("GetProperty: %+v", err)
+	} else {
+		log.Println("BlockInhibited:", v.String())
+	}
+	if err := obj.Call(
+		"org.freedesktop.login1.Manager.ListInhibitors",
+		dbus.FlagNoAutoStart,
+	).Store(
+		&inhibitors,
+	); err != nil {
+		log.Printf("calling %+v: %+v", obj, err)
+	}
+	log.Println("inhibitors:", inhibitors)
+	for _, in := range inhibitors {
+		if in.What == "idle" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
+*/
