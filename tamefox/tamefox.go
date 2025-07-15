@@ -4,15 +4,12 @@ package main
 
 import (
 	"bytes"
-	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"sync"
@@ -20,6 +17,7 @@ import (
 	"time"
 
 	// "github.com/godbus/dbus/v5"
+	"github.com/joshuarubin/go-sway"
 	"github.com/tgulacsi/go/globalctx"
 	"golang.org/x/sync/errgroup"
 )
@@ -65,6 +63,29 @@ func Main() error {
 	if !*flagVerbose {
 		log.SetOutput(io.Discard)
 	}
+	var (
+		onACmu sync.Mutex
+		onACb  bool
+		onACt  time.Time
+	)
+	onAC := func() bool {
+		if *flagAC == "" {
+			return false
+		}
+		onACmu.Lock()
+		defer onACmu.Unlock()
+		now := time.Now()
+		if onACt.IsZero() || onACt.Before(now.Add(-*flagTimeout)) {
+			b, err := os.ReadFile(*flagAC)
+			if err != nil {
+				log.Printf("ERR Read %s: %w", *flagAC, err)
+				return onACb
+			}
+			b = bytes.TrimSpace(b)
+			onACb = bytes.Equal(bytes.TrimSpace(b), []byte("1"))
+		}
+		return onACb
+	}
 
 	rProg := regexp.MustCompile(*flagProg)
 
@@ -82,18 +103,13 @@ func Main() error {
 	ctx, cancel := globalctx.Wrap(context.Background())
 	defer cancel()
 	grp, ctx := errgroup.WithContext(ctx)
-	cmd := exec.CommandContext(ctx, "swaymsg", "-m", "-t", "subscribe", "[\"window\"]")
-	pr, err := cmd.StdoutPipe()
+	client, err := sway.New(ctx)
 	if err != nil {
-		return err
-	}
-	if err = cmd.Start(); err != nil {
 		return err
 	}
 
 	timeout := *flagTimeout
-	var timer *time.Timer
-	stopTimer := func() {
+	stopTimer := func(timer *time.Timer) {
 		if timer != nil && !timer.Stop() {
 			select {
 			case <-timer.C:
@@ -102,72 +118,111 @@ func Main() error {
 		}
 	}
 	var mu sync.RWMutex
-	var ff []int
+	ff := make(map[int]*time.Timer)
 	defer func() {
 		mu.RLock()
 		defer mu.RUnlock()
-		for _, pid := range ff {
+		for pid, timer := range ff {
 			kill(pid, false, 999)
+			stopTimer(timer)
 		}
 	}()
-	grp.Go(func() error {
-		dec := json.NewDecoder(pr)
-		for dec.More() {
-			var change Change
-			if err = dec.Decode(&change); err != nil {
-				return err
-			}
-			log.Println(change)
-			if change.Change != "focus" {
-				continue
-			}
-			if rProg.MatchString(cmp.Or(
-				change.Container.AppID, change.Container.Name,
-			)) {
-				mu.Lock()
-				ff = append(ff, change.Container.PID)
-				mu.Unlock()
-				kill(change.Container.PID, false, 999)
-				stopTimer()
-				continue
-			}
-			kill(change.Container.PID, false, 0)
 
-			if *flagAC != "" {
-				b, err := os.ReadFile(*flagAC)
-				if err != nil {
-					return err
-				}
-				b = bytes.TrimSpace(b)
-				if bytes.Equal(bytes.TrimSpace(b), []byte("1")) {
-					log.Println("on AC, skip STOP")
-					continue
-				}
-			}
-			if timer == nil {
-				timer = time.AfterFunc(timeout, func() {
-					// if inhibited, err := iic.isInhibited(); err != nil {
-					// 	log.Printf("error isInhibited: %+v", err)
-					// } else if inhibited {
-					// 	log.Printf("idle is inhibited, skip stop")
-					// } else {
-					mu.RLock()
-					for _, pid := range ff {
-						kill(pid, true, *flagStopDepth)
-					}
-					mu.RUnlock()
-					mu.Lock()
-					ff = ff[:0]
-					mu.Unlock()
-					// }
-				})
-				continue
-			}
-			stopTimer()
-			timer.Reset(timeout)
+	newTimer := func(pid int) *time.Timer {
+		if onAC() {
+			return nil
 		}
-		return nil
+		if t := ff[pid]; t != nil {
+			return t
+		}
+		log.Printf("new timer for %d", pid)
+		return time.AfterFunc(timeout, func() {
+			// if inhibited, err := iic.isInhibited(); err != nil {
+			// 	log.Printf("error isInhibited: %+v", err)
+			// } else if inhibited {
+			// 	log.Printf("idle is inhibited, skip stop")
+			// } else {
+			if node, err := client.GetTree(ctx); err != nil {
+				log.Printf("ERR GetTree: %+v", err)
+			} else {
+				if node = node.TraverseNodes(func(n *sway.Node) bool {
+					return n != nil && n.InhibitIdle != nil && *n.InhibitIdle
+				}); node != nil {
+					log.Printf("idle is inhibited by %+v", node)
+					return
+				}
+			}
+			kill(pid, true, *flagStopDepth)
+		})
+	}
+
+	// Fill ff
+	node, err := client.GetTree(ctx)
+	if err != nil {
+		return err
+	}
+	node.TraverseNodes(func(node *sway.Node) bool {
+		name, pid := nodeIDs(node)
+		if name != "" && pid != 0 && rProg.MatchString(name) {
+			mu.Lock()
+			ff[pid] = newTimer(pid)
+			mu.Unlock()
+		}
+		return false
 	})
+
+	var lastFF int
+	if err := sway.Subscribe(ctx,
+		windowEventHandler{
+			EventHandler: sway.NoOpEventHandler(),
+			WindowEventHandler: func(ctx context.Context, evt sway.WindowEvent) {
+				switch evt.Change {
+				case "new", "close", "focus":
+				default:
+					return
+				}
+				log.Printf("Event: %+v", evt)
+				name, pid := nodeIDs(&evt.Container)
+				if name == "" || pid == 0 {
+					return
+				}
+				isFF := !rProg.MatchString(name)
+				mu.Lock()
+				defer mu.Unlock()
+				switch evt.Change {
+				case "new":
+					if isFF {
+						ff[pid] = newTimer(pid)
+					}
+				case "close":
+					if isFF {
+						if timer := ff[pid]; timer != nil {
+							stopTimer(timer)
+						}
+						delete(ff, pid)
+					}
+				case "focus":
+					kill(pid, false, 999)
+					if isFF {
+						if timer := ff[pid]; timer != nil {
+							stopTimer(timer)
+						}
+					} else if lastFF != pid {
+						for _, t := range ff {
+							t.Reset(timeout)
+						}
+					}
+				}
+				if isFF {
+					lastFF = pid
+				}
+				return
+			},
+		},
+		sway.EventTypeWindow,
+	); err != nil {
+		return err
+	}
 
 	grp.Go(func() error {
 		ticker := time.NewTicker(time.Minute)
@@ -328,3 +383,30 @@ func (i *idleInhibitChecker) isInhibited() (bool, error) {
 	return false, nil
 }
 */
+
+type windowEventHandler struct {
+	sway.EventHandler
+	WindowEventHandler func(context.Context, sway.WindowEvent)
+}
+
+func (we windowEventHandler) Window(ctx context.Context, evt sway.WindowEvent) {
+	f := we.WindowEventHandler
+	if f == nil {
+		f = we.EventHandler.Window
+	}
+	f(ctx, evt)
+}
+
+func nodeIDs(node *sway.Node) (string, int) {
+	if node == nil {
+		return "", 0
+	}
+	var pid int
+	if node.PID != nil {
+		pid = int(*node.PID)
+	}
+	if node.AppID != nil && *node.AppID != "" {
+		return *node.AppID, pid
+	}
+	return node.Name, pid
+}
