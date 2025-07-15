@@ -186,9 +186,12 @@ func Main() error {
 				if name == "" || pid == 0 {
 					return
 				}
-				isFF := !rProg.MatchString(name)
+				isFF := rProg.MatchString(name)
 				mu.Lock()
 				defer mu.Unlock()
+				if pid != 0 && ff[pid] != nil {
+					kill(pid, false, 999)
+				}
 				switch evt.Change {
 				case "new":
 					if isFF {
@@ -202,13 +205,15 @@ func Main() error {
 						delete(ff, pid)
 					}
 				case "focus":
-					kill(pid, false, 999)
 					if isFF {
 						if timer := ff[pid]; timer != nil {
+							log.Printf("stopTimer %d", pid)
 							stopTimer(timer)
 						}
-					} else if lastFF != pid {
-						for _, t := range ff {
+					}
+					if lastFF != 0 && lastFF != pid {
+						if t := ff[lastFF]; t != nil {
+							log.Printf("%d resetTimer %d", pid, lastFF)
 							t.Reset(timeout)
 						}
 					}
