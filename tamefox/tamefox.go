@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -109,26 +110,18 @@ func Main() error {
 	}
 
 	timeout := *flagTimeout
-	stopTimer := func(timer *time.Timer) {
-		if timer != nil && !timer.Stop() {
-			select {
-			case <-timer.C:
-			default:
-			}
-		}
-	}
 	var mu sync.RWMutex
-	ff := make(map[int]*time.Timer)
+	ff := make(map[int]*Timer)
 	defer func() {
 		mu.RLock()
 		defer mu.RUnlock()
 		for pid, timer := range ff {
 			kill(pid, false, 999)
-			stopTimer(timer)
+			timer.Stop()
 		}
 	}()
 
-	newTimer := func(pid int) *time.Timer {
+	newTimer := func(pid int) *Timer {
 		if onAC() {
 			return nil
 		}
@@ -136,7 +129,7 @@ func Main() error {
 			return t
 		}
 		log.Printf("new timer for %d", pid)
-		return time.AfterFunc(timeout, func() {
+		return newAfterFunc(timeout, func() {
 			// if inhibited, err := iic.isInhibited(); err != nil {
 			// 	log.Printf("error isInhibited: %+v", err)
 			// } else if inhibited {
@@ -189,9 +182,6 @@ func Main() error {
 				isFF := rProg.MatchString(name)
 				mu.Lock()
 				defer mu.Unlock()
-				if pid != 0 && ff[pid] != nil {
-					kill(pid, false, 999)
-				}
 				switch evt.Change {
 				case "new":
 					if isFF {
@@ -199,23 +189,33 @@ func Main() error {
 					}
 				case "close":
 					if isFF {
-						if timer := ff[pid]; timer != nil {
-							stopTimer(timer)
-						}
+						kill(pid, false, 999)
+						ff[pid].Stop()
 						delete(ff, pid)
 					}
 				case "focus":
 					if isFF {
-						if timer := ff[pid]; timer != nil {
+						kill(pid, false, 999)
+						timer := ff[pid]
+						if timer == nil { // new does not have name, so this may be the first encounter
+							timer = newTimer(pid)
+							ff[pid] = timer
+						} else {
 							log.Printf("stopTimer %d", pid)
-							stopTimer(timer)
 						}
+						timer.Stop()
 					}
 					if lastFF != 0 && lastFF != pid {
 						if t := ff[lastFF]; t != nil {
-							log.Printf("%d resetTimer %d", pid, lastFF)
-							t.Reset(timeout)
+							if t.IsActive() {
+								log.Printf("timer is active for %d", lastFF)
+							} else {
+								log.Printf("%d resetTimer %d", pid, lastFF)
+								t.Reset(timeout)
+							}
 						}
+					} else {
+						log.Printf("%d lastFF=%d", pid, lastFF)
 					}
 				}
 				if isFF {
@@ -414,4 +414,33 @@ func nodeIDs(node *sway.Node) (string, int) {
 		return *node.AppID, pid
 	}
 	return node.Name, pid
+}
+
+type Timer struct {
+	timer  *time.Timer
+	active atomic.Bool
+}
+
+func newAfterFunc(timeout time.Duration, f func()) *Timer {
+	var t Timer
+	t.active.Store(true)
+	t.timer = time.AfterFunc(timeout, func() { t.active.Store(false); f() })
+	return &t
+}
+func (t *Timer) IsActive() bool { return t.active.Load() }
+func (t *Timer) Reset(timeout time.Duration) {
+	t.active.Store(true)
+	t.timer.Reset(timeout)
+}
+func (t *Timer) Stop() {
+	if t == nil {
+		return
+	}
+	t.active.Store(false)
+	if t.timer != nil && !t.timer.Stop() {
+		select {
+		case <-t.timer.C:
+		default:
+		}
+	}
 }
