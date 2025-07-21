@@ -6,10 +6,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"io"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"sync"
@@ -19,6 +20,8 @@ import (
 
 	// "github.com/godbus/dbus/v5"
 	"github.com/joshuarubin/go-sway"
+	"github.com/peterbourgon/ff/v4"
+	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/tgulacsi/go/globalctx"
 	"golang.org/x/sync/errgroup"
 )
@@ -54,42 +57,245 @@ func main() {
 var self = os.Getpid()
 
 func Main() error {
-	flagTimeout := flag.Duration("t", 10*time.Second, "timeout for stop")
-	flagProg := flag.String("prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
-	flagStopDepth := flag.Int("stop-depth", 1, "STOP depth of child tree")
-	flagAC := flag.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
-	flagVerbose := flag.Bool("v", false, "verbose logging")
-	flag.Parse()
+	systemctl := func(ctx context.Context, todo string) error {
+		args := []string{"--user", todo, "tamefox.service"}
+		if todo == "daemon-reload" {
+			args = args[:len(args)-1]
+		}
+		cmd := exec.CommandContext(ctx, "systemctl", args...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		return cmd.Run()
+	}
+	startCmd := ff.Command{Name: "start",
+		Exec: func(ctx context.Context, args []string) error {
+			return systemctl(ctx, "restart")
+		},
+	}
+	stopCmd := ff.Command{Name: "stop",
+		Exec: func(ctx context.Context, args []string) error {
+			return systemctl(ctx, "stop")
+		},
+	}
+	installCmd := ff.Command{Name: "install",
+		Exec: func(ctx context.Context, args []string) error {
+			executable, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			dn := os.Getenv("XDG_CONFIG_HOME")
+			if dn == "" {
+				dn = os.ExpandEnv("$HOME/.config")
+			}
+			fn := filepath.Join(dn, "systemd", "user", "tamefox.service")
+			if _, err := os.Stat(fn); err != nil {
+				if err = os.WriteFile(fn, []byte(`[Unit]
+Description=TameFox - stop power hungry browser out of focus
+
+[Service]
+ExecStart=`+executable+` --verbose
+Restart=always
+RestartSec=1s
+
+[Install]
+WantedBy=graphical-session.target`),
+					0644,
+				); err != nil {
+					return err
+				}
+			}
+			return systemctl(ctx, "daemon-reload")
+		},
+	}
+	FS := ff.NewFlagSet("app")
+	flagTimeout := FS.Duration('t', "timeput", 10*time.Second, "timeout for stop")
+	flagProg := FS.String('p', "prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
+	flagStopDepth := FS.Int(0, "stop-depth", 1, "STOP depth of child tree")
+	flagAC := FS.String(0, "ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
+	flagVerbose := FS.Bool('v', "verbose", "verbose logging")
+
+	app := ff.Command{Name: "tamefox",
+		Subcommands: []*ff.Command{&startCmd, &stopCmd, &installCmd},
+		Exec: func(ctx context.Context, args []string) error {
+			var (
+				onACmu sync.Mutex
+				onACb  bool
+				onACt  time.Time
+			)
+			onAC := func() bool {
+				if *flagAC == "" {
+					return false
+				}
+				onACmu.Lock()
+				defer onACmu.Unlock()
+				now := time.Now()
+				if onACt.IsZero() || onACt.Before(now.Add(-*flagTimeout)) {
+					b, err := os.ReadFile(*flagAC)
+					if err != nil {
+						log.Printf("ERR Read %s: %w", *flagAC, err)
+						return onACb
+					}
+					b = bytes.TrimSpace(b)
+					onACb = bytes.Equal(bytes.TrimSpace(b), []byte("1"))
+				}
+				return onACb
+			}
+
+			rProg := regexp.MustCompile(*flagProg)
+
+			grp, ctx := errgroup.WithContext(ctx)
+			client, err := sway.New(ctx)
+			if err != nil {
+				return err
+			}
+
+			timeout := *flagTimeout
+			var mu sync.RWMutex
+			ff := make(map[int]*Timer)
+			defer func() {
+				mu.RLock()
+				defer mu.RUnlock()
+				for pid, timer := range ff {
+					kill(pid, false, 999)
+					timer.Stop()
+				}
+			}()
+
+			newTimer := func(pid int) *Timer {
+				if onAC() {
+					return nil
+				}
+				if t := ff[pid]; t != nil {
+					return t
+				}
+				log.Printf("new timer for %d", pid)
+				return newAfterFunc(timeout, func() {
+					// if inhibited, err := iic.isInhibited(); err != nil {
+					// 	log.Printf("error isInhibited: %+v", err)
+					// } else if inhibited {
+					// 	log.Printf("idle is inhibited, skip stop")
+					// } else {
+					if node, err := client.GetTree(ctx); err != nil {
+						log.Printf("ERR GetTree: %+v", err)
+					} else {
+						if node = node.TraverseNodes(func(n *sway.Node) bool {
+							return n != nil && n.InhibitIdle != nil && *n.InhibitIdle
+						}); node != nil {
+							log.Printf("idle is inhibited by %+v", node)
+							return
+						}
+					}
+					kill(pid, true, *flagStopDepth)
+				})
+			}
+
+			// Fill ff
+			node, err := client.GetTree(ctx)
+			if err != nil {
+				return err
+			}
+			node.TraverseNodes(func(node *sway.Node) bool {
+				name, pid := nodeIDs(node)
+				if name != "" && pid != 0 && rProg.MatchString(name) {
+					mu.Lock()
+					ff[pid] = newTimer(pid)
+					mu.Unlock()
+				}
+				return false
+			})
+
+			var lastFF int
+			if err := sway.Subscribe(ctx,
+				windowEventHandler{
+					EventHandler: sway.NoOpEventHandler(),
+					WindowEventHandler: func(ctx context.Context, evt sway.WindowEvent) {
+						switch evt.Change {
+						case "new", "close", "focus":
+						default:
+							return
+						}
+						log.Printf("Event: %+v", evt)
+						name, pid := nodeIDs(&evt.Container)
+						if name == "" || pid == 0 {
+							return
+						}
+						isFF := rProg.MatchString(name)
+						mu.Lock()
+						defer mu.Unlock()
+						switch evt.Change {
+						case "new":
+							if isFF {
+								ff[pid] = newTimer(pid)
+							}
+						case "close":
+							if isFF {
+								kill(pid, false, 999)
+								ff[pid].Stop()
+								delete(ff, pid)
+							}
+						case "focus":
+							if isFF {
+								kill(pid, false, 999)
+								timer := ff[pid]
+								if timer == nil { // new does not have name, so this may be the first encounter
+									timer = newTimer(pid)
+									ff[pid] = timer
+								} else {
+									log.Printf("stopTimer %d", pid)
+								}
+								timer.Stop()
+							}
+							if lastFF != 0 && lastFF != pid {
+								if t := ff[lastFF]; t != nil {
+									if t.IsActive() {
+										log.Printf("timer is active for %d", lastFF)
+									} else {
+										log.Printf("%d resetTimer %d", pid, lastFF)
+										t.Reset(timeout)
+									}
+								}
+							} else {
+								log.Printf("%d lastFF=%d", pid, lastFF)
+							}
+						}
+						if isFF {
+							lastFF = pid
+						}
+						return
+					},
+				},
+				sway.EventTypeWindow,
+			); err != nil {
+				return err
+			}
+
+			grp.Go(func() error {
+				ticker := time.NewTicker(time.Minute)
+				for {
+					select {
+					case <-ctx.Done():
+						return nil
+					case <-ticker.C:
+						if os.Getppid() == 1 {
+							return errors.New("parent is 1")
+						}
+					}
+				}
+			})
+			return grp.Wait()
+		},
+	}
+
+	if err := app.Parse(os.Args[1:]); err != nil {
+		ffhelp.Command(&app).WriteTo(os.Stderr)
+		if errors.Is(err, ff.ErrHelp) {
+			return nil
+		}
+		return err
+	}
 
 	if !*flagVerbose {
 		log.SetOutput(io.Discard)
 	}
-	var (
-		onACmu sync.Mutex
-		onACb  bool
-		onACt  time.Time
-	)
-	onAC := func() bool {
-		if *flagAC == "" {
-			return false
-		}
-		onACmu.Lock()
-		defer onACmu.Unlock()
-		now := time.Now()
-		if onACt.IsZero() || onACt.Before(now.Add(-*flagTimeout)) {
-			b, err := os.ReadFile(*flagAC)
-			if err != nil {
-				log.Printf("ERR Read %s: %w", *flagAC, err)
-				return onACb
-			}
-			b = bytes.TrimSpace(b)
-			onACb = bytes.Equal(bytes.TrimSpace(b), []byte("1"))
-		}
-		return onACb
-	}
-
-	rProg := regexp.MustCompile(*flagProg)
-
 	// iic, err := newIdleInhibitChecker()
 	// if err != nil {
 	// 	return err
@@ -103,146 +309,8 @@ func Main() error {
 
 	ctx, cancel := globalctx.Wrap(context.Background())
 	defer cancel()
-	grp, ctx := errgroup.WithContext(ctx)
-	client, err := sway.New(ctx)
-	if err != nil {
-		return err
-	}
 
-	timeout := *flagTimeout
-	var mu sync.RWMutex
-	ff := make(map[int]*Timer)
-	defer func() {
-		mu.RLock()
-		defer mu.RUnlock()
-		for pid, timer := range ff {
-			kill(pid, false, 999)
-			timer.Stop()
-		}
-	}()
-
-	newTimer := func(pid int) *Timer {
-		if onAC() {
-			return nil
-		}
-		if t := ff[pid]; t != nil {
-			return t
-		}
-		log.Printf("new timer for %d", pid)
-		return newAfterFunc(timeout, func() {
-			// if inhibited, err := iic.isInhibited(); err != nil {
-			// 	log.Printf("error isInhibited: %+v", err)
-			// } else if inhibited {
-			// 	log.Printf("idle is inhibited, skip stop")
-			// } else {
-			if node, err := client.GetTree(ctx); err != nil {
-				log.Printf("ERR GetTree: %+v", err)
-			} else {
-				if node = node.TraverseNodes(func(n *sway.Node) bool {
-					return n != nil && n.InhibitIdle != nil && *n.InhibitIdle
-				}); node != nil {
-					log.Printf("idle is inhibited by %+v", node)
-					return
-				}
-			}
-			kill(pid, true, *flagStopDepth)
-		})
-	}
-
-	// Fill ff
-	node, err := client.GetTree(ctx)
-	if err != nil {
-		return err
-	}
-	node.TraverseNodes(func(node *sway.Node) bool {
-		name, pid := nodeIDs(node)
-		if name != "" && pid != 0 && rProg.MatchString(name) {
-			mu.Lock()
-			ff[pid] = newTimer(pid)
-			mu.Unlock()
-		}
-		return false
-	})
-
-	var lastFF int
-	if err := sway.Subscribe(ctx,
-		windowEventHandler{
-			EventHandler: sway.NoOpEventHandler(),
-			WindowEventHandler: func(ctx context.Context, evt sway.WindowEvent) {
-				switch evt.Change {
-				case "new", "close", "focus":
-				default:
-					return
-				}
-				log.Printf("Event: %+v", evt)
-				name, pid := nodeIDs(&evt.Container)
-				if name == "" || pid == 0 {
-					return
-				}
-				isFF := rProg.MatchString(name)
-				mu.Lock()
-				defer mu.Unlock()
-				switch evt.Change {
-				case "new":
-					if isFF {
-						ff[pid] = newTimer(pid)
-					}
-				case "close":
-					if isFF {
-						kill(pid, false, 999)
-						ff[pid].Stop()
-						delete(ff, pid)
-					}
-				case "focus":
-					if isFF {
-						kill(pid, false, 999)
-						timer := ff[pid]
-						if timer == nil { // new does not have name, so this may be the first encounter
-							timer = newTimer(pid)
-							ff[pid] = timer
-						} else {
-							log.Printf("stopTimer %d", pid)
-						}
-						timer.Stop()
-					}
-					if lastFF != 0 && lastFF != pid {
-						if t := ff[lastFF]; t != nil {
-							if t.IsActive() {
-								log.Printf("timer is active for %d", lastFF)
-							} else {
-								log.Printf("%d resetTimer %d", pid, lastFF)
-								t.Reset(timeout)
-							}
-						}
-					} else {
-						log.Printf("%d lastFF=%d", pid, lastFF)
-					}
-				}
-				if isFF {
-					lastFF = pid
-				}
-				return
-			},
-		},
-		sway.EventTypeWindow,
-	); err != nil {
-		return err
-	}
-
-	grp.Go(func() error {
-		ticker := time.NewTicker(time.Minute)
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-ticker.C:
-				if os.Getppid() == 1 {
-					return errors.New("parent is 1")
-				}
-			}
-		}
-	})
-	return grp.Wait()
+	return app.Run(ctx)
 }
 
 type Change struct {
