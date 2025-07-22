@@ -57,12 +57,15 @@ func main() {
 var self = os.Getpid()
 
 func Main() error {
-	systemctl := func(ctx context.Context, todo string) error {
-		args := []string{"--user", todo, "tamefox.service"}
+	systemctl := func(ctx context.Context, todo string, args ...string) error {
+		var cmdArgs []string
 		if todo == "daemon-reload" {
-			args = args[:len(args)-1]
+			cmdArgs = []string{"--user", todo}
+		} else {
+			cmdArgs = append(append(append(make([]string, 0, 2+len(args)+1),
+				"--user", todo), args...), "tamefox.service")
 		}
-		cmd := exec.CommandContext(ctx, "systemctl", args...)
+		cmd := exec.CommandContext(ctx, "systemctl", cmdArgs...)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		return cmd.Run()
 	}
@@ -74,6 +77,11 @@ func Main() error {
 	stopCmd := ff.Command{Name: "stop",
 		Exec: func(ctx context.Context, args []string) error {
 			return systemctl(ctx, "stop")
+		},
+	}
+	statusCmd := ff.Command{Name: "status",
+		Exec: func(ctx context.Context, args []string) error {
+			return systemctl(ctx, "status", "--no-pager", "-l")
 		},
 	}
 	installCmd := ff.Command{Name: "install",
@@ -113,8 +121,8 @@ WantedBy=graphical-session.target`),
 	flagAC := FS.String(0, "ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
 	flagVerbose := FS.Bool('v', "verbose", "verbose logging")
 
-	app := ff.Command{Name: "tamefox",
-		Subcommands: []*ff.Command{&startCmd, &stopCmd, &installCmd},
+	app := ff.Command{Name: "tamefox", Flags: FS,
+		Subcommands: []*ff.Command{&startCmd, &stopCmd, &installCmd, &statusCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			var (
 				onACmu sync.Mutex
