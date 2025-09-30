@@ -119,6 +119,7 @@ WantedBy=graphical-session.target`),
 	flagProg := FS.String('p', "prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
 	flagStopDepth := FS.Int(0, "stop-depth", 1, "STOP depth of child tree")
 	flagAC := FS.String(0, "ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
+	// flagCgroup := FS.String(0, "cgroup", "", "cgroup name - e.g. /user.slice/user-1000.slice/user@1000.service/app.slice/librewolf.service")
 	flagVerbose := FS.Bool('v', "verbose", "verbose logging")
 
 	app := ff.Command{Name: "tamefox", Flags: FS,
@@ -336,6 +337,27 @@ func kill(pid int, stop bool, depth int) error {
 		return nil
 	}
 	var firstErr error
+	fn := "/proc/" + strconv.Itoa(pid) + "/cgroup"
+	if row, err := os.ReadFile(fn); err == nil {
+		log.Println(fn+":", string(row))
+		if _, row, ok := bytes.Cut(row, []byte(":")); ok {
+			if _, row, ok = bytes.Cut(row, []byte(":")); ok {
+				cgroup := string(bytes.TrimSpace(row))
+				fn := "/sys/fs/cgroup" + cgroup + "/cgroup.freeze"
+				log.Println("cgroup:", fn)
+				b := byte('0')
+				if stop {
+					b = '1'
+				}
+				if err := os.WriteFile(fn, []byte{b}, 0644); err != nil {
+					log.Println("WriteFile %s %c: %+v", fn, b, err)
+				} else {
+					return nil
+				}
+
+			}
+		}
+	}
 	if stop {
 		const sig = syscall.SIGSTOP
 		log.Println("STOP", pid)
