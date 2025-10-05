@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +25,7 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/tgulacsi/go/globalctx"
+	"github.com/tgulacsi/go/niri"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -151,11 +154,24 @@ WantedBy=graphical-session.target`),
 
 			rProg := regexp.MustCompile(*flagProg)
 
+			var client clientInterface
+			var err error
 			grp, ctx := errgroup.WithContext(ctx)
-			client, err := sway.New(ctx)
+			if niriSocket := os.Getenv("NIRI_SOCKET"); niriSocket != "" {
+				var n niri.Client
+				if n, err = niri.New(ctx); err == nil {
+					client = niriClient{n}
+				}
+			} else {
+				var s sway.Client
+				if s, err = sway.New(ctx); err == nil {
+					client = swayClient{s}
+				}
+			}
 			if err != nil {
 				return err
 			}
+			defer client.Close()
 
 			timeout := *flagTimeout
 			var mu sync.RWMutex
@@ -183,98 +199,106 @@ WantedBy=graphical-session.target`),
 					// } else if inhibited {
 					// 	log.Printf("idle is inhibited, skip stop")
 					// } else {
-					if node, err := client.GetTree(ctx); err != nil {
-						log.Printf("ERR GetTree: %+v", err)
-					} else {
-						if node = node.TraverseNodes(func(n *sway.Node) bool {
-							return n != nil && n.InhibitIdle != nil && *n.InhibitIdle
-						}); node != nil {
-							log.Printf("idle is inhibited by %+v", node)
-							return
+					if ok, err := client.IsIdleInhibited(ctx); err != nil {
+						if errors.Is(err, errors.ErrUnsupported) {
+							// logger.Debug("isIdleInhibited", "error", err)
+						} else {
+							log.Printf("WARN isIdleInhibited: %+v", err)
 						}
+					} else if ok {
+						log.Println("idle is inhibited")
+						return
 					}
 					kill(pid, true, *flagStopDepth)
 				})
 			}
 
 			// Fill ff
-			node, err := client.GetTree(ctx)
+			ww, err := client.ListWindows(ctx)
 			if err != nil {
 				return err
 			}
-			node.TraverseNodes(func(node *sway.Node) bool {
-				name, pid := nodeIDs(node)
-				if name != "" && pid != 0 && rProg.MatchString(name) {
+			for _, w := range ww {
+				if w.Name != "" && w.PID != 0 && rProg.MatchString(w.Name) {
 					mu.Lock()
-					ff[pid] = newTimer(pid)
+					ff[w.PID] = newTimer(w.PID)
 					mu.Unlock()
 				}
-				return false
-			})
+				break
+			}
 
 			var lastFF int
-			if err := sway.Subscribe(ctx,
-				windowEventHandler{
-					EventHandler: sway.NoOpEventHandler(),
-					WindowEventHandler: func(ctx context.Context, evt sway.WindowEvent) {
-						switch evt.Change {
-						case "new", "close", "focus":
-						default:
-							return
-						}
-						log.Printf("Event: %+v", evt)
-						name, pid := nodeIDs(&evt.Container)
-						if name == "" || pid == 0 {
-							return
-						}
-						isFF := rProg.MatchString(name)
-						mu.Lock()
-						defer mu.Unlock()
-						switch evt.Change {
-						case "new":
-							if isFF {
-								ff[pid] = newTimer(pid)
+			if c, ok := client.(niriClient); ok {
+				if err := c.c.Subscribe(ctx, func(e niri.Event) error {
+					fmt.Printf("EVENT: %+v", e)
+					return nil
+				}); err != nil {
+					return err
+				}
+			} else {
+				if err := sway.Subscribe(ctx,
+					windowEventHandler{
+						EventHandler: sway.NoOpEventHandler(),
+						WindowEventHandler: func(ctx context.Context, evt sway.WindowEvent) {
+							switch evt.Change {
+							case "new", "close", "focus":
+							default:
+								return
 							}
-						case "close":
-							if isFF {
-								kill(pid, false, 999)
-								ff[pid].Stop()
-								delete(ff, pid)
+							log.Printf("Event: %+v", evt)
+							name, pid := nodeIDs(&evt.Container)
+							if name == "" || pid == 0 {
+								return
 							}
-						case "focus":
-							if isFF {
-								kill(pid, false, 999)
-								timer := ff[pid]
-								if timer == nil { // new does not have name, so this may be the first encounter
-									timer = newTimer(pid)
-									ff[pid] = timer
-								} else {
-									log.Printf("stopTimer %d", pid)
+							isFF := rProg.MatchString(name)
+							mu.Lock()
+							defer mu.Unlock()
+							switch evt.Change {
+							case "new":
+								if isFF {
+									ff[pid] = newTimer(pid)
 								}
-								timer.Stop()
-							}
-							if lastFF != 0 && lastFF != pid {
-								if t := ff[lastFF]; t != nil {
-									if t.IsActive() {
-										log.Printf("timer is active for %d", lastFF)
+							case "close":
+								if isFF {
+									kill(pid, false, 999)
+									ff[pid].Stop()
+									delete(ff, pid)
+								}
+							case "focus":
+								if isFF {
+									kill(pid, false, 999)
+									timer := ff[pid]
+									if timer == nil { // new does not have name, so this may be the first encounter
+										timer = newTimer(pid)
+										ff[pid] = timer
 									} else {
-										log.Printf("%d resetTimer %d", pid, lastFF)
-										t.Reset(timeout)
+										log.Printf("stopTimer %d", pid)
 									}
+									timer.Stop()
 								}
-							} else {
-								log.Printf("%d lastFF=%d", pid, lastFF)
+								if lastFF != 0 && lastFF != pid {
+									if t := ff[lastFF]; t != nil {
+										if t.IsActive() {
+											log.Printf("timer is active for %d", lastFF)
+										} else {
+											log.Printf("%d resetTimer %d", pid, lastFF)
+											t.Reset(timeout)
+										}
+									}
+								} else {
+									log.Printf("%d lastFF=%d", pid, lastFF)
+								}
 							}
-						}
-						if isFF {
-							lastFF = pid
-						}
-						return
+							if isFF {
+								lastFF = pid
+							}
+							return
+						},
 					},
-				},
-				sway.EventTypeWindow,
-			); err != nil {
-				return err
+					sway.EventTypeWindow,
+				); err != nil {
+					return err
+				}
 			}
 
 			grp.Go(func() error {
@@ -302,7 +326,10 @@ WantedBy=graphical-session.target`),
 		return err
 	}
 
-	if !*flagVerbose {
+	if *flagVerbose {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	} else {
+		slog.SetLogLoggerLevel(slog.LevelWarn)
 		log.SetOutput(io.Discard)
 	}
 	// iic, err := newIdleInhibitChecker()
@@ -541,4 +568,62 @@ func (t *Timer) Stop() {
 		default:
 		}
 	}
+}
+
+type (
+	clientInterface interface {
+		ListWindows(context.Context) ([]Container, error)
+		IsIdleInhibited(context.Context) (bool, error)
+		Close() error
+	}
+	niriClient struct{ c niri.Client }
+	swayClient struct{ c sway.Client }
+)
+
+var (
+	_ clientInterface = niriClient{}
+	_ clientInterface = swayClient{}
+)
+
+func (nc niriClient) Close() error { return nc.c.Close() }
+func (sc swayClient) Close() error { return nil }
+
+func (nc niriClient) IsIdleInhibited(_ context.Context) (bool, error) {
+	return false, errors.ErrUnsupported
+}
+func (sc swayClient) IsIdleInhibited(ctx context.Context) (bool, error) {
+	node, err := sc.c.GetTree(ctx)
+	if err != nil {
+		return false, err
+	}
+	if node = node.TraverseNodes(func(n *sway.Node) bool {
+		return n != nil && n.InhibitIdle != nil && *n.InhibitIdle
+	}); node != nil {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (nc niriClient) ListWindows(ctx context.Context) ([]Container, error) {
+	ws, err := nc.c.ListWindows(ctx)
+	ww := make([]Container, len(ws))
+	for i, w := range ws {
+		ww[i] = Container{
+			PID: int(w.PID), AppID: w.AppID, Name: w.Title,
+		}
+	}
+	return ww, err
+}
+func (sc swayClient) ListWindows(ctx context.Context) ([]Container, error) {
+	node, err := sc.c.GetTree(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var ww []Container
+	node.TraverseNodes(func(node *sway.Node) bool {
+		name, pid := nodeIDs(node)
+		ww = append(ww, Container{AppID: name, PID: pid})
+		return true
+	})
+	return ww, nil
 }
