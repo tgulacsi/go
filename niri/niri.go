@@ -5,7 +5,6 @@
 package niri
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -174,9 +173,9 @@ func (c Client) ListWindows(ctx context.Context) ([]Window, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ww []Window
+	var ww WindowsChanged
 	err = json.Unmarshal(p, &ww)
-	return ww, err
+	return ww.Windows, err
 }
 
 func (c Client) Subscribe(ctx context.Context, f func(Event) error) error {
@@ -186,7 +185,11 @@ func (c Client) Subscribe(ctx context.Context, f func(Event) error) error {
 		return err
 	}
 	defer conn.Close()
-	if _, err := conn.Write([]byte("EventStream")); err != nil {
+	go func() {
+		<-ctx.Done()
+		conn.Close()
+	}()
+	if _, err := conn.Write([]byte(`"EventStream"` + "\n")); err != nil {
 		return err
 	}
 	dec := json.NewDecoder(conn)
@@ -195,6 +198,7 @@ func (c Client) Subscribe(ctx context.Context, f func(Event) error) error {
 		if err := dec.Decode(&e); err != nil {
 			return err
 		}
+		slog.Debug("event", "e", e)
 		if err := f(e); err != nil {
 			return err
 		}
@@ -211,7 +215,7 @@ func (c Client) do(ctx context.Context, command string) ([]byte, error) {
 	c.conn.SetWriteDeadline(dl)
 	c.conn.SetReadDeadline(dl)
 	slog.Debug("do", "command", command)
-	if _, err := c.conn.Write([]byte(strconv.Quote(command))); err != nil {
+	if _, err := c.conn.Write([]byte(strconv.Quote(command) + "\n")); err != nil {
 		slog.Error("Write", "error", err)
 		return nil, err
 	}
@@ -220,13 +224,7 @@ func (c Client) do(ctx context.Context, command string) ([]byte, error) {
 		Ok  json.RawMessage
 		Err string
 	}
-	scanner := bufio.NewScanner(c.conn)
-	if !scanner.Scan() {
-		slog.Error("Scan", "error", scanner.Err())
-		return nil, scanner.Err()
-	}
-	slog.Debug("scanned", "line", scanner.Text())
-	if err := json.Unmarshal(scanner.Bytes(), &ans); err != nil {
+	if err := json.NewDecoder(c.conn).Decode(&ans); err != nil {
 		return nil, err
 	}
 	if ans.Err != "" {
