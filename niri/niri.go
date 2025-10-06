@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package niri is for IPC with the Niri Wayland compositor.
+// Hosts types for parsing an EventStream.
 package niri
 
 import (
