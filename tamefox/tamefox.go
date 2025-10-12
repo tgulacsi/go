@@ -117,16 +117,73 @@ WantedBy=graphical-session.target`),
 			return systemctl(ctx, "daemon-reload")
 		},
 	}
-	FS := ff.NewFlagSet("app")
+
+	var prog string
+	var rProg *regexp.Regexp
+
+	getClient := func(ctx context.Context) (client clientInterface, pids []int, err error) {
+		if niriSocket := os.Getenv("NIRI_SOCKET"); niriSocket != "" {
+			var n niri.Client
+			if n, err = niri.New(ctx); err == nil {
+				client = niriClient{n}
+			}
+		} else {
+			var s sway.Client
+			if s, err = sway.New(ctx); err == nil {
+				client = swayClient{s}
+			}
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Fill ff
+		ww, err := client.ListWindows(ctx)
+		if err != nil {
+			client.Close()
+			return nil, nil, err
+		}
+		for _, w := range ww {
+			slog.Debug("window", "w", w)
+			if w.Name != "" && w.PID != 0 &&
+				(rProg.MatchString(w.Name) || rProg.MatchString(w.AppID)) {
+				slog.Info("found", "prog", prog, "window", w)
+				pids = append(pids, w.PID)
+			}
+		}
+		return client, pids, nil
+	}
+
+	FS := ff.NewFlagSet("signal")
+	flagSignal := FS.Bool('S', "stop", "stop (or wake)")
+	signalCmd := ff.Command{Name: "signal", Flags: FS,
+		Exec: func(ctx context.Context, args []string) error {
+			client, pids, err := getClient(ctx)
+			if err != nil {
+				return err
+			}
+			defer client.Close()
+			if len(pids) == 0 {
+				return fmt.Errorf("%s not found", rProg)
+			}
+			for _, pid := range pids {
+				slog.Info("kill", "pid", pid, "stop", *flagSignal)
+				kill(pid, *flagSignal, 999)
+			}
+			return nil
+		},
+	}
+
+	FS = ff.NewFlagSet("app")
 	flagTimeout := FS.Duration('t', "timeput", 10*time.Second, "timeout for stop")
-	flagProg := FS.String('p', "prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
+	FS.StringVar(&prog, 'p', "prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
 	flagStopDepth := FS.Int(0, "stop-depth", 1, "STOP depth of child tree")
 	flagAC := FS.String(0, "ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
 	// flagCgroup := FS.String(0, "cgroup", "", "cgroup name - e.g. /user.slice/user-1000.slice/user@1000.service/app.slice/librewolf.service")
 	flagVerbose := FS.Bool('v', "verbose", "verbose logging")
 
 	app := ff.Command{Name: "tamefox", Flags: FS,
-		Subcommands: []*ff.Command{&startCmd, &stopCmd, &installCmd, &statusCmd},
+		Subcommands: []*ff.Command{&startCmd, &stopCmd, &installCmd, &statusCmd, &signalCmd},
 		Exec: func(ctx context.Context, args []string) error {
 			var (
 				onACmu sync.Mutex
@@ -152,27 +209,7 @@ WantedBy=graphical-session.target`),
 				return onACb
 			}
 
-			rProg := regexp.MustCompile(*flagProg)
-
-			var client clientInterface
-			var err error
 			grp, ctx := errgroup.WithContext(ctx)
-			if niriSocket := os.Getenv("NIRI_SOCKET"); niriSocket != "" {
-				var n niri.Client
-				if n, err = niri.New(ctx); err == nil {
-					client = niriClient{n}
-				}
-			} else {
-				var s sway.Client
-				if s, err = sway.New(ctx); err == nil {
-					client = swayClient{s}
-				}
-			}
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-
 			timeout := *flagTimeout
 			var mu sync.RWMutex
 			ff := make(map[int]*Timer)
@@ -184,6 +221,12 @@ WantedBy=graphical-session.target`),
 					timer.Stop()
 				}
 			}()
+
+			client, pids, err := getClient(ctx)
+			if err != nil {
+				return err
+			}
+			defer client.Close()
 
 			newTimer := func(pid int) *Timer {
 				if onAC() {
@@ -213,19 +256,11 @@ WantedBy=graphical-session.target`),
 				})
 			}
 
-			// Fill ff
-			ww, err := client.ListWindows(ctx)
-			if err != nil {
-				return err
+			mu.Lock()
+			for _, pid := range pids {
+				ff[pid] = newTimer(pid)
 			}
-			for _, w := range ww {
-				if w.Name != "" && w.PID != 0 && rProg.MatchString(w.Name) {
-					mu.Lock()
-					ff[w.PID] = newTimer(w.PID)
-					mu.Unlock()
-				}
-				break
-			}
+			mu.Unlock()
 
 			var lastFF int
 			if c, ok := client.(niriClient); ok {
@@ -332,6 +367,7 @@ WantedBy=graphical-session.target`),
 		slog.SetLogLoggerLevel(slog.LevelWarn)
 		log.SetOutput(io.Discard)
 	}
+	rProg = regexp.MustCompile(prog)
 	// iic, err := newIdleInhibitChecker()
 	// if err != nil {
 	// 	return err
@@ -377,7 +413,7 @@ func kill(pid int, stop bool, depth int) error {
 					b = '1'
 				}
 				if err := os.WriteFile(fn, []byte{b}, 0644); err != nil {
-					log.Println("WriteFile %s %c: %+v", fn, b, err)
+					log.Printf("WriteFile %s %c: %+v", fn, b, err)
 				} else {
 					return nil
 				}
