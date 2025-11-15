@@ -27,10 +27,7 @@ func (htw *HeadTailKeeper) Write(p []byte) (int, error) {
 	htw.hsh.Write(p)
 	length := len(p)
 	if rem := htw.Limit - len(htw.head); rem > 0 {
-		m := len(p)
-		if m > rem {
-			m = rem
-		}
+		m := min(len(p), rem)
 		htw.head = append(htw.head, p[:m]...)
 		p = p[m:]
 	}

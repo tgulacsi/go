@@ -52,7 +52,7 @@ func New(err error, code int) *httpError {
 
 // Newf returns a new httpError with the given code,
 // and the message is created from msg and the args.
-func Newf(code int, msg string, args ...interface{}) *httpError {
+func Newf(code int, msg string, args ...any) *httpError {
 	return New(fmt.Errorf(msg, args...), code)
 }
 

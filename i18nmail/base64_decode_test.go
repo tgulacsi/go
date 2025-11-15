@@ -28,7 +28,7 @@ func testB64FilterReaderPeek(t *testing.T, newReader func(io.Reader, []byte) io.
 		t.Fatal(err)
 	}
 	var grp errgroup.Group
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		grp.Go(func() error {
 			rc := newReader(fh, []byte(b64chars))
 			r := bufio.NewReader(rc)

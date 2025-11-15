@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	Log = func(...interface{}) error { return nil }
+	Log = func(...any) error { return nil }
 
 	DefaultTitle   = "Cím koordináták pontosítása"
 	DefaultAddress = "Budapest"

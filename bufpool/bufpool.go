@@ -30,7 +30,7 @@ func New(size int) *bufferPool {
 	if size == 0 {
 		size = DefaultSize
 	}
-	return &bufferPool{Pool: &sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, size)) }}}
+	return &bufferPool{Pool: &sync.Pool{New: func() any { return bytes.NewBuffer(make([]byte, 0, size)) }}}
 }
 
 func Get() *bytes.Buffer    { return Default.Get() }
@@ -59,7 +59,7 @@ func (p *bufferPool) Put(buf *bytes.Buffer) {
 }
 
 func NewStrings() *stringsPool {
-	return &stringsPool{Pool: &sync.Pool{New: func() interface{} { return &strings.Builder{} }}}
+	return &stringsPool{Pool: &sync.Pool{New: func() any { return &strings.Builder{} }}}
 }
 
 var DefaultStrings = NewStrings()

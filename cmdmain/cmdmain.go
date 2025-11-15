@@ -122,7 +122,7 @@ func hasFlags(flags *flag.FlagSet) bool {
 }
 
 // Errorf prints to Stderr
-func Errorf(format string, args ...interface{}) {
+func Errorf(format string, args ...any) {
 	fmt.Fprintf(Stderr, format, args...)
 }
 

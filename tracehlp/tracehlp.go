@@ -26,19 +26,19 @@ import (
 )
 
 // NewLoggerTracer returns a new basictracer with the given processName and Log function.
-func NewLoggerTracer(processName string, Log func(keyvals ...interface{}) error) opentracing.Tracer {
+func NewLoggerTracer(processName string, Log func(keyvals ...any) error) opentracing.Tracer {
 	return basictracer.New(NewLoggerRecorder(processName, Log))
 }
 
 // LoggerRecorder implements the basictracer.Recorder interface.
 type LoggerRecorder struct {
 	tags        map[string]string
-	Log         func(keyvals ...interface{}) error
+	Log         func(keyvals ...any) error
 	processName string
 }
 
 // NewLoggerRecorder returns a LoggerRecorder for the given `processName`.
-func NewLoggerRecorder(processName string, Log func(keyvals ...interface{}) error) *LoggerRecorder {
+func NewLoggerRecorder(processName string, Log func(keyvals ...any) error) *LoggerRecorder {
 	return &LoggerRecorder{
 		processName: processName,
 		tags:        make(map[string]string),
@@ -50,7 +50,7 @@ func NewLoggerRecorder(processName string, Log func(keyvals ...interface{}) erro
 func (t *LoggerRecorder) ProcessName() string { return t.processName }
 
 // SetTag sets a tag.
-func (t *LoggerRecorder) SetTag(key string, val interface{}) *LoggerRecorder {
+func (t *LoggerRecorder) SetTag(key string, val any) *LoggerRecorder {
 	t.tags[key] = fmt.Sprint(val)
 	return t
 }

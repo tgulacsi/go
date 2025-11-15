@@ -27,7 +27,7 @@ import (
 )
 
 // Log is discarded by default
-var Log = func(keyvals ...interface{}) error { return nil }
+var Log = func(keyvals ...any) error { return nil }
 
 // ErrTimedOut is an error for child timeout
 var ErrTimedOut = errors.New("child timed out")

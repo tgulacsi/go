@@ -30,7 +30,7 @@ import (
 )
 
 // Log is discarded by default
-var Log = func(...interface{}) error { return nil }
+var Log = func(...any) error { return nil }
 
 // Loffice executable name
 var Loffice = "loffice"

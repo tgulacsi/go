@@ -68,7 +68,7 @@ func Main() error {
 	var wanted map[string]struct{}
 	if n := flag.NArg() - 1; n > 0 {
 		wanted = make(map[string]struct{}, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			wanted[flag.Arg(i+1)] = struct{}{}
 		}
 	}

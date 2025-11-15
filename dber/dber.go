@@ -20,7 +20,7 @@ type DBer interface {
 }
 
 type Execer interface {
-	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
 type Txer interface {
@@ -35,12 +35,12 @@ type Preparer interface {
 }
 
 type Queryer interface {
-	QueryContext(context.Context, string, ...interface{}) (Rowser, error)
-	QueryRowContext(context.Context, string, ...interface{}) Scanner
+	QueryContext(context.Context, string, ...any) (Rowser, error)
+	QueryRowContext(context.Context, string, ...any) Scanner
 }
 
 type Scanner interface {
-	Scan(dest ...interface{}) error
+	Scan(dest ...any) error
 }
 
 type Rowser interface {
@@ -66,18 +66,18 @@ func (db SqlDBer) BeginTx(ctx context.Context, opt *sql.TxOptions) (Txer, error)
 	return SqlTxer{tx}, nil
 }
 
-func (db SqlDBer) Query(qry string, args ...interface{}) (Rowser, error) {
+func (db SqlDBer) Query(qry string, args ...any) (Rowser, error) {
 	return db.QueryContext(context.Background(), qry, args...)
 }
-func (db SqlDBer) QueryContext(ctx context.Context, qry string, args ...interface{}) (Rowser, error) {
+func (db SqlDBer) QueryContext(ctx context.Context, qry string, args ...any) (Rowser, error) {
 	rows, err := db.DB.QueryContext(ctx, qry, args...)
 	return SqlRowser{rows}, err
 }
 
-func (db SqlDBer) QueryRow(qry string, args ...interface{}) Scanner {
+func (db SqlDBer) QueryRow(qry string, args ...any) Scanner {
 	return db.QueryRowContext(context.Background(), qry, args...)
 }
-func (db SqlDBer) QueryRowContext(ctx context.Context, qry string, args ...interface{}) Scanner {
+func (db SqlDBer) QueryRowContext(ctx context.Context, qry string, args ...any) Scanner {
 	return SqlScanner{db.DB.QueryRowContext(ctx, qry, args...)}
 }
 
@@ -86,18 +86,18 @@ type SqlTxer struct {
 	*sql.Tx
 }
 
-func (tx SqlTxer) Query(qry string, args ...interface{}) (Rowser, error) {
+func (tx SqlTxer) Query(qry string, args ...any) (Rowser, error) {
 	return tx.QueryContext(context.Background(), qry, args...)
 }
-func (tx SqlTxer) QueryContext(ctx context.Context, qry string, args ...interface{}) (Rowser, error) {
+func (tx SqlTxer) QueryContext(ctx context.Context, qry string, args ...any) (Rowser, error) {
 	rows, err := tx.Tx.QueryContext(ctx, qry, args...)
 	return SqlRowser{rows}, err
 }
 
-func (tx SqlTxer) QueryRow(qry string, args ...interface{}) Scanner {
+func (tx SqlTxer) QueryRow(qry string, args ...any) Scanner {
 	return tx.QueryRowContext(context.Background(), qry, args...)
 }
-func (tx SqlTxer) QueryRowContext(ctx context.Context, qry string, args ...interface{}) Scanner {
+func (tx SqlTxer) QueryRowContext(ctx context.Context, qry string, args ...any) Scanner {
 	return SqlScanner{tx.Tx.QueryRowContext(ctx, qry, args...)}
 }
 func (tx SqlTxer) PrepareContext(ctx context.Context, qry string) (*sql.Stmt, error) {

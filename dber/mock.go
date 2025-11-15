@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	Debug = func(string, ...interface{}) {}
+	Debug = func(string, ...any) {}
 
 	ErrQueryMismatch       = errors.New("query mismatch")
 	ErrArgsMismatch        = errors.New("args mismatch")
@@ -29,10 +29,10 @@ var (
 )
 
 type Mock interface {
-	WithArgs(...interface{}) Mock
-	WillReturnRows(...[]interface{}) Mock
+	WithArgs(...any) Mock
+	WillReturnRows(...[]any) Mock
 	WithResult(ID, Affected int64) Mock
-	WillSetArgs(map[int]interface{}) Mock
+	WillSetArgs(map[int]any) Mock
 }
 
 var _ = Txer((*Tx)(nil))
@@ -114,17 +114,17 @@ var _ = Mock(&expectQuery{})
 
 type expectQuery struct {
 	Qry     *regexp.Regexp
-	Args    []interface{}
-	SetArgs map[int]interface{}
-	Rows    [][]interface{}
+	Args    []any
+	SetArgs map[int]any
+	Rows    [][]any
 	Result  ResultMock
 }
 
-func (exp *expectQuery) WithArgs(args ...interface{}) Mock {
+func (exp *expectQuery) WithArgs(args ...any) Mock {
 	exp.Args = args
 	return exp
 }
-func (exp *expectQuery) WillReturnRows(rows ...[]interface{}) Mock {
+func (exp *expectQuery) WillReturnRows(rows ...[]any) Mock {
 	exp.Rows = rows
 	return exp
 }
@@ -132,16 +132,16 @@ func (exp *expectQuery) WithResult(id, affected int64) Mock {
 	exp.Result.ID, exp.Result.Affected = id, affected
 	return exp
 }
-func (exp *expectQuery) WillSetArgs(args map[int]interface{}) Mock {
+func (exp *expectQuery) WillSetArgs(args map[int]any) Mock {
 	exp.SetArgs = args
 	return exp
 }
 
 // Execute checks whether the given query matches with the next expected.
-func (tx *Tx) Exec(qry string, params ...interface{}) (sql.Result, error) {
+func (tx *Tx) Exec(qry string, params ...any) (sql.Result, error) {
 	return tx.ExecContext(context.Background(), qry, params...)
 }
-func (tx *Tx) ExecContext(ctx context.Context, qry string, params ...interface{}) (sql.Result, error) {
+func (tx *Tx) ExecContext(ctx context.Context, qry string, params ...any) (sql.Result, error) {
 	exp, err := tx.check(ctx, qry, params...)
 	if err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func (tx *Tx) ExecContext(ctx context.Context, qry string, params ...interface{}
 	}
 	return exp.Result, nil
 }
-func (tx *Tx) PrepAndExe(qry string, params ...interface{}) (uint64, error) {
+func (tx *Tx) PrepAndExe(qry string, params ...any) (uint64, error) {
 	res, err := tx.Exec(qry, params...)
 	if err != nil {
 		return 0, err
@@ -160,10 +160,10 @@ func (tx *Tx) PrepAndExe(qry string, params ...interface{}) (uint64, error) {
 	return uint64(aff), err
 }
 
-func (tx *Tx) Query(qry string, params ...interface{}) (Rowser, error) {
+func (tx *Tx) Query(qry string, params ...any) (Rowser, error) {
 	return tx.QueryContext(context.Background(), qry, params...)
 }
-func (tx *Tx) QueryContext(ctx context.Context, qry string, params ...interface{}) (Rowser, error) {
+func (tx *Tx) QueryContext(ctx context.Context, qry string, params ...any) (Rowser, error) {
 	exp, err := tx.check(ctx, qry, params...)
 	if err != nil {
 		return nil, err
@@ -171,10 +171,10 @@ func (tx *Tx) QueryContext(ctx context.Context, qry string, params ...interface{
 	return &rowsMock{Rows: exp.Rows}, nil
 }
 
-func (tx *Tx) QueryRow(qry string, params ...interface{}) Scanner {
+func (tx *Tx) QueryRow(qry string, params ...any) Scanner {
 	return tx.QueryRowContext(context.Background(), qry, params...)
 }
-func (tx *Tx) QueryRowContext(ctx context.Context, qry string, params ...interface{}) Scanner {
+func (tx *Tx) QueryRowContext(ctx context.Context, qry string, params ...any) Scanner {
 	exp, err := tx.check(ctx, qry, params...)
 	if err != nil {
 		return scannerMock{Err: err}
@@ -187,7 +187,7 @@ func (tx *Tx) QueryRowContext(ctx context.Context, qry string, params ...interfa
 
 const ExpectAny = "{{ExpectAny}}"
 
-func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expectQuery, error) {
+func (cu *Tx) check(ctx context.Context, qry string, args ...any) (*expectQuery, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -206,8 +206,8 @@ func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expe
 		return exp, fmt.Errorf("%d. got %d, want %d:\n%s: %w", cu.pos, len(args), len(exp.Args), df, ErrArgsMismatch)
 	}
 	// filter ExpectAny
-	expArgsF := make([]interface{}, 0, len(exp.Args))
-	argsF := make([]interface{}, 0, len(args))
+	expArgsF := make([]any, 0, len(exp.Args))
+	argsF := make([]any, 0, len(args))
 	for i, v := range exp.Args {
 		if v == ExpectAny {
 			continue
@@ -228,7 +228,7 @@ func (cu *Tx) check(ctx context.Context, qry string, args ...interface{}) (*expe
 var _ = Rowser((*rowsMock)(nil))
 
 type rowsMock struct {
-	Rows [][]interface{}
+	Rows [][]any
 }
 
 func (rm rowsMock) Close() error { return nil }
@@ -240,7 +240,7 @@ func (rm *rowsMock) Next() bool {
 	rm.Rows = rm.Rows[1:]
 	return true
 }
-func (rm rowsMock) Scan(dest ...interface{}) error {
+func (rm rowsMock) Scan(dest ...any) error {
 	return scannerMock{Row: rm.Rows[0]}.Scan(dest...)
 }
 
@@ -248,10 +248,10 @@ var _ = Scanner(scannerMock{})
 
 type scannerMock struct {
 	Err error
-	Row []interface{}
+	Row []any
 }
 
-func (sm scannerMock) Scan(dest ...interface{}) error {
+func (sm scannerMock) Scan(dest ...any) error {
 	for i, d := range dest {
 		setPtr(d, sm.Row[i])
 	}
@@ -267,7 +267,7 @@ type ResultMock struct {
 func (res ResultMock) LastInsertId() (int64, error) { return res.ID, nil }
 func (res ResultMock) RowsAffected() (int64, error) { return res.Affected, nil }
 
-func setPtr(d, s interface{}) {
+func setPtr(d, s any) {
 	if so, ok := d.(sql.Out); ok {
 		d = so.Dest
 	}
@@ -287,8 +287,8 @@ func setPtr(d, s interface{}) {
 	}
 }
 
-func verboseString(a interface{}) string {
-	m, ok := a.(map[string]interface{})
+func verboseString(a any) string {
+	m, ok := a.(map[string]any)
 	if !ok {
 		return strings.Replace(fmt.Sprintf("%#v", a), `, "`, ",\n\t\"", -1)
 	}

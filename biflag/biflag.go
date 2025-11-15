@@ -43,7 +43,7 @@ func (b *biBool) String() string {
 	}
 	return s
 }
-func (b *biBool) Get() interface{} { return *b.value }
+func (b *biBool) Get() any { return *b.value }
 func (b *biBool) Set(s string) error {
 	v, err := strconv.ParseBool(s)
 	if err != nil {

@@ -36,7 +36,7 @@ func TestPretty(t *testing.T) {
   }
 }`},
 	} {
-		m := make(map[string]interface{})
+		m := make(map[string]any)
 		if err := json.Unmarshal([]byte(inout[0]), &m); err != nil {
 			t.Fatalf("%d. cannot unmarshal test input string: %v", i, err)
 		}

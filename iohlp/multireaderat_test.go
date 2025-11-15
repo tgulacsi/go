@@ -22,7 +22,7 @@ func TestMultiReaderAt(t *testing.T) {
 	var b [16384]byte
 	rand.Read(b[:])
 	want := string(b[:])
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		parts := make([]iohlp.SizeReaderAt, max(1, i<<i))
 		length := len(want) / len(parts)
 		s := want

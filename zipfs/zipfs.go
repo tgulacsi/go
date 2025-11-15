@@ -92,7 +92,7 @@ type ZipFS map[string]*zipFile
 type zipFile struct {
 	Mode    fs.FileMode // FileInfo.Mode
 	ModTime time.Time   // FileInfo.ModTime
-	Sys     interface{} // FileInfo.Sys
+	Sys     any         // FileInfo.Sys
 	*zip.File
 }
 
@@ -221,7 +221,7 @@ func (i *zipFileInfo) Mode() fs.FileMode          { return i.f.Mode }
 func (i *zipFileInfo) Type() fs.FileMode          { return i.f.Mode.Type() }
 func (i *zipFileInfo) ModTime() time.Time         { return i.f.ModTime }
 func (i *zipFileInfo) IsDir() bool                { return i.f.Mode&fs.ModeDir != 0 }
-func (i *zipFileInfo) Sys() interface{}           { return i.f.Sys }
+func (i *zipFileInfo) Sys() any                   { return i.f.Sys }
 func (i *zipFileInfo) Info() (fs.FileInfo, error) { return i, nil }
 
 // An openzipFile is a regular (non-directory) fs.File open for reading.

@@ -27,7 +27,7 @@ import (
 	"unicode"
 )
 
-var bPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 128)) }}
+var bPool = sync.Pool{New: func() any { return bytes.NewBuffer(make([]byte, 0, 128)) }}
 
 // ContentDisposition returns a formatted http://tools.ietf.org/html/rfc6266 header.
 func ContentDisposition(dispType string, filename string) string {
@@ -60,14 +60,14 @@ func ContentDisposition(dispType string, filename string) string {
 
 type Accept []KeyVal
 type KeyVal struct {
-	Val interface{}
+	Val any
 	Key string
 }
 
 // Match the given Accept header.
 //
 // Parts of the code is copied from github.com/jchannon/negotiator.
-func (A Accept) Match(accept string) interface{} {
+func (A Accept) Match(accept string) any {
 	if len(A) == 0 {
 		return nil
 	}
@@ -159,7 +159,7 @@ func handleMediaRangeWithAcceptParams(mediaRange string, acceptParams []string) 
 	wv.Value = strings.TrimSpace(mediaRange)
 	wv.Weight = parameteredMediaRangeWeight
 
-	for index := 0; index < len(acceptParams); index++ {
+	for index := range acceptParams {
 		ap := strings.ToLower(acceptParams[index])
 		if isQualityAcceptParam(ap) {
 			wv.Weight = parseQuality(ap)
@@ -211,7 +211,7 @@ type weightedValue struct {
 }
 
 // ByWeight implements sort.Interface for []WeightedValue based
-//on the Weight field. The data will be returned sorted decending
+// on the Weight field. The data will be returned sorted decending
 type byWeight []weightedValue
 
 func (a byWeight) Len() int           { return len(a) }

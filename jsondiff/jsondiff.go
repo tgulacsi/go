@@ -31,7 +31,7 @@ import (
 	"github.com/kylelemons/godebug/diff"
 )
 
-func Pretty(w io.Writer, data map[string]interface{}, indent string) error {
+func Pretty(w io.Writer, data map[string]any, indent string) error {
 	n := len(data)
 	if n == 0 {
 		_, err := io.WriteString(w, "{}")
@@ -66,7 +66,7 @@ func Pretty(w io.Writer, data map[string]interface{}, indent string) error {
 			return err
 		}
 		v := data[k]
-		if m, ok := v.(map[string]interface{}); ok {
+		if m, ok := v.(map[string]any); ok {
 			if err = Pretty(w, m, indent+"  "); err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ func Pretty(w io.Writer, data map[string]interface{}, indent string) error {
 }
 
 // Diff returns the line diff of the two JSON map[string]interface{}s.
-func Diff(a map[string]interface{}, b map[string]interface{}) string {
+func Diff(a map[string]any, b map[string]any) string {
 	var bA, bB bytes.Buffer
 	if err := Pretty(&bA, a, ""); err != nil {
 		return "ERROR(a): " + err.Error()
@@ -105,7 +105,7 @@ func Diff(a map[string]interface{}, b map[string]interface{}) string {
 
 // DiffStrings json.Unmarshals the strings and diffs that.
 func DiffStrings(a, b string) (string, error) {
-	mA := make(map[string]interface{})
+	mA := make(map[string]any)
 	if err := json.Unmarshal([]byte(a), &mA); err != nil {
 		return "", fmt.Errorf("%s: %w", "unmarshal 1. arg", err)
 	}
@@ -114,7 +114,7 @@ func DiffStrings(a, b string) (string, error) {
 		return "", fmt.Errorf("%s: %w", "pretty-print 1. arg", err)
 	}
 
-	mB := make(map[string]interface{})
+	mB := make(map[string]any)
 	if err := json.Unmarshal([]byte(b), &mB); err != nil {
 		return "", fmt.Errorf("%s: %w", "unmarshal 2. arg", err)
 	}

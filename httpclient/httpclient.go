@@ -111,7 +111,7 @@ func NewWithClient(name string, cl *http.Client, timeout, interval time.Duration
 }
 
 // NewRequest calls github.com/hashicorp/go-retryablehttp's NewRequest.
-func NewRequest(method, URL string, body interface{}) (*retryablehttp.Request, error) {
+func NewRequest(method, URL string, body any) (*retryablehttp.Request, error) {
 	return retryablehttp.NewRequest(method, URL, body)
 }
 
@@ -119,7 +119,7 @@ func NewRequest(method, URL string, body interface{}) (*retryablehttp.Request, e
 type Breaker interface {
 	// Execute runs the given request if the circuit breaker is closed or half-open states.
 	// An error is instantly returned when the circuit breaker is tripped.
-	Execute(fn func() (interface{}, error)) (interface{}, error)
+	Execute(fn func() (any, error)) (any, error)
 
 	// Opened reports whether the breaker is opened at the moment.
 	Opened() bool
@@ -144,7 +144,7 @@ func (t TransportWithBreaker) RoundTrip(r *http.Request) (*http.Response, error)
 	} else {
 		dl = time.Now().Add((waitCount*(waitCount) - 1) / 2)
 	}
-	for i := 0; i < waitCount; i++ {
+	for i := range waitCount {
 		if !t.Breaker.Opened() {
 			break
 		}
@@ -157,7 +157,7 @@ func (t TransportWithBreaker) RoundTrip(r *http.Request) (*http.Response, error)
 		time.Sleep(sleep)
 	}
 
-	res, err := t.Breaker.Execute(func() (interface{}, error) {
+	res, err := t.Breaker.Execute(func() (any, error) {
 		return t.Tripper.RoundTrip(r)
 	})
 
@@ -180,18 +180,18 @@ func (b GoBreaker) Opened() bool { return b.CircuitBreaker.State() == gobreaker.
 
 type logrPrintf struct{ *slog.Logger }
 
-func (lr logrPrintf) Printf(pat string, args ...interface{}) {
+func (lr logrPrintf) Printf(pat string, args ...any) {
 	lr.Logger.Info(fmt.Sprintf(pat, args...))
 }
-func (lr logrPrintf) Error(pat string, args ...interface{}) {
+func (lr logrPrintf) Error(pat string, args ...any) {
 	lr.Logger.Error(fmt.Sprintf(pat, args...))
 }
-func (lr logrPrintf) Warn(pat string, args ...interface{}) {
+func (lr logrPrintf) Warn(pat string, args ...any) {
 	lr.Logger.Warn(fmt.Sprintf(pat, args...))
 }
-func (lr logrPrintf) Info(pat string, args ...interface{}) {
+func (lr logrPrintf) Info(pat string, args ...any) {
 	lr.Logger.Info(fmt.Sprintf(pat, args...))
 }
-func (lr logrPrintf) Debug(pat string, args ...interface{}) {
+func (lr logrPrintf) Debug(pat string, args ...any) {
 	lr.Logger.Debug(fmt.Sprintf(pat, args...))
 }

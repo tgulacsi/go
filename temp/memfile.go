@@ -261,6 +261,6 @@ func (dfi dummyFileInfo) ModTime() time.Time {
 func (dfi dummyFileInfo) IsDir() bool {
 	return dfi.isDir
 }
-func (dfi dummyFileInfo) Sys() interface{} {
+func (dfi dummyFileInfo) Sys() any {
 	return nil
 }

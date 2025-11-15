@@ -533,10 +533,7 @@ func (V Version) GetPDFData(
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
 			return V3ResultData{}, nil, "", "", fmt.Errorf("%s: %w", resp.Status, ErrAuth)
 		}
-		n := int(sr.Size())
-		if n > 1<<20 {
-			n = 1 << 20
-		}
+		n := min(int(sr.Size()), 1<<20)
 		b := make([]byte, n)
 		n, _ = sr.ReadAt(b, 0)
 		b = b[:n]

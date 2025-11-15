@@ -25,7 +25,7 @@ import (
 )
 
 // LogFunc is the Log function.
-type LogFunc func(...interface{}) error
+type LogFunc func(...any) error
 
 // New returns a Logger, using Logfmt logger with Stringify on w.
 func New(w io.Writer) Stringify {
@@ -38,7 +38,7 @@ func NewTestLogger(t testLogger) log.Logger {
 }
 
 type testLogger interface {
-	Log(args ...interface{})
+	Log(args ...any)
 }
 type testLog struct {
 	testLogger
@@ -60,7 +60,7 @@ type Stringify struct {
 }
 
 // Log with stringifying every value.
-func (l Stringify) Log(keyvals ...interface{}) error {
+func (l Stringify) Log(keyvals ...any) error {
 	for i := 1; i < len(keyvals); i += 2 {
 		switch keyvals[i].(type) {
 		case string, fmt.Stringer, fmt.Formatter:
@@ -76,7 +76,7 @@ var _ = fmt.Stringer(StringWrap{})
 
 // StringWrap wraps the Value as a fmt.Stringer.
 type StringWrap struct {
-	Value interface{}
+	Value any
 }
 
 // String returns a string representation (%v) of the underlying Value.
@@ -86,7 +86,7 @@ func (sw StringWrap) String() string {
 
 type MultiLogger []log.Logger
 
-func (m MultiLogger) Log(keyvals ...interface{}) error {
+func (m MultiLogger) Log(keyvals ...any) error {
 	var firstErr error
 	for _, lgr := range m {
 		if err := lgr.Log(keyvals...); err != nil && firstErr == nil {
