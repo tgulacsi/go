@@ -83,6 +83,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/smartystreets/assertions v1.13.0 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
+	github.com/sony/gobreaker/v2 v2.3.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
