@@ -1,6 +1,6 @@
 // Copyright 2025 Tamás Gulácsi. All rights reserved.
 
-package httpcircuitbreaker
+package httpcb
 
 import (
 	"errors"
