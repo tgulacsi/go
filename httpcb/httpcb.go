@@ -4,6 +4,7 @@ package httpcb
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -11,10 +12,23 @@ import (
 	"github.com/sony/gobreaker/v2"
 )
 
-type Settings struct{ gobreaker.Settings }
+type Settings struct {
+	gobreaker.Settings
+	*slog.Logger
+}
 
-func NewBreakerSettings(name string, bucketPeriod, timeout time.Duration) Settings {
-	return Settings{gobreaker.Settings{Name: name, BucketPeriod: bucketPeriod, Timeout: timeout}}
+func NewSettings(name string, bucketPeriod, timeout time.Duration, logger *slog.Logger) Settings {
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
+	return Settings{
+		Logger: logger,
+		Settings: gobreaker.Settings{
+			Name:         name,
+			BucketPeriod: bucketPeriod,
+			Timeout:      timeout,
+		},
+	}
 }
 func (st Settings) IsZero() bool { return st.Name == "" }
 
@@ -23,13 +37,12 @@ func NewHTTPClient(settings Settings, client *http.Client) (*http.Client, Monito
 		cl := *http.DefaultClient
 		client = &cl
 	}
-	tr, _ := client.Transport.(*http.Transport)
-	trcb := TransportWithCircuitBreaker(settings, tr)
+	trcb := NewTransport(settings, client.Transport)
 	client.Transport = trcb
 	return client, Monitor{Stater: trcb.breaker}
 }
 
-func TransportWithCircuitBreaker(
+func NewTransport(
 	settings Settings, rt http.RoundTripper,
 ) Transport {
 	if settings.IsSuccessful == nil {
@@ -38,9 +51,15 @@ func TransportWithCircuitBreaker(
 			return errors.As(err, &ue)
 		}
 	}
+	if settings.OnStateChange == nil && settings.Logger != nil {
+		settings.OnStateChange = func(name string, from, to gobreaker.State) {
+			settings.Logger.Warn("breaker changed state", "name", name, "from", from, "to", to)
+		}
+	}
 	if rt == nil {
 		rt = http.DefaultTransport
 	}
+	_ = rt.RoundTrip // panic on nil
 	return Transport{
 		RoundTripper: rt,
 		breaker:      gobreaker.NewCircuitBreaker[*http.Response](settings.Settings),
@@ -77,4 +96,4 @@ func (bm Monitor) IsOpen() bool {
 	}
 	return bm.Stater.State() == gobreaker.StateOpen
 }
-func NewBreakerMonitor(bs Stater) Monitor { return Monitor{Stater: bs} }
+func NewMonitor(bs Stater) Monitor { return Monitor{Stater: bs} }
