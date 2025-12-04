@@ -47,8 +47,11 @@ func NewTransport(
 ) Transport {
 	if settings.IsSuccessful == nil {
 		settings.IsSuccessful = func(err error) bool {
+			if err == nil {
+				return true
+			}
 			var ue *url.Error
-			return errors.As(err, &ue)
+			return !errors.As(err, &ue)
 		}
 	}
 	if settings.OnStateChange == nil && settings.Logger != nil {
