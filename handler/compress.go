@@ -30,6 +30,9 @@ func CompressHandler(h http.Handler) http.Handler {
 // or any integer value between gzip.BestSpeed and gzip.BestCompression inclusive.
 // gzip.DefaultCompression is used in case of invalid compression level.
 func CompressHandlerLevel(h http.Handler, level int) http.Handler {
+	if ch, ok := h.(compressHandler); ok {
+		return ch
+	}
 	wrappersMu.Lock()
 	if wrappers == nil {
 		wrappers = make(map[int]func(http.Handler) http.HandlerFunc)
@@ -44,5 +47,7 @@ func CompressHandlerLevel(h http.Handler, level int) http.Handler {
 	}
 	wrappersMu.Unlock()
 
-	return wrapper(h)
+	return compressHandler{Handler: wrapper(h)}
 }
+
+type compressHandler struct{ http.Handler }
