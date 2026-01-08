@@ -121,6 +121,7 @@ func (conf Config) Get(ctx context.Context, pkg, version string) (string, error)
 		}
 		conf.CacheDir = filepath.Join(conf.CacheDir, "maven")
 	}
+	os.MkdirAll(conf.CacheDir, 0755)
 
 	F := func(pkg, version string) string {
 		return filepath.Join(conf.CacheDir, pkg+"-"+version+".jar")
