@@ -35,9 +35,22 @@ func Main() error {
 	defer cancel()
 
 	args := os.Args[1:]
-	justPrint := len(args) > 1 && args[0] == "--print"
-	if justPrint {
-		args = args[1:]
+	var runArgs []string
+	var justPrint bool
+	if len(args) > 1 {
+		switch args[0] {
+		case "--print":
+			justPrint = true
+			args = args[1:]
+		case "-cp":
+			runArgs = args
+			args = args[1:]
+		case "-jar":
+			args = args[1:]
+			fallthrough
+		default:
+			runArgs = append(append(make([]string, 0, 1+len(args)), "-jar"), args...)
+		}
 	}
 	pkg, version, _ := strings.Cut(args[0], "@")
 	binary, err := maven.Config{}.Get(ctx, pkg, version)
@@ -50,7 +63,9 @@ func Main() error {
 		return nil
 	}
 
-	cmd := exec.CommandContext(ctx, "java", append(append(make([]string, 0, 2+len(args)-1), "-jar", binary), args[1:]...)...)
+	runArgs[1] = binary
+	cmd := exec.CommandContext(ctx, "java", runArgs...)
+	log.Println(cmd.Args)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
 }
