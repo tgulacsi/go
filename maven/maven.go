@@ -7,6 +7,7 @@
 package maven
 
 import (
+	"bufio"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -91,22 +92,38 @@ func (conf Config) DownloadJar(ctx context.Context, w io.Writer, meta Metadata, 
 		return fmt.Errorf("%+v: empty Pkg", meta)
 	}
 
-	jarURL := meta.BaseURL.JoinPath(".", version, meta.Pkg+"-"+version+".jar")
-	req, err := http.NewRequestWithContext(ctx, "GET", jarURL.String(), nil)
-	if err != nil {
-		return fmt.Errorf("GET: %w", err)
-	}
-	log.Println("Downloading " + req.URL.String() + " ...")
 	if conf.HTTPClient == nil {
 		conf.HTTPClient = http.DefaultClient
 	}
-	resp, err := conf.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("GET %s: %w", req.URL, err)
+	for _, suffix := range []string{"-jar-with-dependencies", ""} {
+		jarURL := meta.BaseURL.JoinPath(".", version, meta.Pkg+"-"+version+suffix+".jar")
+		req, err := http.NewRequestWithContext(ctx, "GET", jarURL.String(), nil)
+		if err != nil {
+			return fmt.Errorf("GET: %w", err)
+		}
+		if err := func() error {
+			log.Println("Downloading " + req.URL.String() + " ...")
+			resp, err := conf.HTTPClient.Do(req)
+			if err != nil {
+				return fmt.Errorf("GET %s: %w", req.URL, err)
+			}
+			br := bufio.NewReader(resp.Body)
+			if b, err := br.Peek(4); err != nil {
+				return err
+			} else if len(b) < 4 || !(b[0] == 'P' && b[1] == 'K' && (b[2] == 3 && b[3] == 4 || b[2] == 5 && b[3] == 6 || b[2] == 7 && b[3] == 8)) {
+				return fmt.Errorf("%q not a ZIP", string(b))
+			}
+			_, err = io.Copy(w, br)
+			resp.Body.Close()
+			return err
+		}(); err != nil {
+			if suffix != "" {
+				continue
+			}
+			return err
+		}
 	}
-	_, err = io.Copy(w, resp.Body)
-	resp.Body.Close()
-	return err
+	return nil
 }
 
 // Get check whether the given version exists in the cache,
@@ -119,7 +136,7 @@ func (conf Config) Get(ctx context.Context, pkg, version string) (string, error)
 		if conf.CacheDir == "" {
 			conf.CacheDir = os.ExpandEnv("$HOME/.cache")
 		}
-		conf.CacheDir = filepath.Join(conf.CacheDir, "maven")
+		conf.CacheDir = filepath.Join(conf.CacheDir, "maventool")
 	}
 	os.MkdirAll(conf.CacheDir, 0755)
 
