@@ -29,4 +29,11 @@ func TestOneFileFS(t *testing.T) {
 	if err := fstest.TestFS(FS, existingFile); err != nil {
 		t.Fatal(err)
 	}
+	dis, err := fs.ReadDir(FS, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, di := range dis {
+		t.Log(di.Name())
+	}
 }
