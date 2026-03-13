@@ -25,7 +25,7 @@ require (
 	github.com/outcaste-io/badger/v3 v3.2202.0
 	github.com/pdfcpu/pdfcpu v0.11.0
 	github.com/peterbourgon/ff/v3 v3.4.0
-	github.com/peterbourgon/ff/v4 v4.0.0-alpha.4
+	github.com/peterbourgon/ff/v4 v4.0.0-beta.1
 	github.com/rogpeppe/retry v0.1.0
 	github.com/rs/zerolog v1.31.0
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
@@ -115,3 +115,5 @@ tool (
 	codeberg.org/go-pdf/fpdf/makefont
 	github.com/tgulacsi/go/pdfreport
 )
+
+replace github.com/peterbourgon/ff/v4 v4.0.0-beta.1 => github.com/UNO-SOFT/ff/v4 v4.0.0-beta.1.us
