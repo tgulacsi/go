@@ -1,4 +1,4 @@
-// Copyright 2025 Tamás Gulácsi. All rights reserved.
+// Copyright 2025, 2026 Tamás Gulácsi. All rights reserved.
 
 package httpcb
 
@@ -14,7 +14,7 @@ import (
 
 type Settings struct {
 	gobreaker.Settings
-	*slog.Logger
+	Logger *slog.Logger
 }
 
 func NewSettings(name string, bucketPeriod, timeout time.Duration, logger *slog.Logger) Settings {
