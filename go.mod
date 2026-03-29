@@ -53,6 +53,7 @@ require (
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/edsrzf/mmap-go v1.1.0 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
@@ -107,9 +108,7 @@ require (
 	modernc.org/zappy v1.0.6 // indirect
 )
 
-go 1.24
-
-toolchain go1.24.2
+go 1.26
 
 tool (
 	codeberg.org/go-pdf/fpdf/makefont
