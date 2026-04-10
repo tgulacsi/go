@@ -219,9 +219,9 @@ func (V Version) RefKey() string {
 
 type (
 	V3Response struct {
-		Data        V3ResultData `json:"resultData"`
 		File        V3File       `json:"file"`
 		Errors      []V3Error    `json:"errors"`
+		Data        V3ResultData `json:"resultData"`
 		OperationID int          `json:"operationId"`
 		Successful  bool         `json:"isSuccessful"`
 	}
@@ -292,17 +292,17 @@ type (
 	}
 
 	V3HourlyWind struct {
+		Direction string `json:"directionCode"`
 		V3Hourly
 		MaxGustKmH float64 `json:"maxgustKmh"`
-		Direction  string  `json:"directionCode"`
 	}
 
 	V3MeasureTemp struct {
 		V3Measurement
 	}
 	V3MeasureWind struct {
+		Direction string `json:"directionCode"`
 		V3Measurement
-		Direction  string  `json:"directionCode"`
 		MaxGustKmH float64 `json:"maxGustKmH"`
 	}
 
@@ -327,9 +327,9 @@ type (
 	}
 	V3DailyMinMax struct {
 		Date     string  `json:"dateString"`
+		Value    string  `json:"value"`
 		MinValue float64 `json:"minValue"`
 		MaxValue float64 `json:"maxValue"`
-		Value    string  `json:"value"`
 	}
 	V3DailyWind struct {
 		V3DailyMinMax
