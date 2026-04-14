@@ -1,5 +1,5 @@
 /*
-Copyright 2017, 2023 Tamás Gulácsi
+Copyright 2017, 2026 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -441,6 +441,7 @@ func (V Version) GetPDFData(
 		body = bytes.NewReader(b)
 	} else {
 		opt = opt.Prepare()
+		opt.At = opt.At.Round(time.Hour) // K-MT17297
 		params := url.Values(map[string][]string{
 			"address":  {opt.Address},
 			V.LatKey(): {fmt.Sprintf("%.5f", opt.Lat)},
