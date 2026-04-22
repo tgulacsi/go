@@ -140,6 +140,20 @@ func (s soapClient) CallAction(ctx context.Context, w io.Writer, soapAction stri
 	dec, err := FindBody(nil, sr)
 	return dec, err
 }
+
+type HTTPStatusError struct {
+	StatusCode int
+	Status     string
+	Body       string
+}
+
+func (e *HTTPStatusError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d: %s: %s", e.StatusCode, e.Status, e.Body)
+}
+
 func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body io.Reader) (io.ReadCloser, error) {
 	buf := s.bufpool.Get()
 	defer s.bufpool.Put(buf)
@@ -162,7 +176,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 	logger := GetLogger(ctx)
 	resp, err := s.Client.Do(req.WithContext(ctx))
 	if err != nil {
-		logger.Error("Do", "url", req.URL, "body", buf.String(), "error", err)
+		logger.Error("Do", "url", req.URL, "body", buf.String(), "action", soapAction, "error", err)
 		if resp != nil && resp.Body != nil {
 			defer resp.Body.Close()
 		}
@@ -176,13 +190,13 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 		return nil, err
 	}
 	if resp.StatusCode > 299 {
-		logger.Error("Do", "url", req.URL, "status", resp.Status, "body", buf.String(), "error", err)
-		err := errors.New(resp.Status)
-		b, _ := io.ReadAll(resp.Body)
-		if len(b) == 0 {
-			return nil, err
+		b, readErr := io.ReadAll(resp.Body)
+		err = &HTTPStatusError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(b)}
+		if readErr != nil {
+			err = errors.Join(err, readErr)
 		}
-		return nil, fmt.Errorf("%s: %w", string(b), err)
+		logger.Error("Do", "url", req.URL, "action", soapAction, "status", resp.Status, "body", buf.String(), "error", err)
+		return nil, fmt.Errorf("%s: %s: %w", req.URL, soapAction, err)
 	}
 	if logger.Enabled(ctx, slog.LevelDebug) {
 		logger.Debug("calling", "url", s.URL, "soapAction", soapAction, "body", buf.String())
