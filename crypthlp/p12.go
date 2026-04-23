@@ -98,32 +98,12 @@ func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pr
 		return
 	}
 
-	pk, cert, cas, err := ReadP12Bytes(ctx, p12Bytes, p12Password)
+	pk, cert, cas, err := ReadP12Bytes(ctx, p12Bytes, p12Password, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	if certificate, err = x509.ParseCertificate(cert); err != nil {
 		return
-	}
-	var ok bool
-	switch certificate.PublicKey.(type) {
-	case *rsa.PublicKey:
-		if cert.PrivateKey, ok = priv.(*rsa.PrivateKey); !ok {
-			return fmt.Errorf("tls: private key type does not match public key type")
-		}
-		logger.Debug("found RSA private key")
-	case *ecdsa.PublicKey:
-		if cert.PrivateKey, ok = priv.(*ecdsa.PrivateKey); !ok {
-			return fmt.Errorf("tls: private key type does not match public key type")
-		}
-		logger.Debug("found ECDSA private key")
-	case ed25519.PublicKey:
-		if cert.PrivateKey, ok = priv.(ed25519.PrivateKey); !ok {
-			return fmt.Errorf("tls: private key type does not match public key type")
-		}
-		logger.Debug("found ED25519 private key")
-	default:
-		return fmt.Errorf("tls: unknown public key algorithm")
 	}
 
 	if len(cas) != 0 {
@@ -145,7 +125,7 @@ func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pr
 }
 
 // ReadP12Bytes splits the give .p12 bytes to privateKey and certificate bytes (as returned by openssl).
-func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (privateKey, certificate, CAs []byte, err error) {
+func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outputPEM bool) (privateKey, certificate, CAs []byte, err error) {
 	if p12Password, err = ReadPassword(p12Password); err != nil {
 		return nil, nil, nil, err
 	}
@@ -161,6 +141,10 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pri
 		noenc = "nodes"
 	}
 
+	outform := "PEM"
+	if !outputPEM {
+		outform = "DER"
+	}
 	const envName = "CRYPTO_PASSWORD"
 	var buf bytes.Buffer
 	var errBuf strings.Builder
@@ -175,8 +159,9 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pri
 		buf.Reset()
 		errBuf.Reset()
 		cmd := exec.CommandContext(ctx, "openssl",
-			append(append(make([]string, 0, 1+len(argsDest.Args)+2),
-				"pkcs12", "-passin", "env:"+envName), argsDest.Args...)...)
+			append(append(make([]string, 0, 1+len(argsDest.Args)+4),
+				"pkcs12", "-passin", "env:"+envName, "-outform", outform),
+				argsDest.Args...)...)
 		cmd.Stdin = bytes.NewReader(p12Bytes)
 		cmd.Stdout = &buf
 		cmd.Stderr = &errBuf
@@ -215,7 +200,7 @@ func ConvertP12(ctx context.Context, p12FileName, p12Password string) (certPEM, 
 	if ok {
 		return
 	}
-	privateKey, certificate, CAs, err := ReadP12Bytes(ctx, b, p12Password)
+	privateKey, certificate, CAs, err := ReadP12Bytes(ctx, b, p12Password, true)
 	if err != nil {
 		return "", "", "", err
 	}
