@@ -8,7 +8,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -56,18 +60,76 @@ func ReadPassword(s string) (string, error) {
 	return string(b), err
 }
 
+func ParseP12ToTLSCertificate(ctx context.Context, caCertPool *x509.CertPool, p12Bytes []byte, p12Password string) (tls.Certificate, error) {
+	priv, crt, cas, err := ParseP12Bytes(ctx, p12Bytes, p12Password)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	cert := tls.Certificate{
+		Certificate: [][]byte{crt.Raw},
+		Leaf:        crt,
+	}
+	for _, ca := range cas {
+		caCertPool.AddCert(ca)
+	}
+	var ok bool
+	switch crt.PublicKey.(type) {
+	case *rsa.PublicKey:
+		if cert.PrivateKey, ok = priv.(*rsa.PrivateKey); !ok {
+			return cert, fmt.Errorf("tls: private key type does not match public key type")
+		}
+	case *ecdsa.PublicKey:
+		if cert.PrivateKey, ok = priv.(*ecdsa.PrivateKey); !ok {
+			return cert, fmt.Errorf("tls: private key type does not match public key type")
+		}
+	case ed25519.PublicKey:
+		if cert.PrivateKey, ok = priv.(ed25519.PrivateKey); !ok {
+			return cert, fmt.Errorf("tls: private key type does not match public key type")
+		}
+	default:
+		return cert, fmt.Errorf("tls: unknown public key algorithm")
+	}
+	return cert, nil
+}
+
 // ParseP12Bytes parses the private key and certificate from the .p12 file using openssl.
-func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (privateKey any, certificate *x509.Certificate, err error) {
+func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (privateKey any, certificate *x509.Certificate, CAs []*x509.Certificate, err error) {
 	if privateKey, certificate, err = pkcs12.Decode(p12Bytes, p12Password); err == nil {
 		return
 	}
 
-	pk, cert, err := ReadP12Bytes(ctx, p12Bytes, p12Password)
+	pk, cert, cas, err := ReadP12Bytes(ctx, p12Bytes, p12Password)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if certificate, err = x509.ParseCertificate(cert); err != nil {
 		return
+	}
+	var ok bool
+	switch certificate.PublicKey.(type) {
+	case *rsa.PublicKey:
+		if cert.PrivateKey, ok = priv.(*rsa.PrivateKey); !ok {
+			return fmt.Errorf("tls: private key type does not match public key type")
+		}
+		logger.Debug("found RSA private key")
+	case *ecdsa.PublicKey:
+		if cert.PrivateKey, ok = priv.(*ecdsa.PrivateKey); !ok {
+			return fmt.Errorf("tls: private key type does not match public key type")
+		}
+		logger.Debug("found ECDSA private key")
+	case ed25519.PublicKey:
+		if cert.PrivateKey, ok = priv.(ed25519.PrivateKey); !ok {
+			return fmt.Errorf("tls: private key type does not match public key type")
+		}
+		logger.Debug("found ED25519 private key")
+	default:
+		return fmt.Errorf("tls: unknown public key algorithm")
+	}
+
+	if len(cas) != 0 {
+		if CAs, err = x509.ParseCertificates(cas); err != nil {
+			slog.Error("parse cas", "error", err)
+		}
 	}
 	for _, f := range []func([]byte) (any, error){
 		func(b []byte) (any, error) { return x509.ParseECPrivateKey(b) },
@@ -83,9 +145,9 @@ func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pr
 }
 
 // ReadP12Bytes splits the give .p12 bytes to privateKey and certificate bytes (as returned by openssl).
-func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (privateKey, certificate []byte, err error) {
+func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (privateKey, certificate, CAs []byte, err error) {
 	if p12Password, err = ReadPassword(p12Password); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// https://serverfault.com/questions/515833/how-to-remove-private-key-password-from-pkcs12-container
@@ -107,7 +169,7 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pri
 		Dest *[]byte
 	}{
 		{Args: []string{"-nokeys", "-clcerts"}, Dest: &certificate},
-		// caPEM:   {"-nokeys", "-cacerts"},
+		{Args: []string{"-nokeys", "-cacerts"}, Dest: &CAs},
 		{Args: []string{"-nocerts", "-" + noenc}, Dest: &privateKey},
 	} {
 		buf.Reset()
@@ -130,11 +192,11 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pri
 			*argsDest.Dest = append(make([]byte, 0, buf.Len()), buf.Bytes()...)
 		}
 	}
-	return privateKey, certificate, nil
+	return privateKey, certificate, CAs, nil
 }
 
 // ConvertP12 converts the .p12 file to <base64>.crt and <base64>.key PEM files. Does nothing if those files exist.
-func ConvertP12(ctx context.Context, p12FileName, p12Password string) (certPEM, keyPEM string, err error) {
+func ConvertP12(ctx context.Context, p12FileName, p12Password string) (certPEM, caPEM, keyPEM string, err error) {
 	b, readErr := os.ReadFile(p12FileName)
 	if readErr != nil {
 		err = readErr
@@ -153,12 +215,15 @@ func ConvertP12(ctx context.Context, p12FileName, p12Password string) (certPEM, 
 	if ok {
 		return
 	}
-	privateKey, certificate, err := ReadP12Bytes(ctx, b, p12Password)
+	privateKey, certificate, CAs, err := ReadP12Bytes(ctx, b, p12Password)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if err = os.WriteFile(certPEM, certificate, 0600); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return certPEM, keyPEM, os.WriteFile(keyPEM, privateKey, 0600)
+	if err = os.WriteFile(caPEM, CAs, 0600); err != nil {
+		return certPEM, "", "", err
+	}
+	return certPEM, caPEM, keyPEM, os.WriteFile(keyPEM, privateKey, 0600)
 }
