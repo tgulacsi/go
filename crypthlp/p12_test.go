@@ -16,7 +16,23 @@ func TestParseJKS(t *testing.T) {
 	if err != nil {
 		t.Skip(err)
 	}
-	if bag, err := crypthlp.ReadJKSBytes(t.Context(), b, "19Kobe96", false); err != nil {
+	if bag, err := crypthlp.ReadJKSBytes(t.Context(), b, "19Kobe96"); err != nil {
+		t.Error(err)
+	} else {
+		key, cert, cas, err := bag.Parse()
+		t.Logf("key: %+v cert: %+v cas: %+v", key, cert, cas)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestParseP12(t *testing.T) {
+	b, err := os.ReadFile("testdata/pdf_signer.p12")
+	if err != nil {
+		t.Skip(err)
+	}
+	if bag, err := crypthlp.ReadP12Bytes(t.Context(), b, "19Kobe96"); err != nil {
 		t.Error(err)
 	} else {
 		key, cert, cas, err := bag.Parse()
