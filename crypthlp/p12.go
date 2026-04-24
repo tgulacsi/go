@@ -193,8 +193,10 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (Bag
 				slog.Debug("got", "bytes", buf.String())
 			}
 			var found bool
+			data := buf.Bytes()
 			for {
-				if p, err := pem.Decode(buf.Bytes()); p == nil || err != nil {
+				var p *pem.Block
+				if p, data = pem.Decode(data); p == nil {
 					break
 				} else {
 					*argsDest.Dest = append(make([]byte, 0, len(p.Bytes)), p.Bytes...)
@@ -202,7 +204,7 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (Bag
 				}
 			}
 			if !found {
-				slog.Warn("not PEM")
+				slog.Warn("not PEM", "bytes", buf.String())
 				*argsDest.Dest = append(make([]byte, 0, buf.Len()), buf.Bytes()...)
 			}
 		}
