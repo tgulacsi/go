@@ -15,6 +15,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"os"
@@ -141,10 +142,6 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outp
 		noenc = "nodes"
 	}
 
-	outform := "PEM"
-	if !outputPEM {
-		outform = "DER"
-	}
 	const envName = "CRYPTO_PASSWORD"
 	var buf bytes.Buffer
 	var errBuf strings.Builder
@@ -160,13 +157,13 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outp
 		errBuf.Reset()
 		cmd := exec.CommandContext(ctx, "openssl",
 			append(append(make([]string, 0, 1+len(argsDest.Args)+4),
-				"pkcs12", "-passin", "env:"+envName, "-outform", outform),
+				"pkcs12", "-passin", "env:"+envName),
 				argsDest.Args...)...)
 		cmd.Stdin = bytes.NewReader(p12Bytes)
 		cmd.Stdout = &buf
 		cmd.Stderr = &errBuf
 		cmd.Env = append(cmd.Env, envName+"="+p12Password)
-		slog.Info("split", "cmd", cmd.Args)
+		slog.Debug("split", "cmd", cmd.Args)
 		if err = cmd.Run(); err != nil {
 			err = fmt.Errorf("%q: %s: %w", cmd.Args, errBuf.String(), err)
 			return
@@ -174,7 +171,16 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outp
 		if buf.Len() == 0 {
 			slog.Warn("zero length", "cmd", cmd.Args)
 		} else {
-			*argsDest.Dest = append(make([]byte, 0, buf.Len()), buf.Bytes()...)
+			if slog.Default().Enabled(ctx, slog.LevelDebug) {
+				slog.Debug("got", "bytes", buf.String())
+			}
+			if outputPEM {
+				*argsDest.Dest = append(make([]byte, 0, buf.Len()), buf.Bytes()...)
+			} else {
+				if p, _ := pem.Decode(buf.Bytes()); p != nil {
+					*argsDest.Dest = append(make([]byte, 0, len(p.Bytes)), p.Bytes...)
+				}
+			}
 		}
 	}
 	return privateKey, certificate, CAs, nil
@@ -211,4 +217,46 @@ func ConvertP12(ctx context.Context, p12FileName, p12Password string) (certPEM, 
 		return certPEM, "", "", err
 	}
 	return certPEM, caPEM, keyPEM, os.WriteFile(keyPEM, privateKey, 0600)
+}
+
+// ReadJKSBytes splits the give .p12 bytes to privateKey and certificate bytes (as returned by openssl).
+func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string, outputPEM bool) (privateKey, certificate, CAs []byte, err error) {
+	fh, err := os.CreateTemp("", "jks-*.jks")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer func() { fh.Close(); os.Remove(fh.Name()) }()
+	if _, err = fh.Write(jksBytes); err != nil {
+		return nil, nil, nil, err
+	}
+	if fh.Close(); err != nil {
+		return nil, nil, nil, err
+	}
+	p12Fn := fh.Name() + ".p12"
+	if b, err := exec.CommandContext(ctx, "keytool",
+		"-importkeystore",
+		"-srckeystore", fh.Name(),
+		"-destkeystore", p12Fn, "-deststoretype", "pkcs12",
+		"-srcstorepass", jksPassword, "-deststorepass", jksPassword,
+	).CombinedOutput(); err != nil {
+		slog.Warn("convert JKS to P12", "out", string(b), "error", err)
+	} else {
+		defer os.Remove(p12Fn)
+		p12Bytes, err := os.ReadFile(p12Fn)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return ReadP12Bytes(ctx, p12Bytes, jksPassword, outputPEM)
+	}
+
+	// Plan B
+	p12Bytes, err := exec.CommandContext(ctx, "keytool",
+		"-list", "-keystore", fh.Name(),
+		"-storepass", jksPassword, "-storetype", "JKS",
+		"-rfc",
+	).Output()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return ReadP12Bytes(ctx, p12Bytes, jksPassword, outputPEM)
 }
