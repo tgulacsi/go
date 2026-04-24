@@ -61,6 +61,7 @@ func ReadPassword(s string) (string, error) {
 	return string(b), err
 }
 
+// Bag contains DER encoded blobs
 type Bag struct {
 	PrivateKey, Cert, CAs []byte
 }
@@ -276,13 +277,14 @@ func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string) (Bag
 		return Bag{}, err
 	}
 	p12Fn := fh.Name() + ".p12"
-	if b, err := exec.CommandContext(ctx, "keytool",
+	cmd := exec.CommandContext(ctx, "keytool",
 		"-importkeystore",
 		"-srckeystore", fh.Name(),
 		"-destkeystore", p12Fn, "-deststoretype", "pkcs12",
 		"-srcstorepass", jksPassword, "-deststorepass", jksPassword,
-	).CombinedOutput(); err != nil {
-		slog.Warn("convert JKS to P12", "out", string(b), "error", err)
+	)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		slog.Warn("convert JKS to P12", "cmd", cmd.Args, "out", string(b), "error", err)
 	} else {
 		defer os.Remove(p12Fn)
 		p12Bytes, err := os.ReadFile(p12Fn)
@@ -293,13 +295,16 @@ func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string) (Bag
 	}
 
 	// Plan B
-	p12Bytes, err := exec.CommandContext(ctx, "keytool",
+	cmd = exec.CommandContext(ctx, "keytool",
 		"-list", "-keystore", fh.Name(),
 		"-storepass", jksPassword, "-storetype", "JKS",
 		"-rfc",
-	).Output()
+	)
+	var errBuf strings.Builder
+	cmd.Stderr = &errBuf
+	p12Bytes, err := cmd.Output()
 	if err != nil {
-		return Bag{}, err
+		return Bag{}, fmt.Errorf("%q: %s: %w", cmd.Args, errBuf.String(), err)
 	}
 	return ReadP12Bytes(ctx, p12Bytes, jksPassword)
 }
