@@ -17,8 +17,14 @@ func TestParseJKS(t *testing.T) {
 		t.Skip(err)
 	}
 	for _, outputPEM := range []bool{false, true} {
-		if _, _, _, err := crypthlp.ReadJKSBytes(t.Context(), b, "19Kobe96", outputPEM); err != nil {
+		if bag, err := crypthlp.ReadJKSBytes(t.Context(), b, "19Kobe96", outputPEM); err != nil {
 			t.Errorf("outputPEM=%t: %+v", outputPEM, err)
+		} else {
+			key, cert, cas, err := bag.Parse()
+			t.Logf("key: %+v cert: %+v cas: %+v", key, cert, cas)
+			if err != nil {
+				t.Error(err)
+			}
 		}
 	}
 }

@@ -61,8 +61,20 @@ func ReadPassword(s string) (string, error) {
 	return string(b), err
 }
 
+type Bag struct {
+	PrivateKey, Cert, CAs []byte
+}
+
 func ParseP12ToTLSCertificate(ctx context.Context, caCertPool *x509.CertPool, p12Bytes []byte, p12Password string) (tls.Certificate, error) {
-	priv, crt, cas, err := ParseP12Bytes(ctx, p12Bytes, p12Password)
+	bag, err := ReadP12Bytes(ctx, p12Bytes, p12Password, false)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return bag.ToTLSCertificate(caCertPool)
+}
+
+func (bag Bag) ToTLSCertificate(caCertPool *x509.CertPool) (tls.Certificate, error) {
+	priv, crt, cas, err := bag.Parse()
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -99,16 +111,21 @@ func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pr
 		return
 	}
 
-	pk, cert, cas, err := ReadP12Bytes(ctx, p12Bytes, p12Password, false)
+	bag, err := ReadP12Bytes(ctx, p12Bytes, p12Password, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if certificate, err = x509.ParseCertificate(cert); err != nil {
+	return bag.Parse()
+}
+
+// Parse parses the private key and certificate from the bytes
+func (bag Bag) Parse() (privateKey any, certificate *x509.Certificate, CAs []*x509.Certificate, err error) {
+	if certificate, err = x509.ParseCertificate(bag.Cert); err != nil {
 		return
 	}
 
-	if len(cas) != 0 {
-		if CAs, err = x509.ParseCertificates(cas); err != nil {
+	if len(bag.CAs) != 0 {
+		if CAs, err = x509.ParseCertificates(bag.CAs); err != nil {
 			slog.Error("parse cas", "error", err)
 		}
 	}
@@ -118,7 +135,7 @@ func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pr
 		x509.ParsePKCS8PrivateKey,
 		x509.ParsePKIXPublicKey,
 	} {
-		if privateKey, err = f(pk); err == nil {
+		if privateKey, err = f(bag.PrivateKey); err == nil {
 			return
 		}
 	}
@@ -126,18 +143,20 @@ func ParseP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string) (pr
 }
 
 // ReadP12Bytes splits the give .p12 bytes to privateKey and certificate bytes (as returned by openssl).
-func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outputPEM bool) (privateKey, certificate, CAs []byte, err error) {
-	if p12Password, err = ReadPassword(p12Password); err != nil {
-		return nil, nil, nil, err
+func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outputPEM bool) (Bag, error) {
+	p12Password, err := ReadPassword(p12Password)
+	if err != nil {
+		return Bag{}, err
 	}
 
 	// https://serverfault.com/questions/515833/how-to-remove-private-key-password-from-pkcs12-container
 	// https://www.unosoft.hu/mantis/kobe/view.php?id=16930#c163679
 	// How to remove the passphrase?
 	noenc := "noenc"
+	var bag Bag
 	var out []byte
 	if out, err = exec.CommandContext(ctx, "openssl", "pkcs12", "-h").CombinedOutput(); err != nil && len(out) == 0 {
-		return
+		return bag, err
 	} else if !bytes.Contains(out, []byte("-noenc")) { // older openssl
 		noenc = "nodes"
 	}
@@ -149,9 +168,9 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outp
 		Args []string
 		Dest *[]byte
 	}{
-		{Args: []string{"-nokeys", "-clcerts"}, Dest: &certificate},
-		{Args: []string{"-nokeys", "-cacerts"}, Dest: &CAs},
-		{Args: []string{"-nocerts", "-" + noenc}, Dest: &privateKey},
+		{Args: []string{"-nokeys", "-clcerts"}, Dest: &bag.Cert},
+		{Args: []string{"-nokeys", "-cacerts"}, Dest: &bag.CAs},
+		{Args: []string{"-nocerts", "-" + noenc}, Dest: &bag.PrivateKey},
 	} {
 		buf.Reset()
 		errBuf.Reset()
@@ -165,8 +184,7 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outp
 		cmd.Env = append(cmd.Env, envName+"="+p12Password)
 		slog.Debug("split", "cmd", cmd.Args)
 		if err = cmd.Run(); err != nil {
-			err = fmt.Errorf("%q: %s: %w", cmd.Args, errBuf.String(), err)
-			return
+			return bag, fmt.Errorf("%q: %s: %w", cmd.Args, errBuf.String(), err)
 		}
 		if buf.Len() == 0 {
 			slog.Warn("zero length", "cmd", cmd.Args)
@@ -183,7 +201,7 @@ func ReadP12Bytes(ctx context.Context, p12Bytes []byte, p12Password string, outp
 			}
 		}
 	}
-	return privateKey, certificate, CAs, nil
+	return bag, nil
 }
 
 // ConvertP12 converts the .p12 file to <base64>.crt and <base64>.key PEM files. Does nothing if those files exist.
@@ -206,31 +224,31 @@ func ConvertP12(ctx context.Context, p12FileName, p12Password string) (certPEM, 
 	if ok {
 		return
 	}
-	privateKey, certificate, CAs, err := ReadP12Bytes(ctx, b, p12Password, true)
+	bag, err := ReadP12Bytes(ctx, b, p12Password, true)
 	if err != nil {
 		return "", "", "", err
 	}
-	if err = os.WriteFile(certPEM, certificate, 0600); err != nil {
+	if err = os.WriteFile(certPEM, bag.Cert, 0600); err != nil {
 		return "", "", "", err
 	}
-	if err = os.WriteFile(caPEM, CAs, 0600); err != nil {
+	if err = os.WriteFile(caPEM, bag.CAs, 0600); err != nil {
 		return certPEM, "", "", err
 	}
-	return certPEM, caPEM, keyPEM, os.WriteFile(keyPEM, privateKey, 0600)
+	return certPEM, caPEM, keyPEM, os.WriteFile(keyPEM, bag.PrivateKey, 0600)
 }
 
 // ReadJKSBytes splits the give .p12 bytes to privateKey and certificate bytes (as returned by openssl).
-func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string, outputPEM bool) (privateKey, certificate, CAs []byte, err error) {
+func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string, outputPEM bool) (Bag, error) {
 	fh, err := os.CreateTemp("", "jks-*.jks")
 	if err != nil {
-		return nil, nil, nil, err
+		return Bag{}, err
 	}
 	defer func() { fh.Close(); os.Remove(fh.Name()) }()
 	if _, err = fh.Write(jksBytes); err != nil {
-		return nil, nil, nil, err
+		return Bag{}, err
 	}
 	if fh.Close(); err != nil {
-		return nil, nil, nil, err
+		return Bag{}, err
 	}
 	p12Fn := fh.Name() + ".p12"
 	if b, err := exec.CommandContext(ctx, "keytool",
@@ -244,7 +262,7 @@ func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string, outp
 		defer os.Remove(p12Fn)
 		p12Bytes, err := os.ReadFile(p12Fn)
 		if err != nil {
-			return nil, nil, nil, err
+			return Bag{}, err
 		}
 		return ReadP12Bytes(ctx, p12Bytes, jksPassword, outputPEM)
 	}
@@ -256,7 +274,7 @@ func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string, outp
 		"-rfc",
 	).Output()
 	if err != nil {
-		return nil, nil, nil, err
+		return Bag{}, err
 	}
 	return ReadP12Bytes(ctx, p12Bytes, jksPassword, outputPEM)
 }
