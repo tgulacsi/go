@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/carlos7ags/folio/reader"
 	"github.com/google/renameio/v2"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
@@ -42,7 +43,10 @@ func init() {
 
 var skipPdfunite, skipPdftk, skipGs int32
 
-var errNotInstalled = errors.New("not installed")
+var (
+	errNotInstalled = errors.New("not installed")
+	ErrEncrypted    = errors.New("PDF is encrypted")
+)
 
 func fileSize(fn string) int64 {
 	if fi, err := os.Stat(fn); err == nil {
@@ -255,27 +259,38 @@ func Split(ctx context.Context, destDir, fn string) error {
 
 // PageNum returns the number of pages in the document.
 func PageNum(ctx context.Context, fn string) (int, error) {
+	E := func(err error) error { return err }
+	if rdr, err := reader.Load(fn); err == nil {
+		if n := rdr.PageCount(); n > 0 {
+			return n, nil
+		}
+	} else if strings.Contains(err.Error(), "encrypted") {
+		E = func(err error) error {
+			return errors.Join(err, ErrEncrypted)
+		}
+	}
+
 	fh, err := os.Open(fn)
 	if err != nil {
 		return 0, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("PANIC: %+v", r)
+			err = E(fmt.Errorf("PANIC: %+v", r))
 		}
 	}()
 	pdf, err := api.ReadContext(fh, config)
 	fh.Close()
 	if err != nil {
-		return 0, fmt.Errorf("read: %w", err)
+		return 0, E(fmt.Errorf("read: %w", err))
 	}
 	if pdf.PageCount != 0 {
 		return pdf.PageCount, nil
 	}
 	if err = pdfcpu.OptimizeXRefTable(pdf); err != nil {
-		err = fmt.Errorf("Optimize: %w", err)
+		err = fmt.Errorf("optimize: %w", err)
 	}
-	return pdf.PageCount, err
+	return pdf.PageCount, E(err)
 }
 
 type countingWriter struct {
