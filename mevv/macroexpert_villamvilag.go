@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/UNO-SOFT/zlog/v2"
+	"github.com/tgulacsi/go/httpcb"
 	"github.com/tgulacsi/go/httpinsecure"
 	"github.com/tgulacsi/go/iohlp"
 )
@@ -44,7 +45,7 @@ var ErrAuth = errors.New("authentication error")
 
 const (
 	macroExpertURLv0     = `https://www.macroexpert.hu/villamvilag_uj/interface_GetWeatherPdf.php`
-	macroExpertURLv1     = `https://macrometeo.hu/meteo-api-app/api/pdf/query-kobe`
+	macroExpertURLv1     = `https://macrometeo.hu/meteo-api-app/api/pdf/quercy-kobe`
 	macroExpertURLv2     = `https://macrometeo.hu/meteo-api-app/api/pdf/query`
 	macroExpertURLv3     = `https://frontend.macrometeo.hu/webapi/query-civil`
 	MacroExpertURLv3Test = `https://frontend-test.macrometeo.hu/webapi/query-civil`
@@ -162,9 +163,19 @@ func (req V3Query) Prepare() V3Query {
 	return req
 }
 
-var client = &http.Client{Transport: httpinsecure.InsecureTransport}
+var (
+	DefaultBrokerSettings = httpcb.NewSettings("mevv", time.Minute, 10*time.Minute, slog.Default().With("lib", "mevv"))
+	DefaultHTTPClient     = &http.Client{
+		Transport: httpcb.NewTransport(DefaultBrokerSettings, httpinsecure.InsecureTransport)}
+)
 
-type Version string
+type (
+	Version string
+	Client  struct {
+		Version    Version
+		HTTPClient *http.Client
+	}
+)
 
 const (
 	V0 = Version("v0")
@@ -410,21 +421,23 @@ needWinds O varchar(1) SzĂŠl adatokat kĂŠrek â1â â kĂŠrem, 
 needRainsInt O varchar(1) Fix - â0â
 language O varchar(2) Fix - âhuâ
 */
-func (V Version) GetPDF(
+func (cl Client) GetPDF(
 	ctx context.Context,
 	username, password string,
 	opt Options,
 ) (rc io.ReadCloser, fileName, mimeType string, err error) {
-	_, rc, fileName, mimeType, err = V.GetPDFData(ctx, username, password, opt)
+	_, rc, fileName, mimeType, err = cl.GetPDFData(ctx, username, password, opt)
 	return rc, fileName, mimeType, err
 }
-func (V Version) GetPDFData(
+
+func (cl Client) GetPDFData(
 	ctx context.Context,
 	username, password string,
 	opt Options,
 ) (data V3ResultData, r io.ReadCloser, fileName, mimeType string, err error) {
 	logger := zlog.SFromContext(ctx)
 	meURL := opt.URL
+	V := cl.Version
 	if meURL == "" {
 		meURL = V.URL()
 	}
@@ -517,7 +530,11 @@ func (V Version) GetPDFData(
 		req.SetBasicAuth(username, password)
 	}
 	logger.Debug(method, "url", req.URL, "headers", req.Header)
-	resp, err := client.Do(req)
+	httpClient := cl.HTTPClient
+	if httpClient == nil {
+		httpClient = DefaultHTTPClient
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error(method, "url", req.URL, "headers", req.Header, "body", buf.String(), "error", err)
 		return V3ResultData{}, nil, "", "", fmt.Errorf("do %#v (%q): %w", req.URL.String(), buf.String(), err)

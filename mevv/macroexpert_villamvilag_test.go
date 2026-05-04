@@ -51,7 +51,9 @@ func TestMacroExpertVillamVilagPDF(t *testing.T) {
 						With("version", V, "case", nm))
 					tc.URL = URL
 					ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-					data, r, _, ct, err := V.GetPDFData(ctx, username, password, tc.Options)
+					data, r, _, ct, err := mevv.Client{Version: V}.GetPDFData(
+						ctx, username, password, tc.Options,
+					)
 					cancel()
 					t.Logf("ct=%q err=%v", ct, err)
 					if err != nil {
