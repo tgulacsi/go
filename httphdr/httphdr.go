@@ -217,3 +217,14 @@ type byWeight []weightedValue
 func (a byWeight) Len() int           { return len(a) }
 func (a byWeight) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byWeight) Less(i, j int) bool { return a[i].Weight > a[j].Weight }
+
+// RedactPassw replaces the password part in URL string with ***.
+func RedactPassw(s string) string {
+	// http://user:passw@host:port/...
+	if i := strings.IndexByte(s, '@'); i >= 0 {
+		if j := strings.LastIndexByte(s[:i], ':'); j >= 0 {
+			return s[:j+1] + strings.Repeat("*", i-j) + s[i:]
+		}
+	}
+	return s
+}
