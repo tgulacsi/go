@@ -1,5 +1,5 @@
 /*
-  Copyright 2019, 2024 Tamás Gulácsi
+  Copyright 2019, 2026 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -260,13 +260,29 @@ func Split(ctx context.Context, destDir, fn string) error {
 // PageNum returns the number of pages in the document.
 func PageNum(ctx context.Context, fn string) (int, error) {
 	E := func(err error) error { return err }
-	if rdr, err := reader.Load(fn); err == nil {
-		if n := rdr.PageCount(); n > 0 {
-			return n, nil
+	done := make(chan error, 1)
+	var n int
+	go func() {
+		rdr, err := reader.Load(fn)
+		if err == nil {
+			n = rdr.PageCount()
 		}
-	} else if strings.Contains(err.Error(), "encrypted") {
-		E = func(err error) error {
-			return errors.Join(err, ErrEncrypted)
+		done <- err
+	}()
+	select {
+	case <-ctx.Done():
+		err := ctx.Err()
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.Error("folio/reader.Load timed out")
+		}
+		return 0, ctx.Err()
+	case err := <-done:
+		if err == nil && n > 0 {
+			return n, nil
+		} else if err != nil && strings.Contains(err.Error(), "encrypted") {
+			E = func(err error) error {
+				return errors.Join(err, ErrEncrypted)
+			}
 		}
 	}
 

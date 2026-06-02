@@ -327,7 +327,6 @@ WantedBy=graphical-session.target`),
 							if isFF {
 								lastFF = pid
 							}
-							return
 						},
 					},
 					sway.EventTypeWindow,

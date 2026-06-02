@@ -269,7 +269,8 @@ func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string) (Bag
 	if err != nil {
 		return Bag{}, err
 	}
-	defer func() { fh.Close(); os.Remove(fh.Name()) }()
+	fn := fh.Name()
+	defer func() { fh.Close(); os.Remove(fn) }()
 	if _, err = fh.Write(jksBytes); err != nil {
 		return Bag{}, err
 	}
@@ -283,10 +284,10 @@ func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string) (Bag
 		"-destkeystore", p12Fn, "-deststoretype", "pkcs12",
 		"-srcstorepass", jksPassword, "-deststorepass", jksPassword,
 	)
+	defer os.Remove(p12Fn)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		slog.Warn("convert JKS to P12", "cmd", cmd.Args, "out", string(b), "error", err)
 	} else {
-		defer os.Remove(p12Fn)
 		p12Bytes, err := os.ReadFile(p12Fn)
 		if err != nil {
 			return Bag{}, err
