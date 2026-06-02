@@ -195,24 +195,3 @@ func consumeSign(b []byte, allowPlus bool) ([]byte, bool) {
 	}
 	return b, false
 }
-
-// bytesCutByte is similar to bytes.Cut(b, []byte{c}),
-// except c may optionally be included as part of the suffix.
-func bytesCutByte(b []byte, c byte, include bool) ([]byte, []byte) {
-	if i := bytes.IndexByte(b, c); i >= 0 {
-		if include {
-			return b[:i], b[i:]
-		}
-		return b[:i], b[i+1:]
-	}
-	return b, nil
-}
-
-// parseDec2 parses b as an unsigned, base-10, 2-digit number.
-// The result is undefined if digits are not base-10.
-func parseDec2(b []byte) byte {
-	if len(b) < 2 {
-		return 0
-	}
-	return 10*(b[0]-'0') + (b[1] - '0')
-}
