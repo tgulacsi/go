@@ -123,7 +123,8 @@ func CopyJournalRecord(w io.Writer, br *bufio.Reader) (int64, error) {
 			return written, err
 		}
 	}
-	return written, nil
+	_, err := w.Write([]byte{'\n'})
+	return written, err
 }
 
 // iterExport returns an interator over the JOURNAL_EXPORT format - but only one entry

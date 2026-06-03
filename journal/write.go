@@ -121,6 +121,6 @@ func WriteField(w io.Writer, variable, value string) error {
 
 // WriteEndOfEntry terminates the journal entry.
 func WriteEndOfEntry(w io.Writer) error {
-	_, err := fmt.Fprintln(w)
+	_, err := w.Write([]byte{'\n'})
 	return err
 }
