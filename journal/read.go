@@ -17,14 +17,15 @@ import (
 )
 
 type Record struct {
-	Realtime time.Time `json:"__REALTIME_TIMESTAMP"`
-	Fields   map[string]string
-	Message  string `json:"MESSAGE"`
-	Cursor   string `json:"__CURSOR"`
-	CodeFile string `json:"CODE_FILE"`
-	CodeFunc string `json:"CODE_FUNC"`
-	CodeLine uint32 `json:"CODE_LINE"`
-	Priority uint8  `json:"PRIORITY"` // 0=emerg 7=debug
+	Realtime         time.Time `json:"__REALTIME_TIMESTAMP"`
+	Fields           map[string]string
+	Message          string `json:"MESSAGE"`
+	SyslogIdentifier string `json:"SYSLOG_IDENTIFIER"`
+	Cursor           string `json:"__CURSOR"`
+	CodeFile         string `json:"CODE_FILE"`
+	CodeFunc         string `json:"CODE_FUNC"`
+	CodeLine         uint32 `json:"CODE_LINE"`
+	Priority         uint8  `json:"PRIORITY"` // 0=emerg 7=debug
 }
 
 func IterRecords(r io.Reader) iter.Seq2[Record, error] {
@@ -50,6 +51,8 @@ func IterRecords(r io.Reader) iter.Seq2[Record, error] {
 					rec.Realtime = time.UnixMicro(u)
 				case "MESSAGE":
 					rec.Message = string(kv.Value)
+				case "SYSLOG_IDENTIFIER":
+					rec.SyslogIdentifier = string(kv.Value)
 				case "__CURSOR":
 					rec.Cursor = string(kv.Value)
 				case "CODE_FILE":

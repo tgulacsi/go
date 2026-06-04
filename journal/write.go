@@ -21,6 +21,7 @@ func (rec Record) WriteTo(w io.Writer) (int64, error) {
 	buf.Reset()
 	for _, kv := range [][2]string{
 		{"MESSAGE", rec.Message},
+		{"SYSLOG_IDENTIFIER", rec.SyslogIdentifier},
 		{"CODE_FILE", rec.CodeFile},
 		{"CODE_FUNC", rec.CodeFunc},
 		{"__CURSOR", rec.Cursor},
