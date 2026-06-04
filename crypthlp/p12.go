@@ -279,6 +279,7 @@ func ReadJKSBytes(ctx context.Context, jksBytes []byte, jksPassword string) (Bag
 	}
 	p12Fn := fh.Name() + ".p12"
 	cmd := exec.CommandContext(ctx, "keytool",
+		"-J-Dcom.redhat.fips=false",
 		"-importkeystore",
 		"-srckeystore", fh.Name(),
 		"-destkeystore", p12Fn, "-deststoretype", "pkcs12",
