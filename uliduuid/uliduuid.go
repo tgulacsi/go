@@ -45,6 +45,13 @@ func (u *UUID) SetByte(i int, b byte) { u.UUID[i] = b }
 // BytesTo copy the underlying bytes to the given array.
 func (u *UUID) BytesTo(b [16]byte) { copy(b[:], u.UUID[:]) }
 
+// ToUUID converts the UUID to ULID
+func (u *UUID) ToULID() ULID {
+	var uu ULID
+	copy(uu.ULID[:], u.UUID[:])
+	return uu
+}
+
 type ULID struct {
 	ulid.ULID
 }
@@ -76,6 +83,13 @@ func (u *ULID) SetByte(i int, b byte) { u.ULID[i] = b }
 // BytesTo copy the underlying bytes to the given array.
 func (u *ULID) BytesTo(b [16]byte) { copy(b[:], u.ULID[:]) }
 
+// ToUUID converts the ULID to UUID.
+func (u *ULID) ToUUID() UUID {
+	var uu UUID
+	copy(uu.UUID[:], u.ULID[:])
+	return uu
+}
+
 type ID struct {
 	uuid  *UUID
 	ulid  *ULID
@@ -106,19 +120,33 @@ func New(x any) (t ID) {
 	return t
 }
 
-func (t ID) UUID() uuid.UUID {
+func (t ID) UUID() UUID {
 	if t.uuid != nil {
-		return t.uuid.UUID
+		return *t.uuid
+	} else if t.ulid != nil {
+		return t.ulid.ToUUID()
 	}
-	return uuid.UUID{}
-}
-func (t ID) ULID() ulid.ULID {
-	if t.ulid != nil {
-		return t.ulid.ULID
+	var u UUID
+	if len(t.other) == 16 {
+		copy(u.UUID[:], t.other)
 	}
-	return ulid.ULID{}
+	return u
 }
 
+func (t ID) ULID() ULID {
+	if t.ulid != nil {
+		return *t.ulid
+	} else if t.uuid != nil {
+		return t.uuid.ToULID()
+	}
+	var u ULID
+	if len(t.other) == 16 {
+		copy(u.ULID[:], t.other)
+	}
+	return u
+}
+
+func (t ID) IsULID() bool { return t.ulid != nil }
 func (t ID) IsUUID() bool { return t.uuid != nil }
 func (t ID) IsZero() bool { return t.uuid == nil && t.ulid == nil && len(t.other) == 0 }
 
@@ -127,7 +155,7 @@ func (t ID) BytesTo(b [16]byte) {
 	if t.uuid != nil {
 		t.uuid.BytesTo(b)
 	} else if t.ulid != nil {
-		t.uuid.BytesTo(b)
+		t.ulid.BytesTo(b)
 	} else {
 		copy(b[:], t.other)
 	}

@@ -35,7 +35,16 @@ func TestUnmarshal(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("TransactionID=%q", hdr.TransactionID)
-	if !hdr.TransactionID.IsUUID() || hdr.TransactionID.UUID() != u.UUID {
+	if !hdr.TransactionID.IsUUID() || hdr.TransactionID.UUID() != u {
 		t.Errorf("got %q wanted %q", hdr.TransactionID, u)
+	}
+}
+
+func TestConvert(t *testing.T) {
+	uu := uliduuid.NewUUID(0)
+	ul := uu.ToULID()
+	t.Log("uu:", uu.String(), "ul:", ul.String())
+	if uu != ul.ToUUID() {
+		t.Errorf("got %s wanted %s", ul.ToUUID(), uu)
 	}
 }
