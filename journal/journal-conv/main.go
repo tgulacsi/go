@@ -60,7 +60,8 @@ func Main() error {
 			var print func(io.Writer, journal.Record) error
 			switch *flagTo {
 			case "json":
-				print = func(w io.Writer, rec journal.Record) error { return json.MarshalWrite(w, rec) }
+				opt := jsontext.AllowInvalidUTF8(true)
+				print = func(w io.Writer, rec journal.Record) error { return json.MarshalWrite(w, rec, opt) }
 			case "export":
 				print = func(w io.Writer, rec journal.Record) error { _, err := rec.WriteTo(w); return err }
 			}
