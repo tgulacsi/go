@@ -1,5 +1,5 @@
 /*
-Copyright 2017, 2022 Tamás Gulácsi
+Copyright 2017, 2026 Tamás Gulácsi
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/UNO-SOFT/zlog/v2"
+	"github.com/google/go-cmp/cmp"
 	"github.com/tgulacsi/go/mevv"
 )
 
@@ -296,4 +297,79 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 		}
 }
 
-// vim: set noet fileencoding=utf-8:
+func TestPrepare(t *testing.T) {
+	type Input struct {
+		At, Since, Till   time.Time
+		Interval          int
+		Hourly, NeedRains bool
+	}
+	type Output struct {
+		At       time.Time
+		Interval int
+	}
+	now := time.Now().Truncate(0)
+	for tName, tCase := range map[string]struct {
+		In   Input
+		Want Output
+	}{
+		"hourly": {
+			In:   Input{At: now, Interval: 12, Hourly: true},
+			Want: Output{At: now, Interval: 1},
+		},
+		"hourlyRains": {
+			In:   Input{At: now, Interval: 12, Hourly: true, NeedRains: true},
+			Want: Output{At: now, Interval: 3},
+		},
+
+		"5": {
+			In:   Input{At: now, Interval: 5},
+			Want: Output{At: now, Interval: 5},
+		},
+		"5-middle": {
+			In:   Input{Since: now.AddDate(0, 0, -2), Interval: 5},
+			Want: Output{At: now, Interval: 5},
+		},
+
+		"13": {
+			In:   Input{At: now, Interval: 12},
+			Want: Output{At: now, Interval: 13},
+		},
+		"13-middle": {
+			In:   Input{Since: now, Interval: 6},
+			Want: Output{At: now, Interval: 13},
+		},
+
+		"30": {
+			In:   Input{At: now, Interval: 20},
+			Want: Output{At: now, Interval: 30},
+		},
+		"30-middle": {
+			In:   Input{Since: now, Interval: 22},
+			Want: Output{At: now, Interval: 30},
+		},
+
+		"180": {
+			In:   Input{At: now, Interval: 183},
+			Want: Output{At: now, Interval: 180},
+		},
+		"180-middle": {
+			In:   Input{Since: now, Interval: 159},
+			Want: Output{At: now, Interval: 180},
+		},
+	} {
+		t.Run(tName, func(t *testing.T) {
+			opt := mevv.Options{
+				At: tCase.In.At, Since: tCase.In.Since, Till: tCase.In.Till,
+				Interval: tCase.In.Interval,
+				Hourly:   tCase.In.Hourly, NeedRains: tCase.In.NeedRains,
+			}.Prepare()
+			got := Output{At: opt.At, Interval: opt.Interval}
+			t.Log(got)
+			if d := cmp.Diff(tCase.Want, got); d != "" {
+				t.Errorf("%s: got %#v, wanted %#v", d, got, tCase.Want)
+			}
+		})
+	}
+}
+
+//

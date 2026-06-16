@@ -71,12 +71,6 @@ type Options struct {
 }
 
 func (opt Options) Prepare() Options {
-	var d time.Duration
-	wasZero := opt.At.IsZero() && !(opt.Since.IsZero() || opt.Till.IsZero())
-	if wasZero {
-		d = opt.Till.Sub(opt.Since) / 2
-		opt.At = opt.Since.Add(d)
-	}
 	if opt.Hourly {
 		if opt.NeedRains {
 			opt.Interval = 3
@@ -86,27 +80,40 @@ func (opt Options) Prepare() Options {
 		return opt
 	}
 
-	if wasZero && opt.Interval == 0 {
-		opt.Interval = int(d/(24*time.Hour)) + 1
-	}
 	switch {
-	case opt.Interval < 15:
+	case opt.Interval <= 5:
 		opt.Interval = 5
-	case opt.Interval < 90:
+	case opt.Interval <= 13:
+		opt.Interval = 13
+	case opt.Interval <= 30:
 		opt.Interval = 30
-		if d != 0 {
-			opt.At = opt.Since
-		}
 	default:
 		opt.Interval = 180
-		if d != 0 {
-			opt.At = opt.Since
+	}
+
+	if opt.At.IsZero() {
+		if opt.Since.IsZero() && opt.Till.IsZero() {
+			return opt
+		}
+		if opt.Till.IsZero() {
+			if opt.Interval <= 5 {
+				opt.At = opt.Since.AddDate(0, 0, 2)
+				opt.Till = opt.Since.AddDate(0, 0, 5)
+			} else {
+				opt.At = opt.Since
+				opt.Till = opt.Since.AddDate(0, 0, opt.Interval)
+			}
+		} else if opt.Since.IsZero() {
+			if opt.Interval <= 5 {
+				opt.At = opt.Till.AddDate(0, 0, -2)
+				opt.Since = opt.Since.AddDate(0, 0, -5)
+			} else {
+				opt.Since = opt.Since.AddDate(0, 0, -opt.Interval)
+				opt.At = opt.Since
+			}
 		}
 	}
 
-	if opt.Interval <= 0 {
-		opt.Interval = 5
-	}
 	return opt
 }
 
