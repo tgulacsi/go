@@ -34,7 +34,7 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 	}
 	if cleanup != nil {
 		rdr := bytes.NewReader(rat.data)
-		runtime.SetFinalizer(rdr, func(_ *bytes.Reader) { cleanup() })
+		runtime.AddCleanup(rdr, func(_ *bytes.Reader) { cleanup() }, rdr)
 		return io.NewSectionReader(rdr, 0, int64(rat.Len())), nil
 	}
 	return io.NewSectionReader(rat, 0, int64(rat.Len())), nil

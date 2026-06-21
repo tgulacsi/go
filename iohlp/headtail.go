@@ -15,9 +15,9 @@ import (
 // HeadTailKeeper is an io.Writer which keeps only Limit bytes from the start (head),
 // and Limit bytes from the end (tail).
 type HeadTailKeeper struct {
-	Limit      int
-	head, tail []byte
 	hsh        hash.Hash64
+	head, tail []byte
+	Limit      int
 }
 
 func (htw *HeadTailKeeper) Write(p []byte) (int, error) {

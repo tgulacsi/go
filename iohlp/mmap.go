@@ -41,7 +41,11 @@ func Mmap(f *os.File) (*ReaderAt, error) {
 		return nil, err
 	}
 
-	runtime.SetFinalizer(&r, func(r *ReaderAt) { r.munmap() })
+	r.cleanup = runtime.AddCleanup(
+		&r,
+		func(r *ReaderAt) { r.munmap() },
+		&r,
+	)
 
 	return &r, nil
 }
@@ -53,8 +57,9 @@ func Mmap(f *os.File) (*ReaderAt, error) {
 //
 // Copied from https://github.com/golang/exp/blob/85be41e4509f/mmap/mmap_unix.go#L115
 type ReaderAt struct {
-	data []byte
-	fh   uintptr
+	data    []byte
+	cleanup runtime.Cleanup
+	fh      uintptr
 }
 
 // Close closes the reader.
@@ -64,7 +69,7 @@ func (r *ReaderAt) Close() error {
 		return nil
 	}
 	err := r.munmap()
-	runtime.SetFinalizer(r, nil)
+	r.cleanup.Stop()
 	return err
 }
 
