@@ -30,7 +30,7 @@ type Record struct {
 
 func IterRecords(r io.Reader) iter.Seq2[Record, error] {
 	return func(yield func(Record, error) bool) {
-		br := bufio.NewReader(r)
+		br := bufio.NewReaderSize(r, 1<<20)
 		for {
 			var rec Record
 			for kv, err := range iterKeyVals(br) {
