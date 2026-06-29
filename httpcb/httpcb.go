@@ -191,7 +191,11 @@ func (s *Settings) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 			if err != nil {
 				return err
 			}
-			s.MaxRequests = uint32(v.Uint())
+			if u, err := v.Uint(); err != nil {
+				return err
+			} else {
+				s.MaxRequests = uint32(u)
+			}
 		default:
 			var v jsontext.Value
 			if v, err = dec.ReadValue(); err != nil {
