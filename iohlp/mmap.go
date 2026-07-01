@@ -41,12 +41,6 @@ func Mmap(f *os.File) (*ReaderAt, error) {
 		return nil, err
 	}
 
-	r.cleanup = runtime.AddCleanup(
-		&r,
-		func(r ReaderAt) { r.munmap() },
-		r,
-	)
-
 	return &r, nil
 }
 
