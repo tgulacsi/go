@@ -10,6 +10,7 @@
 package smbwatch
 
 /*
+#include <stdbool.h>  // bool
 #include <stdint.h>  // uint32_t
 #include <stdlib.h>  // malloc
 #include <string.h>  // memset
