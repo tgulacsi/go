@@ -1,13 +1,14 @@
 //go:build windows
 // +build windows
 
-// Copyright 2015, 2021 Tamás Gulácsi. All rights reserved.
+// Copyright 2015, 2026 Tamás Gulácsi. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 package iohlp
 
 import (
+	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -35,6 +36,20 @@ func (r *ReaderAt) mmap(fd uintptr, size int) error {
 		return err
 	}
 	r.data = (*(*[MaxInt]byte)(unsafe.Pointer(addr)))[:size:size]
+	type pair struct {
+		addr   uintptr
+		handle windows.Handle
+	}
+	r.cleanup = runtime.AddCleanup(
+		&r,
+		func(p pair) {
+			windows.UnmapViewOfFile(p.addr)
+			if p.handle != 0 {
+				windows.CloseHandle(p.handle)
+			}
+		},
+		pair{addr: addr, handle: handle},
+	)
 	return nil
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014, 2021 Tamás Gulácsi. All rights reserved.
+// Copyright 2014, 2026 Tamás Gulácsi. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -40,12 +40,6 @@ func Mmap(f *os.File) (*ReaderAt, error) {
 	if err = r.mmap(f.Fd(), int(size)); err != nil {
 		return nil, err
 	}
-
-	r.cleanup = runtime.AddCleanup(
-		&r,
-		func(r *ReaderAt) { r.munmap() },
-		&r,
-	)
 
 	return &r, nil
 }

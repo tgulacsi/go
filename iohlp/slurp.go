@@ -1,4 +1,4 @@
-// Copyright 2019, 2022 Tamás Gulácsi. All rights reserved.
+// Copyright 2019, 2026 Tamás Gulácsi. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -34,7 +34,7 @@ func MakeSectionReader(r io.Reader, threshold int) (*io.SectionReader, error) {
 	}
 	if cleanup != nil {
 		rdr := bytes.NewReader(rat.data)
-		runtime.AddCleanup(rdr, func(_ *bytes.Reader) { cleanup() }, rdr)
+		runtime.AddCleanup(rdr, func(_ *bytes.Reader) { cleanup() }, nil)
 		return io.NewSectionReader(rdr, 0, int64(rat.Len())), nil
 	}
 	return io.NewSectionReader(rat, 0, int64(rat.Len())), nil

@@ -9,7 +9,7 @@ require (
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/emersion/go-message v0.18.1
 	github.com/emersion/go-vcard v0.0.0-20230815062825-8fda7d206ec9
-	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/go-kit/log v0.2.1
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zerologr v1.2.3
@@ -33,7 +33,7 @@ require (
 	github.com/rs/zerolog v1.31.0
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
 	github.com/sony/gobreaker v0.5.0
-	github.com/sony/gobreaker/v2 v2.3.0
+	github.com/sony/gobreaker/v2 v2.4.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210305035536-64b5b1c73954
 	github.com/tmc/langchaingo v0.1.12
 	github.com/valyala/quicktemplate v1.8.0
