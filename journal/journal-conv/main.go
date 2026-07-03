@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -61,20 +62,25 @@ func Main() error {
 			switch *flagTo {
 			case "json":
 				opt := jsontext.AllowInvalidUTF8(true)
-				print = func(w io.Writer, rec journal.Record) error { return json.MarshalWrite(w, rec, opt) }
+				print = func(w io.Writer, rec journal.Record) error {
+					err := json.MarshalWrite(w, rec, opt)
+					w.Write([]byte{'\n'})
+					return err
+				}
 			case "export":
 				print = func(w io.Writer, rec journal.Record) error { _, err := rec.WriteTo(w); return err }
 			}
 
+			bw := bufio.NewWriter(os.Stdout)
 			for rec, err := range inp {
 				if err != nil {
 					return err
 				}
-				if err := print(os.Stdout, rec); err != nil {
+				if err := print(bw, rec); err != nil {
 					return err
 				}
 			}
-			return nil
+			return bw.Flush()
 		},
 	}
 	if err := app.Parse(os.Args[1:]); err != nil {
