@@ -78,40 +78,41 @@ func (opt Options) Prepare() Options {
 			opt.Interval = 1
 		}
 		return opt
-	}
-
-	switch {
-	case opt.Interval <= 5:
-		opt.Interval = 5
-	case opt.Interval <= 13:
-		opt.Interval = 13
-	case opt.Interval <= 30:
-		opt.Interval = 30
-	default:
-		opt.Interval = 180
-	}
-
-	if opt.At.IsZero() {
-		if opt.Since.IsZero() && opt.Till.IsZero() {
-			return opt
+	} else {
+		switch {
+		case opt.Interval <= 5:
+			opt.Interval = 5
+		case opt.Interval <= 13:
+			opt.Interval = 13
+		case opt.Interval <= 30:
+			opt.Interval = 30
+		default:
+			opt.Interval = 180
 		}
-		if opt.Till.IsZero() {
-			if opt.Interval <= 5 {
-				opt.At = opt.Since.AddDate(0, 0, 2)
-				opt.Till = opt.Since.AddDate(0, 0, 5)
-			} else {
-				opt.At = opt.Since
-				opt.Till = opt.Since.AddDate(0, 0, opt.Interval)
+
+		if opt.At.IsZero() {
+			if opt.Since.IsZero() && opt.Till.IsZero() {
+				return opt
 			}
-		} else if opt.Since.IsZero() {
-			if opt.Interval <= 5 {
-				opt.At = opt.Till.AddDate(0, 0, -2)
-				opt.Since = opt.Since.AddDate(0, 0, -5)
-			} else {
-				opt.Since = opt.Since.AddDate(0, 0, -opt.Interval)
-				opt.At = opt.Since
+			if opt.Till.IsZero() {
+				if opt.Interval <= 5 {
+					opt.At = opt.Since.AddDate(0, 0, 2)
+					opt.Till = opt.Since.AddDate(0, 0, 5)
+				} else {
+					opt.At = opt.Since
+					opt.Till = opt.Since.AddDate(0, 0, opt.Interval)
+				}
+			} else if opt.Since.IsZero() {
+				if opt.Interval <= 5 {
+					opt.At = opt.Till.AddDate(0, 0, -2)
+					opt.Since = opt.Since.AddDate(0, 0, -5)
+				} else {
+					opt.Since = opt.Since.AddDate(0, 0, -opt.Interval)
+					opt.At = opt.Since
+				}
 			}
 		}
+		opt.At = RoundMidnight(opt.At)
 	}
 
 	return opt
@@ -695,13 +696,45 @@ func ReadUserPassw(filename string) (string, string, error) {
 		if len(line) == 0 {
 			continue
 		}
-		i := bytes.IndexByte(line, ':')
-		if i < 0 {
-			continue
+		if pre, post, ok := bytes.Cut(line, []byte{':'}); ok {
+			return string(pre), string(post), nil
 		}
-		return string(line[:i]), string(line[i+1:]), nil
+	}
+	if err := scanner.Err(); err != nil {
+		return "", "", err
 	}
 	return "", "", io.EOF
+}
+
+// RoundMidnight rounds the clock to midnight, keeping the time zone.
+func RoundMidnight(t time.Time) time.Time {
+	h, m, s := t.Clock()
+	if h == 0 && m == 0 && s == 0 {
+		return t
+	}
+	d := time.Duration(-t.Nanosecond())
+	if s != 0 {
+		if s > 30 {
+			d += time.Duration(60-s) * time.Second
+		} else {
+			d += time.Duration(-s) * time.Second
+		}
+	}
+	if m != 0 {
+		if m > 30 {
+			d += time.Duration(60-m) * time.Minute
+		} else {
+			d += time.Duration(-m) * time.Minute
+		}
+	}
+	if h != 0 {
+		if h > 12 {
+			d += time.Duration(24-h) * time.Hour
+		} else {
+			d += time.Duration(-h) * time.Hour
+		}
+	}
+	return t.Add(d)
 }
 
 // vim: set fileencoding=utf-8 noet:

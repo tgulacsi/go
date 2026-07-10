@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"net/url"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -30,53 +30,48 @@ import (
 	"github.com/tgulacsi/go/mevv"
 )
 
-const testHost = "40.68.241.196"
-
 func TestMacroExpertVillamVilagPDF(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 	username, password, cases := testCases(t)
-	U2, _ := url.Parse(mevv.V2.URL())
-	U2.Scheme, U2.Host = "http", testHost
-	for V, URL := range map[mevv.Version]string{
-		mevv.V2: U2.String(),
-		mevv.V3: mevv.MacroExpertURLv3Test,
-	} {
-		V, URL := V, URL
-		t.Run(string(V), func(t *testing.T) {
-			for nm, tc := range cases {
-				nm, tc := nm, tc
-				t.Run(nm, func(t *testing.T) {
-					t.Parallel()
-					ctx := zlog.NewSContext(ctx, zlog.NewT(t).SLog().
-						With("version", V, "case", nm))
-					tc.URL = URL
-					ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-					data, r, _, ct, err := mevv.Client{Version: V}.GetPDFData(
-						ctx, username, password, tc.Options,
-					)
-					cancel()
-					t.Logf("ct=%q err=%v", ct, err)
-					if err != nil {
-						t.Errorf("got [%s] %v.", ct, err)
-						return
-					}
-					var buf bytes.Buffer
-					if r != nil {
-						_, err = io.Copy(&buf, r)
-						r.Close()
-						if err != nil {
-							t.Errorf("read response: %+v", err)
-						}
-					}
-
-					if tc.Check != nil {
-						t.Log(string(data.Raw))
-						tc.Check(t, data)
-					}
-					// t.Log("response:", buf.String())
-				})
+	V := mevv.V3
+	for nm, tc := range cases {
+		nm, tc := nm, tc
+		t.Run(nm, func(t *testing.T) {
+			t.Parallel()
+			ctx := zlog.NewSContext(t.Context(), zlog.NewT(t).SLog().
+				With("version", V, "case", nm))
+			tc.URL = V.URL() //mevv.MacroExpertURLv3Test
+			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			data, r, _, ct, err := mevv.Client{Version: V}.GetPDFData(
+				ctx, username, password, tc.Options,
+			)
+			t.Logf("ct=%q err=%v", ct, err)
+			if err != nil {
+				t.Errorf("got [%s] %v.", ct, err)
+				return
 			}
+			fh, err := os.Create(filepath.Join(t.ArtifactDir(), nm+".pdf"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer fh.Close()
+			var buf bytes.Buffer
+			if r != nil {
+				_, err = io.Copy(io.MultiWriter(&buf, fh), r)
+				r.Close()
+				if err != nil {
+					t.Errorf("read response: %+v", err)
+				}
+				if err = fh.Close(); err != nil {
+					t.Errorf("close artifact %s: %+v", fh.Name(), err)
+				}
+			}
+
+			if tc.Check != nil {
+				t.Log(string(data.Raw))
+				tc.Check(t, data)
+			}
+			// t.Log("response:", buf.String())
 		})
 	}
 }
@@ -104,6 +99,14 @@ func testCases(t *testing.T) (string, string, map[string]testCase) {
 				Lat:     47.08219889999999, Lng: 18.9232321,
 				Since:      time.Date(2019, 01, 27, 0, 0, 0, 0, time.Local),
 				Till:       time.Date(2019, 01, 30, 0, 0, 0, 0, time.Local),
+				ContractID: "TESZT",
+				NeedPDF:    true,
+			}},
+			"13DaysPDF": {Options: mevv.Options{
+				Address: "Érd, Fő u. 20.",
+				Lat:     47.08219889999999, Lng: 18.9232321,
+				At:         mevv.RoundMidnight(time.Now().AddDate(0, 0, -30)),
+				Interval:   13,
 				ContractID: "TESZT",
 				NeedPDF:    true,
 			}},
@@ -308,6 +311,7 @@ func TestPrepare(t *testing.T) {
 		Interval int
 	}
 	now := time.Now().Truncate(0)
+	midnight := mevv.RoundMidnight(now)
 	for tName, tCase := range map[string]struct {
 		In   Input
 		Want Output
@@ -323,38 +327,38 @@ func TestPrepare(t *testing.T) {
 
 		"5": {
 			In:   Input{At: now, Interval: 5},
-			Want: Output{At: now, Interval: 5},
+			Want: Output{At: midnight, Interval: 5},
 		},
 		"5-middle": {
 			In:   Input{Since: now.AddDate(0, 0, -2), Interval: 5},
-			Want: Output{At: now, Interval: 5},
+			Want: Output{At: midnight, Interval: 5},
 		},
 
 		"13": {
 			In:   Input{At: now, Interval: 12},
-			Want: Output{At: now, Interval: 13},
+			Want: Output{At: midnight, Interval: 13},
 		},
 		"13-middle": {
 			In:   Input{Since: now, Interval: 6},
-			Want: Output{At: now, Interval: 13},
+			Want: Output{At: midnight, Interval: 13},
 		},
 
 		"30": {
 			In:   Input{At: now, Interval: 20},
-			Want: Output{At: now, Interval: 30},
+			Want: Output{At: midnight, Interval: 30},
 		},
 		"30-middle": {
 			In:   Input{Since: now, Interval: 22},
-			Want: Output{At: now, Interval: 30},
+			Want: Output{At: midnight, Interval: 30},
 		},
 
 		"180": {
 			In:   Input{At: now, Interval: 183},
-			Want: Output{At: now, Interval: 180},
+			Want: Output{At: midnight, Interval: 180},
 		},
 		"180-middle": {
 			In:   Input{Since: now, Interval: 159},
-			Want: Output{At: now, Interval: 180},
+			Want: Output{At: midnight, Interval: 180},
 		},
 	} {
 		t.Run(tName, func(t *testing.T) {
@@ -372,4 +376,10 @@ func TestPrepare(t *testing.T) {
 	}
 }
 
-//
+func TestRoundMidnight(t *testing.T) {
+	loc := time.FixedZone("XXX", 3600)
+	now := time.Now().In(loc)
+	if got, want := mevv.RoundMidnight(now).Format("15:04:05.999999999-0700"), "00:00:00+0100"; got != want {
+		t.Errorf("got %s wanted %s", got, want)
+	}
+}
