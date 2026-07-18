@@ -63,6 +63,7 @@ func (r *ReaderAt) Close() error {
 		return nil
 	}
 	err := r.munmap()
+	r.data = nil
 	r.cleanup.Stop()
 	return err
 }
@@ -79,6 +80,9 @@ func (r *ReaderAt) At(i int) byte {
 
 // ReadAt implements the io.ReaderAt interface.
 func (r *ReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
 	_ = r.fh // Windows needs fh
 	if r.data == nil {
 		return 0, errors.New("mmap: closed")

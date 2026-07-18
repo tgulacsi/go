@@ -21,7 +21,7 @@ func (r *ReaderAt) mmap(fd uintptr, size int) error {
 		return err
 	}
 	r.cleanup = runtime.AddCleanup(
-		&r,
+		r,
 		func(data []byte) { syscall.Munmap(data) },
 		r.data,
 	)

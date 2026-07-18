@@ -41,7 +41,7 @@ func (r *ReaderAt) mmap(fd uintptr, size int) error {
 		handle windows.Handle
 	}
 	r.cleanup = runtime.AddCleanup(
-		&r,
+		r,
 		func(p pair) {
 			windows.UnmapViewOfFile(p.addr)
 			if p.handle != 0 {
