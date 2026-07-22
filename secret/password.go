@@ -96,6 +96,17 @@ func (passw *Password) UnmarshalJSON(p []byte) error {
 // String returns the real password.
 func (passw Password) String() string { return string(passw) }
 
+// Text returns the garbled representation of Password.
+func (passw Password) Text() string {
+	if MarshalPassword.Load() {
+		return string(passw)
+	}
+	var buf strings.Builder
+	buf.Grow(len(passw))
+	passw.marshalAppend(&buf)
+	return buf.String()
+}
+
 // Set the password (from a flag).
 func (passw *Password) Set(s string) error {
 	*passw = Password(s)

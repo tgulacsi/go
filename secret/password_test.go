@@ -16,16 +16,20 @@ func TestPassword(t *testing.T) {
 		Username string
 		Password secret.Password
 	}
+	const original, garbled = "password", "p******d"
 	conf := Config{
 		Username: "user",
-		Password: secret.Password("password"),
+		Password: secret.Password(original),
+	}
+	if got, want := conf.Password.Text(), garbled; got != want {
+		t.Fatalf("got %s, wanted %s", got, want)
 	}
 	b, err := json.Marshal(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("garbled:", string(b))
-	if got, want := string(b), `{"Username":"user","Password":"p******d"}`; got != want {
+	if got, want := string(b), `{"Username":"user","Password":"`+garbled+`"}`; got != want {
 		t.Errorf("got %s,\n wanted\n%s", got, want)
 	}
 
@@ -38,7 +42,9 @@ func TestPassword(t *testing.T) {
 	}
 
 	secret.MarshalPassword.Store(true)
-	b, err = json.Marshal(conf)
+	if b, err = json.Marshal(conf); err != nil {
+		t.Fatal(err)
+	}
 	secret.MarshalPassword.Store(false)
 	t.Log("real:", string(b))
 	if err := json.Unmarshal(b, &conf2); err != nil {
