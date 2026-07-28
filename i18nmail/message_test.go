@@ -15,6 +15,7 @@ var headDecodeTests = [][2]string{
 		"(M2B) Re: Kárszám: 140694/1 UDW429 [[K996576-963815]]"},
 	[2]string{"=?utf-8?b?RXNlZMOpa2Vzc8OpZ2kgw6lydGVzw610xZEgKExERzU4OSwgMTA5MjMxNTgp?=\n  =?utf-8?q?_=5B=5BS10923158-3772089=5D=5D?=",
 		"Esedékességi értesítő (LDG589, 10923158) [[S10923158-3772089]]"},
+	{`=?utf-7?B?SytBTlktQkUgTmVtemV0aytBUFktemkgKG5lbXpldGtvemkrQUVBLWtvYmUuaHUp?= <nemzetkozi@kobe.hu>`, "KÖBE Nemzetközi (nemzetkozi@kobe.hu) <nemzetkozi@kobe.hu>"},
 }
 
 func TestHeadDecode(t *testing.T) {
