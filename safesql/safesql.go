@@ -28,8 +28,8 @@ type (
 
 func (s SQL) String() string { return s.str }
 
-// FromConstant creates an SQL value from an untyped string constant.
-func FromConstant(s stringConstant) SQL { return SQL{str: string(s)} }
+// Make creates an SQL value from an untyped string constant.
+func Make(s stringConstant) SQL { return SQL{str: string(s)} }
 
 // Concat SQL parts together.
 func Concat(ss ...SQL) SQL {

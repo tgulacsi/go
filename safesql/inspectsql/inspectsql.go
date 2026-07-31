@@ -3,8 +3,11 @@ package inspectsql
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
+	"go/token"
 	"go/types"
 	"iter"
+	"reflect"
 	"strings"
 
 	"github.com/tgulacsi/go/safesql/inspectsql/typeindex" // golang.org/x/tools/internal/typesinternal/typeindex
@@ -22,13 +25,15 @@ var Analyzer = &analysis.Analyzer{
 	Run:              run,
 	RunDespiteErrors: true,
 	Requires:         []*analysis.Analyzer{inspect.Analyzer, typeindex.Analyzer},
-	FactTypes:        []analysis.Fact{new(foundFact)},
+	FactTypes:        []analysis.Fact{(*SQLQuery)(nil)},
+	ResultType:       reflect.TypeFor[[]string](),
 }
 
 func run(pass *analysis.Pass) (any, error) {
 	var (
-		index = pass.ResultOf[typeindex.Analyzer].(*typeindex.Index)
-		info  = pass.TypesInfo
+		index        = pass.ResultOf[typeindex.Analyzer].(*typeindex.Index)
+		info         = pass.TypesInfo
+		constQueries []string
 	)
 	for callee := range iterObjs(index) {
 		for curCall := range index.Calls(callee) {
@@ -49,12 +54,29 @@ func run(pass *analysis.Pass) (any, error) {
 				continue
 			}
 
+			// A constant string is safe: collect its value for the
+			// "collect" command and don't report it as a diagnostic.
+			if tv, ok := info.Types[qryArg]; ok && tv.Value != nil {
+				if tv.Value.Kind() == constant.String {
+					s := constant.StringVal(tv.Value)
+					pass.ExportPackageFact(&SQLQuery{
+						Query:    s,
+						Position: pass.Fset.Position(qryArg.Pos()),
+					})
+					constQueries = append(constQueries, s)
+					// OK: constant string query
+					continue
+				}
+			}
+
+			// Non-constant string argument: suggest wrapping it with
+			// safesql.Make so it is marked as SQL.
 			// Use granular edits to preserve original formatting.
 			edits := []analysis.TextEdit{
 				{
 					Pos:     qryArg.Pos(),
 					End:     qryArg.Pos(),
-					NewText: []byte("safesql.FromConstant("),
+					NewText: []byte("safesql.Make("),
 				},
 				{
 					Pos:     qryArg.End(),
@@ -76,19 +98,18 @@ func run(pass *analysis.Pass) (any, error) {
 		}
 	}
 
-	if len(pass.AllObjectFacts()) > 0 {
-		pass.ExportPackageFact(new(foundFact))
-	}
-
-	return nil, nil
+	return constQueries, nil
 }
 
 // foundFact is a fact associated with functions that match -name.
 // We use it to exercise the fact machinery in tests.
-type foundFact struct{}
+type SQLQuery struct {
+	token.Position
+	Query string
+}
 
-func (*foundFact) String() string { return "found" }
-func (*foundFact) AFact()         {}
+func (qry *SQLQuery) String() string { return qry.Query }
+func (*SQLQuery) AFact()             {}
 
 func iterObjs(index *typeindex.Index) iter.Seq[types.Object] {
 	return func(yield func(types.Object) bool) {

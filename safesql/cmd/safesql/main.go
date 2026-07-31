@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,7 +16,11 @@ import (
 	"github.com/peterbourgon/ff/v4"
 
 	"github.com/tgulacsi/go/safesql/inspectsql"
+
+	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/checker"
 	"golang.org/x/tools/go/analysis/singlechecker"
+	"golang.org/x/tools/go/packages"
 )
 
 func main() {
@@ -27,15 +32,35 @@ func main() {
 func Main() error {
 	collectCmd := ff.Command{Name: "collect",
 		Exec: func(ctx context.Context, args []string) error {
+			initial, err := packages.Load(&packages.Config{
+				Mode: packages.LoadAllSyntax,
+			}, args...)
+			if err != nil {
+				return err
+			}
+			analyzers := []*analysis.Analyzer{inspectsql.Analyzer}
+			graph, err := checker.Analyze(analyzers, initial, &checker.Options{FactLog: os.Stderr})
+			if err != nil {
+				return err
+			}
+			// fmt.Println(graph)
+			for a := range graph.All() {
+				for _, f := range a.AllPackageFacts() {
+					q := f.Fact.(*inspectsql.SQLQuery)
+					fmt.Println(q.Position.String()+":", q.Query)
+				}
+			}
 			return nil
 		},
 	}
 	inspectCmd := ff.Command{Name: "inspect",
 		Exec: func(ctx context.Context, args []string) error {
+			copy(os.Args[1:], args)
 			singlechecker.Main(inspectsql.Analyzer)
 			return nil
 		},
 	}
+
 	app := ff.Command{Name: "safesql", Subcommands: []*ff.Command{
 		&collectCmd, &inspectCmd,
 	}}
