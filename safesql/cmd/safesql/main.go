@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/peterbourgon/ff/v4"
@@ -23,7 +24,6 @@ import (
 
 	"github.com/tgulacsi/go/safesql/inspectsql"
 
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/checker"
 	"golang.org/x/tools/go/analysis/singlechecker"
@@ -86,16 +86,25 @@ func Main() error {
 					return err
 				}
 			}
-			var grp errgroup.Group
-			grp.SetLimit(runtime.GOMAXPROCS(-1))
+			var wg sync.WaitGroup
+			limit := make(chan struct{}, runtime.GOMAXPROCS(1))
+			var errsMu sync.Mutex
+			var errs []error
 			for a := range graph.All() {
 				for _, f := range a.AllPackageFacts() {
 					q := f.Fact.(*inspectsql.SQLQuery)
-					grp.Go(func() error {
-						if err := todo(q); err != nil {
-							return fmt.Errorf("%s: %w", q.Position.String(), err)
+					wg.Go(func() {
+						select {
+						case limit <- struct{}{}:
+						case <-ctx.Done():
+							return
 						}
-						return nil
+						defer func() { <-limit }()
+						if err := todo(q); err != nil {
+							errsMu.Lock()
+							errs = append(errs, fmt.Errorf("%s: %w", q.Position.String(), err))
+							errsMu.Unlock()
+						}
 					})
 				}
 			}
@@ -103,7 +112,8 @@ func Main() error {
 				_, err = os.Stdout.Write(txtar.Format(&ar))
 				return err
 			}
-			return grp.Wait()
+			wg.Wait()
+			return errors.Join(errs...)
 		},
 	}
 	inspectCmd := ff.Command{Name: "inspect",
