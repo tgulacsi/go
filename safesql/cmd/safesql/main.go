@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -21,6 +20,7 @@ import (
 	"golang.org/x/tools/go/analysis/checker"
 	"golang.org/x/tools/go/analysis/singlechecker"
 	"golang.org/x/tools/go/packages"
+	"golang.org/x/tools/txtar"
 )
 
 func main() {
@@ -44,13 +44,18 @@ func Main() error {
 				return err
 			}
 			// fmt.Println(graph)
+			var ar txtar.Archive
 			for a := range graph.All() {
 				for _, f := range a.AllPackageFacts() {
 					q := f.Fact.(*inspectsql.SQLQuery)
-					fmt.Println(q.Position.String()+":", q.Query)
+					ar.Files = append(ar.Files, txtar.File{
+						Name: q.Position.String(),
+						Data: []byte(q.Query),
+					})
 				}
 			}
-			return nil
+			_, err = os.Stdout.Write(txtar.Format(&ar))
+			return err
 		},
 	}
 	inspectCmd := ff.Command{Name: "inspect",
