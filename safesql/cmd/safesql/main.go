@@ -49,7 +49,7 @@ func Main() error {
 				return err
 			}
 			analyzers := []*analysis.Analyzer{inspectsql.Analyzer}
-			graph, err := checker.Analyze(analyzers, initial, &checker.Options{FactLog: os.Stderr})
+			graph, err := checker.Analyze(analyzers, initial, nil)
 			if err != nil {
 				return err
 			}
@@ -88,11 +88,16 @@ func Main() error {
 			}
 			var wg sync.WaitGroup
 			limit := make(chan struct{}, runtime.GOMAXPROCS(1))
+			seen := make(map[string]struct{})
 			var errsMu sync.Mutex
 			var errs []error
 			for a := range graph.All() {
 				for _, f := range a.AllPackageFacts() {
 					q := f.Fact.(*inspectsql.SQLQuery)
+					if _, ok := seen[q.Query]; ok {
+						continue
+					}
+					seen[q.Query] = struct{}{}
 					wg.Go(func() {
 						select {
 						case limit <- struct{}{}:
@@ -102,7 +107,7 @@ func Main() error {
 						defer func() { <-limit }()
 						if err := todo(q); err != nil {
 							errsMu.Lock()
-							errs = append(errs, fmt.Errorf("%s: %w", q.Position.String(), err))
+							errs = append(errs, fmt.Errorf("%s\n%s: %w", q.Position.String(), q.Query, err))
 							errsMu.Unlock()
 						}
 					})
