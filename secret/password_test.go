@@ -7,7 +7,7 @@ package secret_test
 import (
 	"testing"
 
-	"github.com/go-json-experiment/json"
+	"encoding/json/v2"
 	"github.com/tgulacsi/go/secret"
 )
 

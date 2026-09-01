@@ -9,7 +9,6 @@ require (
 	github.com/dgryski/go-linebreak v0.0.0-20180812204043-d8f37254e7d3
 	github.com/emersion/go-message v0.18.1
 	github.com/emersion/go-vcard v0.0.0-20230815062825-8fda7d206ec9
-	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/go-kit/log v0.2.1
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zerologr v1.2.3
@@ -94,7 +93,6 @@ require (
 	go4.org v0.0.0-20201209231011-d4a079459e60 // indirect
 	golang.org/x/image v0.41.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
 	google.golang.org/grpc v1.81.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
@@ -117,7 +115,7 @@ require (
 	modernc.org/zappy v1.0.6 // indirect
 )
 
-go 1.26
+go 1.27
 
 tool (
 	codeberg.org/go-pdf/fpdf/makefont

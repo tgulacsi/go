@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
+	"encoding/json/v2"
+	"encoding/json/jsontext"
 )
 
 // MarshalPassword allows overriding the default *** behaviour.

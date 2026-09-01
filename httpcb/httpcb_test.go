@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	jsonv2 "github.com/go-json-experiment/json"
+	jsonv2 "encoding/json/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/tgulacsi/go/httpcb"
 )
