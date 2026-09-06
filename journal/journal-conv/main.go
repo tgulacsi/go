@@ -1,6 +1,6 @@
 // Copyright 2026 Tamás Gulácsi.
 //
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 package main
 

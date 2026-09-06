@@ -1,6 +1,6 @@
 // Copyright 2025 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package niri is for IPC with the Niri Wayland compositor.
 // Hosts types for parsing an EventStream.

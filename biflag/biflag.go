@@ -1,6 +1,6 @@
 // Copyright 2021 Tamás Gulácsi
 //
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package biflag provides bi-state (set/not-set) standard flag library compatible flags.
 package biflag

@@ -1,6 +1,6 @@
 // Copyright 2026 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package utf7 implements genuine (RFC2152) and modified UTF-7 encoding (RFC3501 section 5.1.3)
 //

@@ -1,6 +1,6 @@
 // Copyright 2025 Tamás Gulácsi.
 //
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package maven helps parse maven metadata
 // and download jars.

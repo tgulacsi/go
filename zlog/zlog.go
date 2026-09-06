@@ -1,6 +1,6 @@
 // Copyright 2022 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package zlog contains some very simple go-logr / zerologr helper functions.
 // This sets the default timestamp format to time.RFC3339 with ms precision.

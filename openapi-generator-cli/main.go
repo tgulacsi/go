@@ -1,6 +1,6 @@
 // Copyright 2025 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package main of openapi-generator-cli is
 // a Go installable wrapper for openapitools.org's
