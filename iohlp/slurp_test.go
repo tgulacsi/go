@@ -1,6 +1,6 @@
 // Copyright 2019, 2021 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: EUPL-1.2
 
 package iohlp
 

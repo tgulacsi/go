@@ -1,6 +1,6 @@
 // Copyright 2026 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: EUPL-1.2
 
 package safesql_test
 

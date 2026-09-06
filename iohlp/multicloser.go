@@ -1,6 +1,6 @@
 // Copyright 2014, 2021 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: EUPL-1.2
 
 // Package iohlp contains small io-related utility functions.
 package iohlp

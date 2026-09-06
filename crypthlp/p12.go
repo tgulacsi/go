@@ -1,6 +1,6 @@
 // Copyright 2026 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: LGPL-3.0
+// SPDX-License-Identifier: EUPL-1.2
 
 package crypthlp
 

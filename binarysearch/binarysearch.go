@@ -1,6 +1,6 @@
 // Copyright 2023 Tamás Gulácsi.
 //
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: EUPL-1.2
 
 // Package binarysearch implements the branchless binary search
 // algorithm from https://orlp.net/blog/bitwise-binary-search/
