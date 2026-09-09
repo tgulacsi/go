@@ -1,5 +1,5 @@
 /*
-  Copyright 2019, 2025 Tamás Gulácsi
+  Copyright 2019, 2026 Tamás Gulácsi
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -36,10 +36,22 @@ import (
 
 var ErrBodyNotFound = errors.New("body not found")
 
-// Caller is the client interface.
-type Caller interface {
-	Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error)
-}
+type (
+	// Caller is the client interface.
+	Caller interface {
+		Call(ctx context.Context, w io.Writer, method string, body io.Reader) (*xml.Decoder, error)
+	}
+	HTTPDoer interface {
+		Do(*http.Request) (*http.Response, error)
+	}
+
+	soapClient struct {
+		bufpool        bp.Pool
+		Client         HTTPDoer
+		URL            string
+		SOAPActionBase string
+	}
+)
 
 // WithLogger returns the context with the "Logger" value set to the given Log.
 func WithLogger(ctx context.Context, logger *slog.Logger) context.Context {
@@ -47,12 +59,9 @@ func WithLogger(ctx context.Context, logger *slog.Logger) context.Context {
 }
 
 // NewClient returns a new client for the given endpoint.
-func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
+func NewClient(endpointURL, soapActionBase string, cl HTTPDoer) Caller {
 	if cl == nil {
 		cl = http.DefaultClient
-	}
-	if cl.Transport == nil {
-		cl.Transport = http.DefaultTransport
 	}
 	return &soapClient{
 		Client:         cl,
@@ -60,13 +69,6 @@ func NewClient(endpointURL, soapActionBase string, cl *http.Client) Caller {
 		SOAPActionBase: soapActionBase,
 		bufpool:        bp.New(1024),
 	}
-}
-
-type soapClient struct {
-	bufpool bp.Pool
-	*http.Client
-	URL            string
-	SOAPActionBase string
 }
 
 // FindBody finds the soapenv:Body, parses soapenv:Header into hdr (if not nil),
@@ -183,7 +185,7 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 
 		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
-			if fault, ok := urlErr.Err.(*Fault); ok {
+			if fault, ok := any(urlErr.Err).(*Fault); ok {
 				return nil, fault
 			}
 		}
@@ -218,6 +220,13 @@ type Fault struct {
 	Detail string `xml:"detail,omitempty"`
 
 	Response *http.Response `xml:"-"`
+}
+
+func (f *Fault) Error() string {
+	if f == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s: %s (%s: %s)", f.Code, f.Reason, f.Actor, f.Detail)
 }
 
 func (f Fault) StreamXML(W *quicktemplate.Writer) {

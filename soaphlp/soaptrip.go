@@ -6,7 +6,6 @@ package soaphlp
 import (
 	"bytes"
 	"encoding/xml"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -41,10 +40,6 @@ func (st *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	return resp, nil
-}
-
-func (sf Fault) Error() string {
-	return fmt.Sprintf("Code: '%s' String: '%s' Actor: '%s' Detail: '%s'", sf.Code, sf.Reason, sf.Actor, sf.Detail)
 }
 
 // ParseFault attempts to parse a Soap Fault from an http.Response. If a fault is found, it will return an error
