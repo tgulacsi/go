@@ -176,6 +176,10 @@ func (s soapClient) CallActionRaw(ctx context.Context, soapAction string, body i
 	req.Header.Set("SOAPAction", soapAction)
 	req.Header.Set("Content-Type", "text/xml")
 	logger := GetLogger(ctx)
+	if s.Client == nil {
+		logger.Error("nil client")
+		s.Client = http.DefaultClient
+	}
 	resp, err := s.Client.Do(req.WithContext(ctx))
 	if err != nil {
 		logger.Error("Do", "url", req.URL, "body", buf.String(), "action", soapAction, "error", err)
