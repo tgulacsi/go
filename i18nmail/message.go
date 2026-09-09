@@ -7,11 +7,11 @@ Package i18nmail implements parsing of mail messages.
 
 For the most part, this package follows the syntax as specified by RFC 5322.
 Notable divergences:
-    * Obsolete address formats are not parsed, including addresses with
-      embedded route information.
-    * Group addresses are not parsed.
-    * The full range of spacing (the CFWS syntax element) is not supported,
-      such as breaking addresses across lines.
+  - Obsolete address formats are not parsed, including addresses with
+    embedded route information.
+  - Group addresses are not parsed.
+  - The full range of spacing (the CFWS syntax element) is not supported,
+    such as breaking addresses across lines.
 */
 package i18nmail
 
@@ -28,9 +28,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tgulacsi/go/i18nmail/utf7"
 	"github.com/tgulacsi/go/text"
 
 	//"golang.org/x/text/encoding/ianaindex"
+	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 )
@@ -222,9 +224,17 @@ func (a *Address) String() string {
 var WordDecoder = &mime.WordDecoder{
 	CharsetReader: func(charset string, input io.Reader) (io.Reader, error) {
 		//enc, err := ianaindex.MIME.Get(charset)
+		switch strings.ToLower(strings.ReplaceAll(charset, "-", "")) {
+		case "utf8":
+			return input, nil
+		case "iso88592":
+			return transform.NewReader(input, charmap.ISO8859_2.NewDecoder()), nil
+		case "utf7":
+			return transform.NewReader(input, utf7.Encoding.NewDecoder()), nil
+		}
 		enc, err := htmlindex.Get(charset)
 		if err != nil {
-			return input, err
+			return input, fmt.Errorf("htmlindex.Get(%q): %w", charset, err)
 		}
 		return transform.NewReader(input, enc.NewDecoder()), nil
 	},

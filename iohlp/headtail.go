@@ -1,6 +1,6 @@
 // Copyright 2024 Tamas Gulacsi. All rights reserved.
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 package iohlp
 

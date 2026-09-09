@@ -1,7 +1,7 @@
 // Copyright 2022 Tamás Gulácsi. All rights reserved.
 // Copyright 2020 The Go Authors. All rights reserved.
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package zipfs implements an io/fs.FS serving a read-only zip file.
 package zipfs

@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Copied from https://github.com/go-json-experiment/json/blob/d219187c3433/arshal_time.go
+// Copied from https://encoding/json/v2/blob/d219187c3433/arshal_time.go
 
 // daysPerYear is the exact average number of days in a year according to
 // the Gregorian calendar, which has an extra day each year that is

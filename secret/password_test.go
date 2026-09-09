@@ -1,0 +1,56 @@
+// Copyright 2026 Tamás Gulácsi. All rights reserved.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package secret_test
+
+import (
+	"testing"
+
+	"encoding/json/v2"
+	"github.com/tgulacsi/go/secret"
+)
+
+func TestPassword(t *testing.T) {
+	type Config struct {
+		Username string
+		Password secret.Password
+	}
+	const original, garbled = "password", "p******d"
+	conf := Config{
+		Username: "user",
+		Password: secret.Password(original),
+	}
+	if got, want := conf.Password.Text(), garbled; got != want {
+		t.Fatalf("got %s, wanted %s", got, want)
+	}
+	b, err := json.Marshal(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("garbled:", string(b))
+	if got, want := string(b), `{"Username":"user","Password":"`+garbled+`"}`; got != want {
+		t.Errorf("got %s,\n wanted\n%s", got, want)
+	}
+
+	var conf2 Config
+	if err := json.Unmarshal(b, &conf2); err != nil {
+		t.Fatal(err)
+	}
+	if got := conf2.Password.String(); got != "" {
+		t.Errorf("unmarshaled %q, wanted empty", got)
+	}
+
+	secret.MarshalPassword.Store(true)
+	if b, err = json.Marshal(conf); err != nil {
+		t.Fatal(err)
+	}
+	secret.MarshalPassword.Store(false)
+	t.Log("real:", string(b))
+	if err := json.Unmarshal(b, &conf2); err != nil {
+		t.Fatal(err)
+	}
+	if conf != conf2 {
+		t.Errorf("unmarshaled %#v, wanted %#v", conf2, conf)
+	}
+}

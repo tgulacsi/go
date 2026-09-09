@@ -1,6 +1,6 @@
 // Copyright 2022 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 // https://git-scm.com/docs/pack-protocol
 package gitpktline

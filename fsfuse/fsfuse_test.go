@@ -1,6 +1,6 @@
 // Copyright 2023 Tamás Gulácsi. All rights reserved.
 //
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 package fsfuse_test
 
