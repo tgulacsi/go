@@ -1,5 +1,6 @@
 // Command ff2cli rewrites Go source that uses github.com/peterbourgon/ff/v4
-// to use github.com/UNO-SOFT/cli (and the standard library flag package).
+// or github.com/peterbourgon/ff/v3/ffcli to use github.com/UNO-SOFT/cli (and
+// the standard library flag package).
 //
 // It performs the mechanical bulk of the migration:
 //
@@ -7,22 +8,31 @@
 //   - ff.NewFlagSetFrom(a, b) -> b
 //   - ff flag methods         -> std flag methods (short rune dropped)
 //   - short flags             -> cli.FlagConfigs entries
-//   - ff.Command              -> cli.Command (Subcommands/ShortHelp/LongHelp renamed)
+//   - ff.Command/ffcli.Command -> cli.Command (field names renamed)
 //   - Exec(ctx, args []string)-> Exec(ctx, *cli.State) with an "args := state.Args" prologue
 //   - ff.ErrHelp              -> flag.ErrHelp
 //   - ffhelp.Command(x).WriteTo(w) -> cli.PrintHelp(w, x)
 //   - x.Parse(...)            -> cli.Parse(cmd, args)
 //   - x.Run(ctx)              -> cli.Run(ctx, cmd, nil)
-//   - imports                 -> add cli, add flag, drop ff/ffhelp
+//   - x.ParseAndRun(ctx, args)-> cli.ParseAndRun(ctx, cmd, args, nil)
+//   - imports                 -> add cli, add flag, drop ff/ffhelp/ffcli
+//
+// The ffcli field renames are: FlagSet->Flags, ShortUsage->Usage,
+// ShortHelp->Summary, LongHelp->Description, Subcommands->SubCommands,
+// UsageFunc->Help.
 //
 // What it does NOT do (reported, needs manual handling):
-//   - environment variables (ff.WithEnvVarPrefix / ff.WithEnvVars)
+//   - environment variables (ff.WithEnvVarPrefix / ff.WithEnvVars, ffcli
+//     Command.Options)
 //   - FlagConfigs for a command whose *flag.FlagSet is built in another file
 //     and returned across a function boundary
 //
 // Usage:
 //
-//	go run . [-w] [-report] <dir-or-file>...
+//	go run . [-w] [-report] <path|pattern>...
+//
+// Paths may be files, directories, or Go-style patterns such as "./..." or
+// "./cmd/..." (the "..." element matches all subdirectories).
 //
 // Without -w the transformed source is written to stdout (single file only).
 package main
@@ -47,6 +57,8 @@ import (
 const (
 	ffPath     = "github.com/peterbourgon/ff/v4"
 	ffhelpPath = "github.com/peterbourgon/ff/v4/ffhelp"
+	ffV3Path   = "github.com/peterbourgon/ff/v3"
+	ffcliPath  = "github.com/peterbourgon/ff/v3/ffcli"
 	cliPath    = "github.com/UNO-SOFT/cli"
 )
 
@@ -92,7 +104,7 @@ func main() {
 
 	files := collect(flag.Args())
 	if len(files) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: ff2cli [-w] [-report] <dir-or-file>...")
+		fmt.Fprintln(os.Stderr, "usage: ff2cli [-w] [-report] <path|pattern>...")
 		os.Exit(2)
 	}
 	if !*write && len(files) > 1 {
@@ -127,7 +139,9 @@ func main() {
 	}
 }
 
-// collect expands dirs into .go files (recursively), skipping vendor/hidden/testdata.
+// collect expands paths and Go-style patterns into .go files (recursively),
+// skipping vendor/hidden/testdata. A path element of "..." matches every
+// subdirectory, so "./..." and "./cmd/..." are supported.
 func collect(paths []string) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -137,23 +151,14 @@ func collect(paths []string) []string {
 			out = append(out, p)
 		}
 	}
-	for _, p := range paths {
-		fi, err := os.Stat(p)
-		if err != nil {
-			add(p)
-			continue
-		}
-		if !fi.IsDir() {
-			add(p)
-			continue
-		}
-		filepath.WalkDir(p, func(path string, d os.DirEntry, err error) error {
+	walk := func(root string) {
+		filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
 			name := d.Name()
 			if d.IsDir() {
-				if path == p {
+				if path == root {
 					return nil
 				}
 				if strings.HasPrefix(name, ".") || name == "vendor" || name == "testdata" {
@@ -165,8 +170,45 @@ func collect(paths []string) []string {
 			return nil
 		})
 	}
+	for _, p := range paths {
+		if root, ok := patternRoot(p); ok {
+			walk(root)
+			continue
+		}
+		fi, err := os.Stat(p)
+		if err != nil {
+			add(p)
+			continue
+		}
+		if !fi.IsDir() {
+			add(p)
+			continue
+		}
+		walk(p)
+	}
 	sort.Strings(out)
 	return out
+}
+
+// patternRoot reports whether p is a Go-style pattern containing a "..." path
+// element and, if so, returns the directory that should be walked recursively.
+func patternRoot(p string) (string, bool) {
+	if p == "..." {
+		return ".", true
+	}
+	if root, ok := strings.CutSuffix(p, "/..."); ok && root != "" {
+		return root, true
+	}
+	if root, ok := strings.CutSuffix(p, string(filepath.Separator)+"..."); ok && root != "" {
+		return root, true
+	}
+	if strings.HasPrefix(p, ".../") {
+		return ".", true
+	}
+	if strings.HasPrefix(p, "..."+string(filepath.Separator)) {
+		return ".", true
+	}
+	return "", false
 }
 
 // process rewrites one file. It returns the formatted source, a report, and
@@ -216,11 +258,17 @@ func process(filename string, src []byte) ([]byte, string, bool, error) {
 	}
 	if !used["ff"] {
 		deleteImport(f, ffPath)
+		deleteImport(f, ffV3Path)
 	} else {
 		warn("leftover ff.* reference remains; inspect imports")
 	}
 	if !used["ffhelp"] {
 		deleteImport(f, ffhelpPath)
+	}
+	if !used["ffcli"] {
+		deleteImport(f, ffcliPath)
+	} else {
+		warn("leftover ffcli.* reference remains; inspect imports")
 	}
 
 	var buf bytes.Buffer
@@ -248,7 +296,8 @@ func process(filename string, src []byte) ([]byte, string, bool, error) {
 
 func importsFF(f *ast.File) bool {
 	for _, imp := range f.Imports {
-		if importPath(imp) == ffPath {
+		switch importPath(imp) {
+		case ffPath, ffhelpPath, ffV3Path, ffcliPath:
 			return true
 		}
 	}
@@ -358,7 +407,7 @@ func isPtrCmdType(e ast.Expr) bool {
 
 func isFFOrCLI(e ast.Expr) bool {
 	id, ok := e.(*ast.Ident)
-	return ok && (id.Name == "ff" || id.Name == "cli")
+	return ok && (id.Name == "ff" || id.Name == "ffcli" || id.Name == "cli")
 }
 
 func isFFFlagSetType(e ast.Expr) bool {
@@ -414,12 +463,12 @@ func isFFNew(e ast.Expr) bool {
 	return sel.Sel.Name == "NewFlagSet" || sel.Sel.Name == "NewFlagSetFrom"
 }
 
-// rewriteSelector renames ff.Command/ff.FlagSet/ff.ErrHelp and the
-// Subcommands/ShortHelp/LongHelp fields.
+// rewriteSelector renames ff.Command/ffcli.Command/ff.FlagSet/ff.ErrHelp and
+// the Subcommands/ShortHelp/LongHelp fields.
 func rewriteSelector(n *ast.SelectorExpr, cmdPtr map[string]bool) {
 	switch n.Sel.Name {
 	case "Command":
-		if id, ok := n.X.(*ast.Ident); ok && id.Name == "ff" {
+		if id, ok := n.X.(*ast.Ident); ok && (id.Name == "ff" || id.Name == "ffcli") {
 			id.Name = "cli"
 		}
 	case "FlagSet":
@@ -453,6 +502,12 @@ func renameKeys(n *ast.CompositeLit) {
 			id.Name = "Summary"
 		case "LongHelp":
 			id.Name = "Description"
+		case "FlagSet":
+			id.Name = "Flags"
+		case "ShortUsage":
+			id.Name = "Usage"
+		case "UsageFunc":
+			id.Name = "Help"
 		}
 	}
 }
@@ -464,6 +519,18 @@ func handleCommand(n *ast.CompositeLit, live map[string][]shortRec, cmdPtr map[s
 		return
 	}
 	renameKeys(n)
+	// ffcli.Command.Options (env/file parsers) has no cli.Command equivalent.
+	kept := n.Elts[:0]
+	for _, elt := range n.Elts {
+		if kv, ok := elt.(*ast.KeyValueExpr); ok {
+			if id, ok := kv.Key.(*ast.Ident); ok && id.Name == "Options" {
+				warn("dropped Options field %s; set the flags manually", render(kv.Value))
+				continue
+			}
+		}
+		kept = append(kept, elt)
+	}
+	n.Elts = kept
 	var flagsIdent string
 	var shorts []shortRec
 	for _, elt := range n.Elts {
