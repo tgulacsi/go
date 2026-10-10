@@ -22,34 +22,35 @@ import (
 
 	// "github.com/godbus/dbus/v5"
 	"github.com/joshuarubin/go-sway"
-	"github.com/peterbourgon/ff/v4"
-	"github.com/peterbourgon/ff/v4/ffhelp"
+
+	"flag"
 	"github.com/tgulacsi/go/globalctx"
 	"github.com/tgulacsi/go/niri"
 	"golang.org/x/sync/errgroup"
+
+	/*
+	   #!/bin/sh
+	   firefox=
+
+	   	swaymsg -m -t subscribe '["window"]' | \
+	   		jq -r --unbuffered '.change +" "+  .container.app_id + " " + (.container.pid | tostring)' | \
+	   		grep --line-buffered '^focus ' | \
+	   		while read -r x app pid; do
+	   			#echo "# x=$x app=$app pid=$pid" >&2
+	   			if [ "$app" = 'firefox' ]; then
+	   				echo "CONT $pid" >&2
+	   				firefox=$pid
+	   				kill -CONT $pid
+	   				pkill -CONT -P $pid
+	   			elif [ -n "$firefox" ]; then
+	   				echo "STOP $firefox" >&2
+	   				pkill -STOP -P $firefox
+	   				kill -STOP $firefox
+	   			fi
+	   		done
+	*/"github.com/UNO-SOFT/cli"
 )
 
-/*
-#!/bin/sh
-firefox=
-
-	swaymsg -m -t subscribe '["window"]' | \
-		jq -r --unbuffered '.change +" "+  .container.app_id + " " + (.container.pid | tostring)' | \
-		grep --line-buffered '^focus ' | \
-		while read -r x app pid; do
-			#echo "# x=$x app=$app pid=$pid" >&2
-			if [ "$app" = 'firefox' ]; then
-				echo "CONT $pid" >&2
-				firefox=$pid
-				kill -CONT $pid
-				pkill -CONT -P $pid
-			elif [ -n "$firefox" ]; then
-				echo "STOP $firefox" >&2
-				pkill -STOP -P $firefox
-				kill -STOP $firefox
-			fi
-		done
-*/
 func main() {
 	if err := Main(); err != nil {
 		log.SetOutput(os.Stderr)
@@ -72,23 +73,23 @@ func Main() error {
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		return cmd.Run()
 	}
-	startCmd := ff.Command{Name: "start",
-		Exec: func(ctx context.Context, args []string) error {
+	startCmd := cli.Command{Name: "start",
+		Exec: func(ctx context.Context, state *cli.State) error {
 			return systemctl(ctx, "restart")
 		},
 	}
-	stopCmd := ff.Command{Name: "stop",
-		Exec: func(ctx context.Context, args []string) error {
+	stopCmd := cli.Command{Name: "stop",
+		Exec: func(ctx context.Context, state *cli.State) error {
 			return systemctl(ctx, "stop")
 		},
 	}
-	statusCmd := ff.Command{Name: "status",
-		Exec: func(ctx context.Context, args []string) error {
+	statusCmd := cli.Command{Name: "status",
+		Exec: func(ctx context.Context, state *cli.State) error {
 			return systemctl(ctx, "status", "--no-pager", "-l")
 		},
 	}
-	installCmd := ff.Command{Name: "install",
-		Exec: func(ctx context.Context, args []string) error {
+	installCmd := cli.Command{Name: "install",
+		Exec: func(ctx context.Context, state *cli.State) error {
 			executable, err := os.Executable()
 			if err != nil {
 				return err
@@ -154,10 +155,10 @@ WantedBy=graphical-session.target`),
 		return client, pids, nil
 	}
 
-	FS := ff.NewFlagSet("signal")
-	flagSignal := FS.Bool('S', "stop", "stop (or wake)")
-	signalCmd := ff.Command{Name: "signal", Flags: FS,
-		Exec: func(ctx context.Context, args []string) error {
+	FS := flag.NewFlagSet("signal", flag.ContinueOnError)
+	flagSignal := FS.Bool("stop", false, "stop (or wake)")
+	signalCmd := cli.Command{Name: "signal", Flags: FS,
+		Exec: func(ctx context.Context, state *cli.State) error {
 			client, pids, err := getClient(ctx)
 			if err != nil {
 				return err
@@ -171,20 +172,20 @@ WantedBy=graphical-session.target`),
 				kill(pid, *flagSignal, 999)
 			}
 			return nil
-		},
+		}, FlagConfigs: []cli.FlagConfig{cli.FlagConfig{Name: "stop", Short: "S"}},
 	}
 
-	FS = ff.NewFlagSet("app")
-	flagTimeout := FS.Duration('t', "timeput", 10*time.Second, "timeout for stop")
-	FS.StringVar(&prog, 'p', "prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
-	flagStopDepth := FS.Int(0, "stop-depth", 1, "STOP depth of child tree")
-	flagAC := FS.String(0, "ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
+	FS = flag.NewFlagSet("app", flag.ContinueOnError)
+	flagTimeout := FS.Duration("timeput", 10*time.Second, "timeout for stop")
+	FS.StringVar(&prog, "prog", "^(firefox(-esr)?|[lL]ibre[Ww]olf|vivaldi(-stable)?|[Jj]oplin)$", "name of the program, as regexp")
+	flagStopDepth := FS.Int("stop-depth", 1, "STOP depth of child tree")
+	flagAC := FS.String("ac", "/sys/class/power_supply/AC/online", "check AC (non-battery) here")
 	// flagCgroup := FS.String(0, "cgroup", "", "cgroup name - e.g. /user.slice/user-1000.slice/user@1000.service/app.slice/librewolf.service")
-	flagVerbose := FS.Bool('v', "verbose", "verbose logging")
+	flagVerbose := FS.Bool("verbose", false, "verbose logging")
 
-	app := ff.Command{Name: "tamefox", Flags: FS,
-		Subcommands: []*ff.Command{&startCmd, &stopCmd, &installCmd, &statusCmd, &signalCmd},
-		Exec: func(ctx context.Context, args []string) error {
+	app := cli.Command{Name: "tamefox", Flags: FS,
+		SubCommands: []*cli.Command{&startCmd, &stopCmd, &installCmd, &statusCmd, &signalCmd},
+		Exec: func(ctx context.Context, state *cli.State) error {
 			var (
 				onACmu sync.Mutex
 				onACb  bool
@@ -349,12 +350,12 @@ WantedBy=graphical-session.target`),
 				}
 			})
 			return grp.Wait()
-		},
+		}, FlagConfigs: []cli.FlagConfig{cli.FlagConfig{Name: "timeput", Short: "t"}, cli.FlagConfig{Name: "prog", Short: "p"}, cli.FlagConfig{Name: "verbose", Short: "v"}},
 	}
 
-	if err := app.Parse(os.Args[1:]); err != nil {
-		ffhelp.Command(&app).WriteTo(os.Stderr)
-		if errors.Is(err, ff.ErrHelp) {
+	if err := cli.Parse(&app, os.Args[1:]); err != nil {
+		cli.PrintHelp(os.Stderr, &app)
+		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
@@ -381,7 +382,7 @@ WantedBy=graphical-session.target`),
 	ctx, cancel := globalctx.Wrap(context.Background())
 	defer cancel()
 
-	return app.Run(ctx)
+	return cli.Run(ctx, &app, nil)
 }
 
 type Change struct {

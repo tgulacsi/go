@@ -3,6 +3,7 @@ module github.com/tgulacsi/go
 require (
 	codeberg.org/go-pdf/fpdf v0.11.0
 	github.com/BurntSushi/toml v1.2.1
+	github.com/UNO-SOFT/cli v0.0.0-20261009074406-95b18dbd4953
 	github.com/UNO-SOFT/zlog v0.8.6
 	github.com/clipperhouse/uax29 v1.14.0
 	github.com/dgraph-io/badger/v2 v2.2007.4
@@ -26,8 +27,6 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/outcaste-io/badger/v3 v3.2202.0
 	github.com/pdfcpu/pdfcpu v0.12.1
-	github.com/peterbourgon/ff/v3 v3.4.0
-	github.com/peterbourgon/ff/v4 v4.0.0-beta.1
 	github.com/rogpeppe/retry v0.1.0
 	github.com/rs/zerolog v1.31.0
 	github.com/sloonz/go-qprintable v0.0.0-20210417175225-715103f9e6eb
@@ -84,7 +83,6 @@ require (
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
@@ -115,7 +113,7 @@ require (
 	modernc.org/zappy v1.0.6 // indirect
 )
 
-go 1.27
+go 1.27.0
 
 tool (
 	codeberg.org/go-pdf/fpdf/makefont

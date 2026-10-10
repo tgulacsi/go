@@ -18,9 +18,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/peterbourgon/ff/v3/ffcli"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/UNO-SOFT/cli"
 	"github.com/tgulacsi/go/vcf-maildir-addrs/mailaddr"
 	"github.com/tgulacsi/go/vcf-maildir-addrs/vcf"
 )
@@ -37,8 +37,8 @@ func Main() error {
 	flagContacts := FS.String("contacts", "~/.contacts", "contacts dir")
 	flagConcurrency := FS.Int("concurrency", 8, "concurrency")
 	flagMail := FS.String("maildir", "~/mail", "mail dir")
-	app := ffcli.Command{Name: "vcf-maildir-addrs", FlagSet: FS,
-		Exec: func(ctx context.Context, args []string) error {
+	app := cli.Command{Name: "vcf-maildir-addrs", Flags: FS,
+		Exec: func(ctx context.Context, state *cli.State) error {
 			grp, grpCtx := errgroup.WithContext(ctx)
 			if *flagConcurrency <= 0 {
 				*flagConcurrency = 8
@@ -153,5 +153,5 @@ func Main() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	return app.ParseAndRun(ctx, os.Args[1:])
+	return cli.ParseAndRun(ctx, &app, os.Args[1:], nil)
 }

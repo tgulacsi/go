@@ -15,11 +15,11 @@ import (
 	"os"
 	"os/signal"
 
-	"encoding/json/v2"
 	"encoding/json/jsontext"
-	"github.com/peterbourgon/ff/v4"
-	"github.com/peterbourgon/ff/v4/ffhelp"
+	"encoding/json/v2"
 
+	"flag"
+	"github.com/UNO-SOFT/cli"
 	"github.com/tgulacsi/go/journal"
 )
 
@@ -30,11 +30,11 @@ func main() {
 }
 
 func Main() error {
-	flags := ff.NewFlagSet("journal-conv")
-	flagFrom := flags.StringEnum('f', "from", "input format", "export", "json")
-	flagTo := flags.StringEnum('t', "to", "output format", "json", "export")
-	app := ff.Command{Name: "journal-conv", Flags: flags,
-		Exec: func(ctx context.Context, args []string) error {
+	flags := flag.NewFlagSet("journal-conv", flag.ContinueOnError)
+	flagFrom := flags.String("from", "export", "input format")
+	flagTo := flags.String("to", "json", "output format")
+	app := cli.Command{Name: "journal-conv", Flags: flags,
+		Exec: func(ctx context.Context, state *cli.State) error {
 			var inp iter.Seq2[journal.Record, error]
 			switch *flagFrom {
 			case "export":
@@ -81,16 +81,16 @@ func Main() error {
 				}
 			}
 			return bw.Flush()
-		},
+		}, FlagConfigs: []cli.FlagConfig{cli.FlagConfig{Name: "from", Short: "f"}, cli.FlagConfig{Name: "to", Short: "t"}},
 	}
-	if err := app.Parse(os.Args[1:]); err != nil {
-		if errors.Is(err, ff.ErrHelp) {
-			ffhelp.Command(&app).WriteTo(os.Stderr)
+	if err := cli.Parse(&app, os.Args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			cli.PrintHelp(os.Stderr, &app)
 			return nil
 		}
 		return err
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	return app.Run(ctx)
+	return cli.Run(ctx, &app, nil)
 }

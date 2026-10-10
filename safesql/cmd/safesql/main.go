@@ -19,11 +19,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/peterbourgon/ff/v4"
-	"github.com/peterbourgon/ff/v4/ffhelp"
-
 	"github.com/tgulacsi/go/safesql/inspectsql"
 
+	"flag"
+	"github.com/UNO-SOFT/cli"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/checker"
 	"golang.org/x/tools/go/analysis/singlechecker"
@@ -38,10 +37,11 @@ func main() {
 }
 
 func Main() error {
-	flags := ff.NewFlagSet("collect")
-	flagCollectExecute := flags.StringLong("exec", "", "execute this JSON array with the SQL as {} argument, or stdin if not {} has given")
-	collectCmd := ff.Command{Name: "collect", Flags: flags,
-		Exec: func(ctx context.Context, args []string) error {
+	flags := flag.NewFlagSet("collect", flag.ContinueOnError)
+	flagCollectExecute := flags.String("exec", "", "execute this JSON array with the SQL as {} argument, or stdin if not {} has given")
+	collectCmd := cli.Command{Name: "collect", Flags: flags,
+		Exec: func(ctx context.Context, state *cli.State) error {
+			args := state.Args
 			initial, err := packages.Load(&packages.Config{
 				Mode: packages.LoadAllSyntax,
 			}, args...)
@@ -121,20 +121,21 @@ func Main() error {
 			return errors.Join(errs...)
 		},
 	}
-	inspectCmd := ff.Command{Name: "inspect",
-		Exec: func(ctx context.Context, args []string) error {
+	inspectCmd := cli.Command{Name: "inspect",
+		Exec: func(ctx context.Context, state *cli.State) error {
+			args := state.Args
 			copy(os.Args[1:], args)
 			singlechecker.Main(inspectsql.Analyzer)
 			return nil
 		},
 	}
 
-	app := ff.Command{Name: "safesql", Subcommands: []*ff.Command{
+	app := cli.Command{Name: "safesql", SubCommands: []*cli.Command{
 		&collectCmd, &inspectCmd,
 	}}
-	if err := app.Parse(os.Args[1:]); err != nil {
-		if errors.Is(err, ff.ErrHelp) {
-			ffhelp.Command(&app).WriteTo(os.Stderr)
+	if err := cli.Parse(&app, os.Args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			cli.PrintHelp(os.Stderr, &app)
 			return nil
 		}
 		return err
@@ -143,5 +144,5 @@ func Main() error {
 	os.Args = os.Args[:len(os.Args)-1]
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	return app.Run(ctx)
+	return cli.Run(ctx, &app, nil)
 }
