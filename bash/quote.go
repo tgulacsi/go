@@ -6,20 +6,26 @@ package bash
 
 import (
 	"bufio"
+	// "fmt"
 	"io"
 	"strings"
 )
 
 func Unquote(s string) string {
+	// fmt.Printf("Unqote(%q)\n", s)
 	if len(s) < 2 {
 		return s
 	} else if s[0] == '\'' && s[len(s)-1] == s[0] {
 		return s[1 : len(s)-1]
+	} else if !(s[0] == '"' && s[len(s)-1] == s[0]) {
+		// fmt.Printf("SKIP[%c%c] %q\n", s[0], s[len(s)-1], s)
+		return s
 	}
 	s = s[1 : len(s)-1]
 	var b strings.Builder
 	b.Grow(len(s))
 
+	// fmt.Println("Unqote", s)
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' && i+1 < len(s) {
 			switch s[i+1] {
@@ -48,12 +54,30 @@ func Quote(s string) string {
 	return b.String()
 }
 
-func QuoteWrite(w io.Writer, s string) error {
+func QuoteWrite(w io.Writer, ss ...string) error {
+	var n int
+	for _, s := range ss {
+		n += 1 + len(s) + 2
+	}
+	bw := bufio.NewWriterSize(w, n)
+	for i, s := range ss {
+		if i != 0 {
+			if err := bw.WriteByte(' '); err != nil {
+				return err
+			}
+		}
+		if err := quoteWriteOne(bw, s); err != nil {
+			return err
+		}
+	}
+	return bw.Flush()
+}
+
+func quoteWriteOne(bw *bufio.Writer, s string) error {
 	if !strings.ContainsAny(s, "\\ \"$`") {
-		_, err := io.WriteString(w, s)
+		_, err := bw.WriteString(s)
 		return err
 	}
-	bw := bufio.NewWriterSize(w, len(s)+2)
 	if err := bw.WriteByte('"'); err != nil {
 		return err
 	}
@@ -73,11 +97,6 @@ func QuoteWrite(w io.Writer, s string) error {
 
 func QuotePrint(ss []string) string {
 	var b strings.Builder
-	for i, s := range ss {
-		if i != 0 {
-			b.WriteByte(' ')
-		}
-		QuoteWrite(&b, s)
-	}
+	_ = QuoteWrite(&b, ss...)
 	return b.String()
 }

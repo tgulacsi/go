@@ -22,7 +22,7 @@ require (
 	github.com/joshuarubin/go-sway v1.2.0
 	github.com/klauspost/compress v1.18.5
 	github.com/kylelemons/godebug v1.1.0
-	github.com/oklog/ulid/v2 v2.1.1
+	github.com/oklog/ulid/v2 v2.1.2
 	github.com/opentracing/basictracer-go v1.1.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/outcaste-io/badger/v3 v3.2202.0
@@ -42,7 +42,7 @@ require (
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
 	golang.org/x/text v0.42.0
-	golang.org/x/time v0.5.0
+	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.51.0
 	perkeep.org v0.0.0-20230124163929-44b1dbe0f64f
 	software.sslmate.com/src/go-pkcs12 v0.7.1
@@ -51,6 +51,7 @@ require (
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/KimMachineGun/automemlimit v0.7.5 // indirect
+	github.com/UNO-SOFT/go-boma-soap v0.0.8 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
