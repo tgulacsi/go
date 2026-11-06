@@ -11,16 +11,35 @@ import (
 	"strings"
 )
 
+// Unquote a bash-quoted string
 func Unquote(s string) string {
-	// fmt.Printf("Unqote(%q)\n", s)
 	if len(s) < 2 {
 		return s
 	} else if s[0] == '\'' && s[len(s)-1] == s[0] {
 		return s[1 : len(s)-1]
 	} else if !(s[0] == '"' && s[len(s)-1] == s[0]) {
 		// fmt.Printf("SKIP[%c%c] %q\n", s[0], s[len(s)-1], s)
-		return s
+
+		// Remove matched single-quote pairs
+		if strings.IndexByte(s, '\'') < 0 {
+			return s
+		}
+		var b strings.Builder
+		b.Grow(len(s))
+		for i := 0; i < len(s); i++ {
+			if s[i] == '\'' {
+				if j := strings.IndexByte(s[i+1:], '\''); j >= 0 {
+					b.WriteString(s[i+1 : i+1+j])
+					i += j + 1
+					continue
+				}
+			}
+			b.WriteByte(s[i])
+		}
+
+		return b.String()
 	}
+
 	s = s[1 : len(s)-1]
 	var b strings.Builder
 	b.Grow(len(s))
@@ -44,6 +63,7 @@ func Unquote(s string) string {
 	return b.String()
 }
 
+// Quote a string to be bash-safe.
 func Quote(s string) string {
 	if !strings.ContainsAny(s, "\\ \"$`") {
 		return s
@@ -54,6 +74,7 @@ func Quote(s string) string {
 	return b.String()
 }
 
+// QuoteWrite the words into the writer.
 func QuoteWrite(w io.Writer, ss ...string) error {
 	var n int
 	for _, s := range ss {
@@ -71,6 +92,13 @@ func QuoteWrite(w io.Writer, ss ...string) error {
 		}
 	}
 	return bw.Flush()
+}
+
+// QuotePrint the words into a string.
+func QuotePrint(ss []string) string {
+	var b strings.Builder
+	_ = QuoteWrite(&b, ss...)
+	return b.String()
 }
 
 func quoteWriteOne(bw *bufio.Writer, s string) error {
@@ -93,10 +121,4 @@ func quoteWriteOne(bw *bufio.Writer, s string) error {
 		}
 	}
 	return bw.WriteByte('"')
-}
-
-func QuotePrint(ss []string) string {
-	var b strings.Builder
-	_ = QuoteWrite(&b, ss...)
-	return b.String()
 }

@@ -28,11 +28,16 @@ func TestQuote(t *testing.T) {
 	}
 
 	for in, out := range map[string]string{
-		"a":          "a",
-		"a b":        "a b",
-		"'c'":        "c",
-		`"a"`:        `a`,
-		`"a b \" c"`: "a b \" c",
+		"a":              "a",
+		"a b":            "a b",
+		"'c'":            "c",
+		`"a"`:            `a`,
+		`"a b \" c"`:     "a b \" c",
+		`abc'123'`:       "abc123",
+		`"abc'123"`:      "abc'123",
+		`"abc\$HOME"`:    `abc$HOME`,
+		`abc'12'3'45'`:   "abc12345",
+		`"abc'12'3'45'"`: `abc'12'3'45'`,
 	} {
 		if got, want := bash.Unquote(in), out; got != want {
 			t.Errorf("unquote %q: got %q, wanted %q", in, got, want)
