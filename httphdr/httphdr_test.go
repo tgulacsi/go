@@ -1,35 +1,22 @@
-/*
-copyright 2017 tamás gulácsi
-
-licensed under the apache license, version 2.0 (the "license");
-you may not use this file except in compliance with the license.
-you may obtain a copy of the license at
-
-     http://www.apache.org/licenses/license-2.0
-
-unless required by applicable law or agreed to in writing, software
-distributed under the license is distributed on an "as is" basis,
-without warranties or conditions of any kind, either express or implied.
-see the license for the specific language governing permissions and
-limitations under the license.
-*/
+//  Copyright 2017, 2026 Tamás Gulácsi
+//
+// SPDX-License-Identifier: AGPL-3.0
 
 package httphdr
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestAccept(t *testing.T) {
-	a := Accept([]KeyVal{
-		{"application/pdf", "pdf"},
-		{"application/zip", "zip"},
-		{"{*/pdf", "pdf*"},
-	})
-	for k, want := range map[string]string{
-		"application/pdf": "pdf",
-		"application/zip": "zip",
+	a := Accept([]string{"application/pdf", "application/zip", "{*/pdf"})
+	for k, want := range map[string]int{
+		"application/pdf": 0,
+		"application/zip": 1,
 	} {
+		t.Log(k+":", parseMediaRanges(k))
 		if got := a.Match(k); got != want {
-			t.Errorf("%q got %q, wanted %q.", k, got, want)
+			t.Errorf("%q got %d, wanted %d.", k, got, want)
 		}
 	}
 }

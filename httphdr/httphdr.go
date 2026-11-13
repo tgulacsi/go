@@ -1,18 +1,6 @@
-/*
-copyright 2017 tamás gulácsi
-
-licensed under the apache license, version 2.0 (the "license");
-you may not use this file except in compliance with the license.
-you may obtain a copy of the license at
-
-     http://www.apache.org/licenses/license-2.0
-
-unless required by applicable law or agreed to in writing, software
-distributed under the license is distributed on an "as is" basis,
-without warranties or conditions of any kind, either express or implied.
-see the license for the specific language governing permissions and
-limitations under the license.
-*/
+//  Copyright 2017, 2026 Tamás Gulácsi
+//
+// SPDX-License-Identifier: AGPL-3.0
 
 // Package httphdr provides some support for HTTP headers.
 package httphdr
@@ -20,10 +8,12 @@ package httphdr
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -58,21 +48,17 @@ func ContentDisposition(dispType string, filename string) string {
 	return b.String()
 }
 
-type Accept []KeyVal
-type KeyVal struct {
-	Val any
-	Key string
-}
+type Accept []string
 
-// Match the given Accept header.
+// Match the given Accept header, returning the matching index.
 //
 // Parts of the code is copied from github.com/jchannon/negotiator.
-func (A Accept) Match(accept string) any {
+func (A Accept) Match(accept string) int {
 	if len(A) == 0 {
-		return nil
+		return -1
 	}
 	if accept == "" {
-		return A[0].Val
+		return 0
 	}
 
 	for _, mr := range parseMediaRanges(accept) {
@@ -81,17 +67,18 @@ func (A Accept) Match(accept string) any {
 		}
 
 		if strings.EqualFold(mr.Value, "*/*") {
-			return A[0].Val
+			return 0
 		}
 
-		for _, pair := range A {
-			if doesMatch(mr.Value, pair.Key) {
-				return pair.Val
+		for i, s := range A {
+			if doesMatch(s, mr.Value) {
+				return i
 			}
 		}
 	}
-	return nil
+	return -1
 }
+
 func split(x string) (a, b string) {
 	a, b = x, "*"
 	if i := strings.IndexByte(x, '/'); i >= 0 {
