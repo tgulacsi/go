@@ -215,3 +215,15 @@ func RedactPassw(s string) string {
 	}
 	return s
 }
+
+// ParseRetryAfter parses Retry-After header according to RFC9110
+//
+// https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after
+func ParseRetryAfter(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if i, err := strconv.ParseInt(s, 10, 32); err == nil {
+		return time.Now().Add(time.Duration(i) * time.Second)
+	}
+	t, _ := http.ParseTime(s)
+	return t
+}
