@@ -1,208 +1,148 @@
-// Copyright 2026 Tamás Gulácsi.
-//
-// SPDX-License-Identifier: AGPL-3.0
-
 package sieve
 
 import (
-	"errors"
 	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 )
 
-func TestSIEVESecondChance(t *testing.T) {
-	loads := map[string]int{}
-	c := New(3, func(k string) (string, error) {
-		loads[k]++
-		return k, nil
-	}, nil)
-	getAndRelease := func(key string) {
-		t.Helper()
-		l, err := c.Acquire(key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := l.Release(); err != nil {
-			t.Fatal(err)
-		}
+func TestBasicGetPut(t *testing.T) {
+	c := New[string, int](2)
+	if v, ok := c.Get("missing"); ok || v != 0 {
+		t.Fatalf("missing key: got %d, %v", v, ok)
 	}
-
-	getAndRelease("A")
-	getAndRelease("B")
-	getAndRelease("C")
-	getAndRelease("A") // Give the oldest entry a second chance.
-	getAndRelease("D") // Should evict B instead of A.
-	getAndRelease("A")
-	if loads["A"] != 1 {
-		t.Fatalf("A was evicted despite visited bit: loads=%v", loads)
+	c.Put("a", 1)
+	c.Put("b", 2)
+	if v, ok := c.Get("a"); !ok || v != 1 {
+		t.Fatalf("Get(a) = %d, %v", v, ok)
 	}
-	getAndRelease("B")
-	if loads["B"] != 2 {
-		t.Fatalf("B should have been evicted: loads=%v", loads)
-	}
-	if c.Len() != 3 {
-		t.Fatalf("got %d entries, want 3", c.Len())
+	if n := c.Len(); n != 2 {
+		t.Fatalf("Len() = %d, want 2", n)
 	}
 }
 
-func TestFullReturnsImmediatelyButHitStillWorks(t *testing.T) {
-	var loads int
-	c := New(1, func(k int) (int, error) {
-		loads++
-		return k * 10, nil
-	}, nil)
-
-	held, err := c.Acquire(1)
-	if err != nil {
-		t.Fatal(err)
+func TestSieveRetainsVisitedOldest(t *testing.T) {
+	c := New[string, int](3)
+	c.Put("a", 1) // oldest
+	c.Put("b", 2)
+	c.Put("c", 3)
+	c.Get("a") // protect oldest without moving it
+	c.Put("d", 4)
+	if _, ok := c.Get("b"); ok {
+		t.Fatal("b should have been evicted")
 	}
-	if _, err := c.Acquire(2); !errors.Is(err, ErrFull) {
-		t.Fatalf("expected ErrFull, got %v", err)
+	if v, ok := c.Get("a"); !ok || v != 1 {
+		t.Fatal("visited oldest entry a should have survived")
 	}
-	if loads != 1 || c.Len() != 1 {
-		t.Fatalf("failed Acquire changed cache: loads=%d, len=%d", loads, c.Len())
+	if _, ok := c.Get("d"); !ok {
+		t.Fatal("new entry d should be cached")
 	}
-
-	duplicate, err := c.Acquire(1)
-	if err != nil || duplicate.Value != 10 {
-		t.Fatalf("acquiring existing pinned key: lease=%+v err=%v", duplicate, err)
-	}
-	_ = held.Release()
-	if _, err := c.Acquire(2); !errors.Is(err, ErrFull) {
-		t.Fatalf("expected ErrFull while duplicate lease is pinned, got %v", err)
-	}
-	_ = duplicate.Release()
-
-	next, err := c.Acquire(2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if next.Value != 20 {
-		t.Fatalf("value=%d, want 20", next.Value)
-	}
-	_ = next.Release()
 }
 
-func TestCloseDoesNotWaitAndDisposesOnLastRelease(t *testing.T) {
-	var disposedMu sync.Mutex
-	var disposed []int
-	c := New(2, func(k int) (int, error) { return k, nil }, func(v int) error {
-		disposedMu.Lock()
-		disposed = append(disposed, v)
-		disposedMu.Unlock()
-		return nil
-	})
-	held, _ := c.Acquire(1)
-	idle, _ := c.Acquire(2)
-	_ = idle.Release()
-
-	done := make(chan error, 1)
-	go func() { done <- c.Close() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
+func TestHandContinuesFromPreviousEviction(t *testing.T) {
+	c := New[string, int](3)
+	c.Put("a", 1)
+	c.Put("b", 2)
+	c.Put("c", 3)
+	c.Get("a")
+	c.Put("d", 4) // a visited -> b evicted; hand points at c
+	c.Put("e", 5) // c evicted, not a or d
+	if _, ok := c.Get("c"); ok {
+		t.Fatal("c should have been evicted by advancing hand")
+	}
+	for _, k := range []string{"a", "d", "e"} {
+		if _, ok := c.Get(k); !ok {
+			t.Fatalf("expected %s in cache", k)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Close waited for a pinned lease")
-	}
-	if _, err := c.Acquire(3); !errors.Is(err, ErrClosed) {
-		t.Fatalf("expected ErrClosed after Close, got %v", err)
-	}
-
-	disposedMu.Lock()
-	if len(disposed) != 1 || disposed[0] != 2 {
-		t.Fatalf("idle value not disposed: %v", disposed)
-	}
-	disposedMu.Unlock()
-
-	if err := held.Release(); err != nil {
-		t.Fatal(err)
-	}
-	if err := held.Release(); err != nil {
-		t.Fatal(err)
-	}
-	disposedMu.Lock()
-	if len(disposed) != 2 || disposed[1] != 1 {
-		t.Fatalf("pinned value not disposed on last release: %v", disposed)
-	}
-	disposedMu.Unlock()
-	if c.Len() != 0 {
-		t.Fatalf("closed cache has %d entries", c.Len())
 	}
 }
 
-func TestConcurrentSameKeyLoadsOnce(t *testing.T) {
-	var loads atomic.Int64
-	c := New(2, func(k int) (int, error) {
-		loads.Add(1)
-		return k * 2, nil
-	}, nil)
-	const n = 50
+func TestAllVisitedAndWrap(t *testing.T) {
+	c := New[int, string](2)
+	c.Put(1, "a")
+	c.Put(2, "b")
+	c.Get(1)
+	c.Get(2)
+	c.Put(3, "c") // clears both bits, then wraps and evicts 1
+	if _, ok := c.Get(1); ok {
+		t.Fatal("1 should be evicted after the hand wraps")
+	}
+	if _, ok := c.Get(2); !ok {
+		t.Fatal("2 should remain")
+	}
+	if _, ok := c.Get(3); !ok {
+		t.Fatal("3 should remain")
+	}
+}
+
+func TestUpdateAndCapacityOne(t *testing.T) {
+	c := New[string, string](2)
+	c.Put("a", "old")
+	c.Put("b", "b")
+	c.Put("a", "new") // treat update as a visit; no duplicate or reordering
+	if c.Len() != 2 {
+		t.Fatal("update increased cache length")
+	}
+	c.Put("c", "c") // b is the oldest unvisited entry
+	if _, ok := c.Get("b"); ok {
+		t.Fatal("b should have been evicted")
+	}
+	if v, ok := c.Get("a"); !ok || v != "new" {
+		t.Fatalf("Get(a) = %q, %v", v, ok)
+	}
+
+	one := New[int, int](1)
+	one.Put(1, 10)
+	one.Get(1)
+	one.Put(2, 20)
+	if one.Len() != 1 {
+		t.Fatal("capacity one exceeded")
+	}
+	if _, ok := one.Get(1); ok {
+		t.Fatal("old entry not evicted")
+	}
+}
+
+func TestGenericValueAndNil(t *testing.T) {
+	type key struct{ x, y int }
+	type val struct{ items []string }
+	c := New[key, *val](2)
+	k := key{1, 2}
+	c.Put(k, &val{items: []string{"x"}})
+	v, ok := c.Get(k)
+	if !ok || len(v.items) != 1 || v.items[0] != "x" {
+		t.Fatal("generic key/value mismatch")
+	}
+	c.Put(key{3, 4}, nil)
+	if v, ok := c.Get(key{3, 4}); !ok || v != nil {
+		t.Fatal("stored nil must differ from missing key")
+	}
+}
+
+func TestBadCapacityPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic")
+		}
+	}()
+	New[int, int](0)
+}
+
+func TestConcurrentUse(t *testing.T) {
+	c := New[int, int](16)
 	var wg sync.WaitGroup
-	for range n {
+	for worker := 0; worker < 8; worker++ {
 		wg.Add(1)
-		go func() {
+		go func(worker int) {
 			defer wg.Done()
-			l, err := c.Acquire(7)
-			if err != nil {
-				t.Error(err)
-				return
+			for i := 0; i < 1000; i++ {
+				k := (worker + i) % 64
+				c.Put(k, i)
+				c.Get((k + 1) % 64)
 			}
-			if l.Value != 14 {
-				t.Errorf("got %d", l.Value)
-			}
-			if err := l.Release(); err != nil {
-				t.Error(err)
-			}
-		}()
+		}(worker)
 	}
 	wg.Wait()
-	if loads.Load() != 1 {
-		t.Fatalf("loaded %d times, want 1", loads.Load())
-	}
-}
-
-func TestErrorsAndCloseErrorAccumulation(t *testing.T) {
-	loadErr := errors.New("load failed")
-	c := New(1, func(k string) (string, error) {
-		if k == "bad" {
-			return "", loadErr
-		}
-		return k, nil
-	}, nil)
-	if _, err := c.Acquire("bad"); !errors.Is(err, loadErr) {
-		t.Fatalf("got %v, want loader error", err)
-	}
-	if c.Len() != 0 {
-		t.Fatal("failed load should not be cached")
-	}
-
-	disposeErr := errors.New("dispose failed")
-	d := New(1, func(k int) (int, error) { return k, nil }, func(int) error { return disposeErr })
-	l, _ := d.Acquire(1)
-	if err := d.Close(); err != nil {
-		t.Fatalf("pinned value should not be disposed yet: %v", err)
-	}
-	if err := l.Release(); !errors.Is(err, disposeErr) {
-		t.Fatalf("got %v from Release, want dispose error", err)
-	}
-	if err := d.Close(); !errors.Is(err, disposeErr) {
-		t.Fatalf("second Close should report late dispose error; got %v", err)
-	}
-}
-
-func TestEvictionDisposalError(t *testing.T) {
-	disposeErr := errors.New("can't dispose")
-	c := New(1, func(k int) (int, error) { return k, nil }, func(int) error { return disposeErr })
-	l, _ := c.Acquire(1)
-	_ = l.Release()
-	if _, err := c.Acquire(2); !errors.Is(err, disposeErr) {
-		t.Fatalf("expected eviction error, got %v", err)
-	}
-	if c.Len() != 0 {
-		t.Fatalf("expected failed evicted entry to be removed, len=%d", c.Len())
+	if n := c.Len(); n != 16 {
+		t.Fatalf("Len() = %d, want 16", n)
 	}
 }

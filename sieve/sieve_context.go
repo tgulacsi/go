@@ -2,10 +2,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0
 
-// Package sieve implements a bounded, generic SIEVE resource cache.
-//
-// Values are acquired through leases: an acquired value remains valid until
-// its lease is released, even when other callers are filling the cache.
+// Package sieve provides a bounded, generic SIEVE cache for leased resources.
 package sieve
 
 import (
@@ -16,27 +13,67 @@ import (
 	"sync"
 )
 
-// LoaderContext constructs a value for a missing key. If it returns an error, it
-// must release any resources allocated before the error.
-type LoaderContext[K comparable, V any] func(context.Context, K) (V, error)
+var (
+	// ErrClosed means the cache has already been closed.
+	ErrClosed = errors.New("sieve: closed")
+	// ErrFull means every cached entry is currently pinned by a lease.
+	ErrFull = errors.New("sieve: all entries are in use")
+)
 
-// DisposerContext releases a value when evicted or when the cache is shut down.
-// It may be nil if values require no cleanup.
-type DisposerContext[V any] func(V) error
+type (
+	// LoaderContext constructs a value for a missing key. If it returns an error, it
+	// must release any resources allocated before the error.
+	LoaderContext[K comparable, V any] func(context.Context, K) (V, error)
 
-// CacheContext is a bounded SIEVE cache. New entries go to the front; hits only
-// mark an entry as visited. Acquired entries cannot be evicted.
-type CacheContext[K comparable, V any] struct {
-	mu       sync.Mutex
-	entries  map[K]*entry[K, V]
-	queue    list.List
-	hand     *list.Element
-	capacity int
-	load     LoaderContext[K, V]
-	dispose  DisposerContext[V]
-	changed  chan struct{}
-	closing  bool
-	closeErr error
+	// DisposerContext releases a value when evicted or when the cache is shut down.
+	// It may be nil if values require no cleanup.
+	DisposerContext[V any] func(V) error
+
+	// CacheContext is a bounded SIEVE cache. New entries go to the front; hits only
+	// mark an entry as visited. Acquired entries cannot be evicted.
+	CacheContext[K comparable, V any] struct {
+		mu       sync.Mutex
+		entries  map[K]*entryContext[K, V]
+		queue    list.List
+		hand     *list.Element
+		capacity int
+		load     LoaderContext[K, V]
+		dispose  DisposerContext[V]
+		changed  chan struct{}
+		closing  bool
+		closeErr error
+	}
+
+	entryContext[K comparable, V any] struct {
+		key     K
+		value   V
+		refs    int
+		visited bool
+		node    *list.Element
+	}
+
+	// Lease pins Value until Release. Do not use Value after Release, or copy a
+	// Lease after first use. Release is safe to call more than once.
+	Lease[K comparable, V any] struct {
+		Value V
+		cache leaseReleaser[K, V]
+		entry *entryContext[K, V]
+		once  sync.Once
+		err   error
+	}
+
+	leaseReleaser[K comparable, V any] interface {
+		releaseLease(e *entryContext[K, V]) error
+	}
+)
+
+// Release drops a pin. After Close, the last Release also disposes the value.
+// It returns any disposal error associated with this final release.
+func (l *Lease[K, V]) Release() error {
+	l.once.Do(func() {
+		l.err = l.cache.releaseLease(l.entry)
+	})
+	return l.err
 }
 
 // NewContext creates a cache with room for capacity values.
@@ -50,7 +87,7 @@ func NewContext[K comparable, V any](capacity int, load LoaderContext[K, V], dis
 		panic("sieve: loader must not be nil")
 	}
 	return &CacheContext[K, V]{
-		entries:  make(map[K]*entry[K, V]),
+		entries:  make(map[K]*entryContext[K, V]),
 		capacity: capacity,
 		load:     load,
 		dispose:  dispose,
@@ -65,7 +102,7 @@ func (c *CacheContext[K, V]) signalLocked() {
 
 // victimLocked finds an unpinned, unvisited entry, giving a second chance
 // to visited entries. Two sweeps suffice even if all candidates were visited.
-func (c *CacheContext[K, V]) victimLocked() *entry[K, V] {
+func (c *CacheContext[K, V]) victimLocked() *entryContext[K, V] {
 	n := c.queue.Len()
 	for scanned := 0; scanned < 2*n; scanned++ {
 		if c.hand == nil {
@@ -73,7 +110,7 @@ func (c *CacheContext[K, V]) victimLocked() *entry[K, V] {
 		}
 		node := c.hand
 		c.hand = node.Prev()
-		e := node.Value.(*entry[K, V])
+		e := node.Value.(*entryContext[K, V])
 		if e.refs != 0 {
 			continue
 		}
@@ -138,7 +175,7 @@ func (c *CacheContext[K, V]) Acquire(ctx context.Context, key K) (*Lease[K, V], 
 			c.mu.Unlock()
 			return nil, err
 		}
-		e := &entry[K, V]{key: key, value: value, refs: 1}
+		e := &entryContext[K, V]{key: key, value: value, refs: 1}
 		e.node = c.queue.PushFront(e)
 		c.entries[key] = e
 		c.mu.Unlock()
@@ -146,7 +183,7 @@ func (c *CacheContext[K, V]) Acquire(ctx context.Context, key K) (*Lease[K, V], 
 	}
 }
 
-func (c *CacheContext[K, V]) releaseLease(e *entry[K, V]) error {
+func (c *CacheContext[K, V]) releaseLease(e *entryContext[K, V]) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

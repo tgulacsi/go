@@ -2,217 +2,112 @@
 //
 // SPDX-License-Identifier: AGPL-3.0
 
-// Package sieve provides a bounded, generic SIEVE cache for leased resources.
+// Package sieve implements a bounded, concurrency-safe key-value cache using
+// the SIEVE eviction policy.
 package sieve
 
 import (
 	"container/list"
-	"errors"
-	"fmt"
 	"sync"
-)
-
-var (
-	// ErrClosed means the cache has already been closed.
-	ErrClosed = errors.New("sieve: closed")
-	// ErrFull means every cached entry is currently pinned by a lease.
-	ErrFull = errors.New("sieve: all entries are in use")
 )
 
 type (
 
-	// Loader creates the value for a missing key. On failure, Loader must clean up
-	// any resources it allocated before returning the error.
-	Loader[K comparable, V any] func(K) (V, error)
-
-	// Disposer releases an evicted or closed value. It can be nil when values do
-	// not need explicit cleanup.
-	Disposer[V any] func(V) error
-
-	// Cache is a bounded SIEVE cache. Entries are inserted at the front of the
-	// queue, and hits only set the visited bit. A value with an active lease is
-	// never evicted. The zero value of Cache is not usable; call New.
-	//
-	// Cache misses never wait for an occupied slot: if no entry can be evicted,
-	// Acquire returns ErrFull immediately.
+	// Cache stores up to capacity key-value pairs. Get and Put are safe to call
+	// concurrently. Entries are ordered by insertion, not by last access.
 	Cache[K comparable, V any] struct {
 		mu       sync.Mutex
-		entries  map[K]*entry[K, V]
-		queue    list.List
-		hand     *list.Element
 		capacity int
-		load     Loader[K, V]
-		dispose  Disposer[V]
-		closed   bool
-		closeErr error
+		entries  map[K]*list.Element
+		order    list.List // Front: newest; Back: oldest.
+		hand     *list.Element
 	}
 
 	entry[K comparable, V any] struct {
 		key     K
 		value   V
-		refs    int
 		visited bool
-		node    *list.Element
-	}
-
-	// Lease pins Value until Release. Do not use Value after Release, or copy a
-	// Lease after first use. Release is safe to call more than once.
-	Lease[K comparable, V any] struct {
-		Value V
-		cache leaseReleaser[K, V]
-		entry *entry[K, V]
-		once  sync.Once
-		err   error
-	}
-
-	leaseReleaser[K comparable, V any] interface {
-		releaseLease(e *entry[K, V]) error
 	}
 )
 
-// New creates a cache holding at most capacity values.
-//
-// load and dispose are called while the cache mutex is held, preventing
-// duplicate loads. They must not call back into this cache. Although Acquire
-// never waits for a free slot, normal mutex contention and slow callbacks can
-// still delay calls.
-func New[K comparable, V any](capacity int, load Loader[K, V], dispose Disposer[V]) *Cache[K, V] {
-	if capacity <= 0 {
+// New creates a SIEVE cache with a fixed, positive capacity.
+// New panics if capacity is less than 1.
+func New[K comparable, V any](capacity int) *Cache[K, V] {
+	if capacity < 1 {
 		panic("sieve: capacity must be positive")
 	}
-	if load == nil {
-		panic("sieve: loader must not be nil")
-	}
 	return &Cache[K, V]{
-		entries:  make(map[K]*entry[K, V]),
 		capacity: capacity,
-		load:     load,
-		dispose:  dispose,
+		entries:  make(map[K]*list.Element, capacity),
 	}
 }
 
-// victimLocked finds the next unpinned entry whose visited bit is clear,
-// giving visited entries a second chance by resetting that bit. Two full
-// scans are sufficient unless all entries are pinned.
-func (c *Cache[K, V]) victimLocked() *entry[K, V] {
-	n := c.queue.Len()
-	for scanned := 0; scanned < 2*n; scanned++ {
-		if c.hand == nil {
-			c.hand = c.queue.Back()
-		}
-		node := c.hand
-		c.hand = node.Prev()
-		e := node.Value.(*entry[K, V])
-		if e.refs != 0 {
-			continue
-		}
-		if e.visited {
-			e.visited = false
-			continue
-		}
-		return e
-	}
-	return nil
-}
-
-func (c *Cache[K, V]) disposeLocked(value V) error {
-	if c.dispose == nil {
-		return nil
-	}
-	return c.dispose(value)
-}
-
-// Acquire returns a lease on the given key. On a miss, an unpinned entry is
-// evicted if necessary. If the cache is full and all entries are pinned, it
-// returns ErrFull immediately instead of waiting for Release.
-//
-// The loader runs under the cache lock; it is called once per cache miss.
-func (c *Cache[K, V]) Acquire(key K) (*Lease[K, V], error) {
+// Get returns the value associated with key, and whether it was found.
+// A hit marks the entry visited but does not change its position.
+func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.closed {
-		return nil, ErrClosed
-	}
-	if e := c.entries[key]; e != nil {
-		e.refs++
+	if elem, ok := c.entries[key]; ok {
+		e := elem.Value.(*entry[K, V])
 		e.visited = true
-		return &Lease[K, V]{Value: e.value, cache: c, entry: e}, nil
+		return e.value, true
+	}
+	var zero V
+	return zero, false
+}
+
+// Put inserts or updates a key-value pair.
+// An update marks the existing entry visited without changing its position.
+// Inserting a new key into a full cache evicts one entry using SIEVE.
+func (c *Cache[K, V]) Put(key K, value V) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if elem, ok := c.entries[key]; ok {
+		e := elem.Value.(*entry[K, V])
+		e.value = value
+		e.visited = true
+		return
 	}
 
 	if len(c.entries) == c.capacity {
-		victim := c.victimLocked()
-		if victim == nil {
-			return nil, ErrFull
-		}
-		delete(c.entries, victim.key)
-		c.queue.Remove(victim.node)
-		if err := c.disposeLocked(victim.value); err != nil {
-			return nil, fmt.Errorf("sieve: evict: %w", err)
-		}
+		c.evict()
 	}
 
-	value, err := c.load(key)
-	if err != nil {
-		return nil, err
-	}
-	e := &entry[K, V]{key: key, value: value, refs: 1}
-	e.node = c.queue.PushFront(e)
-	c.entries[key] = e
-	return &Lease[K, V]{Value: value, cache: c, entry: e}, nil
+	elem := c.order.PushFront(&entry[K, V]{key: key, value: value})
+	c.entries[key] = elem
 }
 
-// Release drops a pin. After Close, the last Release also disposes the value.
-// It returns any disposal error associated with this final release.
-func (l *Lease[K, V]) Release() error {
-	l.once.Do(func() {
-		l.err = l.cache.releaseLease(l.entry)
-	})
-	return l.err
-}
-
-func (c *Cache[K, V]) releaseLease(e *entry[K, V]) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	e.refs--
-	if e.refs != 0 || !c.closed {
-		return nil
-	}
-	delete(c.entries, e.key)
-	c.queue.Remove(e.node)
-	err := c.disposeLocked(e.value)
-	c.closeErr = errors.Join(c.closeErr, err)
-	return err
-}
-
-// Len returns the number of entries including pinned ones.
+// Len returns the current number of cached entries.
 func (c *Cache[K, V]) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.entries)
 }
 
-// Close closes the cache without waiting for active leases. Idle entries are
-// disposed immediately; pinned entries are disposed on their final Release.
-// Subsequent calls return accumulated disposal errors, including errors from
-// releases that happened after the first Close.
-func (c *Cache[K, V]) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return c.closeErr
+// evict removes the next unvisited entry, giving visited entries a second
+// chance. The caller must hold c.mu and the cache must not be empty.
+func (c *Cache[K, V]) evict() {
+	candidate := c.hand
+	if candidate == nil {
+		candidate = c.order.Back()
 	}
 
-	c.closed = true
-	c.hand = nil
-	for key, e := range c.entries {
-		if e.refs != 0 {
-			continue
+	for {
+		e := candidate.Value.(*entry[K, V])
+		if !e.visited {
+			// Prev moves toward the newer entries, i.e. toward the front.
+			// A nil hand means the next search starts at the oldest entry.
+			c.hand = candidate.Prev()
+			delete(c.entries, e.key)
+			c.order.Remove(candidate)
+			return
 		}
-		delete(c.entries, key)
-		c.queue.Remove(e.node)
-		c.closeErr = errors.Join(c.closeErr, c.disposeLocked(e.value))
+		e.visited = false
+		candidate = candidate.Prev()
+		if candidate == nil {
+			candidate = c.order.Back()
+		}
 	}
-	return c.closeErr
 }
