@@ -5,171 +5,148 @@
 package sieve
 
 import (
-	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestSIEVEOrder(t *testing.T) {
-	ctx := t.Context()
+func TestSIEVESecondChance(t *testing.T) {
 	loads := map[string]int{}
-	c := New(3, func(_ context.Context, k string) (string, error) { loads[k]++; return k, nil }, nil)
-	take := func(k string) {
+	c := New(3, func(k string) (string, error) {
+		loads[k]++
+		return k, nil
+	}, nil)
+	getAndRelease := func(key string) {
 		t.Helper()
-		lease, err := c.Acquire(ctx, k)
+		l, err := c.Acquire(key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := lease.Release(); err != nil {
+		if err := l.Release(); err != nil {
 			t.Fatal(err)
 		}
 	}
-	take("A")
-	take("B")
-	take("C")
-	take("A") // A visited, B and C unvisited
-	take("D") // Hand skips A and evicts B
-	take("A")
+
+	getAndRelease("A")
+	getAndRelease("B")
+	getAndRelease("C")
+	getAndRelease("A") // Give the oldest entry a second chance.
+	getAndRelease("D") // Should evict B instead of A.
+	getAndRelease("A")
 	if loads["A"] != 1 {
-		t.Fatalf("A unexpectedly evicted: %v", loads)
+		t.Fatalf("A was evicted despite visited bit: loads=%v", loads)
 	}
-	take("B")
+	getAndRelease("B")
 	if loads["B"] != 2 {
-		t.Fatalf("B not evicted: %v", loads)
+		t.Fatalf("B should have been evicted: loads=%v", loads)
 	}
 	if c.Len() != 3 {
-		t.Fatalf("size = %d", c.Len())
+		t.Fatalf("got %d entries, want 3", c.Len())
 	}
 }
 
-func TestPinWaitAndTimeout(t *testing.T) {
-	c := New(1, func(_ context.Context, k int) (int, error) { return k, nil }, nil)
-	held, err := c.Acquire(t.Context(), 1)
+func TestFullReturnsImmediatelyButHitStillWorks(t *testing.T) {
+	var loads int
+	c := New(1, func(k int) (int, error) {
+		loads++
+		return k * 10, nil
+	}, nil)
+
+	held, err := c.Acquire(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Millisecond)
-	defer cancel()
-	_, err = c.Acquire(ctx, 2)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected deadline error, got %v", err)
+	if _, err := c.Acquire(2); !errors.Is(err, ErrFull) {
+		t.Fatalf("expected ErrFull, got %v", err)
 	}
-	if err := held.Release(); err != nil {
-		t.Fatal(err)
+	if loads != 1 || c.Len() != 1 {
+		t.Fatalf("failed Acquire changed cache: loads=%d, len=%d", loads, c.Len())
 	}
-	lease, err := c.Acquire(t.Context(), 2)
+
+	duplicate, err := c.Acquire(1)
+	if err != nil || duplicate.Value != 10 {
+		t.Fatalf("acquiring existing pinned key: lease=%+v err=%v", duplicate, err)
+	}
+	_ = held.Release()
+	if _, err := c.Acquire(2); !errors.Is(err, ErrFull) {
+		t.Fatalf("expected ErrFull while duplicate lease is pinned, got %v", err)
+	}
+	_ = duplicate.Release()
+
+	next, err := c.Acquire(2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lease.Value != 2 {
-		t.Fatalf("wrong value %d", lease.Value)
+	if next.Value != 20 {
+		t.Fatalf("value=%d, want 20", next.Value)
 	}
-	_ = lease.Release()
+	_ = next.Release()
 }
 
-func TestShutdownAndRelease(t *testing.T) {
-	var mu sync.Mutex
-	closed := []int{}
-	c := New(2, func(_ context.Context, k int) (int, error) { return k, nil }, func(v int) error {
-		mu.Lock()
-		defer mu.Unlock()
-		closed = append(closed, v)
+func TestCloseDoesNotWaitAndDisposesOnLastRelease(t *testing.T) {
+	var disposedMu sync.Mutex
+	var disposed []int
+	c := New(2, func(k int) (int, error) { return k, nil }, func(v int) error {
+		disposedMu.Lock()
+		disposed = append(disposed, v)
+		disposedMu.Unlock()
 		return nil
 	})
-	held, _ := c.Acquire(t.Context(), 1)
-	idle, _ := c.Acquire(t.Context(), 2)
+	held, _ := c.Acquire(1)
+	idle, _ := c.Acquire(2)
 	_ = idle.Release()
-	_ = c.Shutdown()
-	if _, err := c.Acquire(t.Context(), 3); !errors.Is(err, ErrClosed) {
-		t.Fatalf("expected closed, got %v", err)
-	}
-	if len(closed) != 1 || closed[0] != 2 {
-		t.Fatalf("idle not closed: %v", closed)
-	}
-	if err := held.Release(); err != nil {
-		t.Fatal(err)
-	}
-	if err := held.Release(); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.Close(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if len(closed) != 2 {
-		t.Fatalf("values not all closed: %v", closed)
-	}
-}
 
-func TestCloseWaits(t *testing.T) {
-	c := New(1, func(_ context.Context, k string) (string, error) { return k, nil }, nil)
-	lease, _ := c.Acquire(t.Context(), "a")
 	done := make(chan error, 1)
-	go func() { done <- c.Close(t.Context()) }()
-	select {
-	case <-done:
-		t.Fatal("Close returned before release")
-	case <-time.After(15 * time.Millisecond):
-	}
-	_ = lease.Release()
+	go func() { done <- c.Close() }()
 	select {
 	case err := <-done:
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Close did not finish")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close waited for a pinned lease")
+	}
+	if _, err := c.Acquire(3); !errors.Is(err, ErrClosed) {
+		t.Fatalf("expected ErrClosed after Close, got %v", err)
+	}
+
+	disposedMu.Lock()
+	if len(disposed) != 1 || disposed[0] != 2 {
+		t.Fatalf("idle value not disposed: %v", disposed)
+	}
+	disposedMu.Unlock()
+
+	if err := held.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if err := held.Release(); err != nil {
+		t.Fatal(err)
+	}
+	disposedMu.Lock()
+	if len(disposed) != 2 || disposed[1] != 1 {
+		t.Fatalf("pinned value not disposed on last release: %v", disposed)
+	}
+	disposedMu.Unlock()
+	if c.Len() != 0 {
+		t.Fatalf("closed cache has %d entries", c.Len())
 	}
 }
 
-func TestWaitingAcquireResumes(t *testing.T) {
-	c := New(1, func(_ context.Context, k string) (string, error) { return k, nil }, nil)
-	first, err := c.Acquire(t.Context(), "first")
-	if err != nil {
-		t.Fatal(err)
-	}
-	type result struct {
-		l   *Lease[string, string]
-		err error
-	}
-	done := make(chan result, 1)
-	go func() {
-		l, err := c.Acquire(t.Context(), "second")
-		done <- result{l, err}
-	}()
-	select {
-	case r := <-done:
-		t.Fatalf("got second lease while first pinned: %+v", r)
-	case <-time.After(15 * time.Millisecond):
-	}
-	if err := first.Release(); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case r := <-done:
-		if r.err != nil {
-			t.Fatal(r.err)
-		}
-		if r.l.Value != "second" {
-			t.Fatalf("got %q", r.l.Value)
-		}
-		_ = r.l.Release()
-	case <-time.After(time.Second):
-		t.Fatal("acquire did not resume")
-	}
-}
-
-func TestConcurrentAcquireLoadsOnce(t *testing.T) {
-	var loads int
-	c := New(2, func(_ context.Context, k int) (int, error) { loads++; return k * 2, nil }, nil)
-	const n = 30
+func TestConcurrentSameKeyLoadsOnce(t *testing.T) {
+	var loads atomic.Int64
+	c := New(2, func(k int) (int, error) {
+		loads.Add(1)
+		return k * 2, nil
+	}, nil)
+	const n = 50
 	var wg sync.WaitGroup
 	for range n {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			l, err := c.Acquire(t.Context(), 7)
+			l, err := c.Acquire(7)
 			if err != nil {
 				t.Error(err)
 				return
@@ -183,25 +160,49 @@ func TestConcurrentAcquireLoadsOnce(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if loads != 1 {
-		t.Fatalf("loads = %d, want 1", loads)
+	if loads.Load() != 1 {
+		t.Fatalf("loaded %d times, want 1", loads.Load())
 	}
 }
 
-func TestCloseTimeoutStillDisposes(t *testing.T) {
-	var disposed bool
-	c := New(1, func(_ context.Context, k int) (int, error) { return k, nil }, func(_ int) error { disposed = true; return nil })
-	l, _ := c.Acquire(t.Context(), 1)
-	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Millisecond)
-	defer cancel()
-	if err := c.Close(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("close error = %v", err)
+func TestErrorsAndCloseErrorAccumulation(t *testing.T) {
+	loadErr := errors.New("load failed")
+	c := New(1, func(k string) (string, error) {
+		if k == "bad" {
+			return "", loadErr
+		}
+		return k, nil
+	}, nil)
+	if _, err := c.Acquire("bad"); !errors.Is(err, loadErr) {
+		t.Fatalf("got %v, want loader error", err)
 	}
-	if disposed {
-		t.Fatal("disposed a pinned value")
+	if c.Len() != 0 {
+		t.Fatal("failed load should not be cached")
 	}
+
+	disposeErr := errors.New("dispose failed")
+	d := New(1, func(k int) (int, error) { return k, nil }, func(int) error { return disposeErr })
+	l, _ := d.Acquire(1)
+	if err := d.Close(); err != nil {
+		t.Fatalf("pinned value should not be disposed yet: %v", err)
+	}
+	if err := l.Release(); !errors.Is(err, disposeErr) {
+		t.Fatalf("got %v from Release, want dispose error", err)
+	}
+	if err := d.Close(); !errors.Is(err, disposeErr) {
+		t.Fatalf("second Close should report late dispose error; got %v", err)
+	}
+}
+
+func TestEvictionDisposalError(t *testing.T) {
+	disposeErr := errors.New("can't dispose")
+	c := New(1, func(k int) (int, error) { return k, nil }, func(int) error { return disposeErr })
+	l, _ := c.Acquire(1)
 	_ = l.Release()
-	if !disposed {
-		t.Fatal("pinned value not disposed on release")
+	if _, err := c.Acquire(2); !errors.Is(err, disposeErr) {
+		t.Fatalf("expected eviction error, got %v", err)
+	}
+	if c.Len() != 0 {
+		t.Fatalf("expected failed evicted entry to be removed, len=%d", c.Len())
 	}
 }
