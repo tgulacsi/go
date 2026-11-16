@@ -36,16 +36,16 @@ type (
 	// the entries are created by the provided Loader,
 	// and the eviction is notified with the Disposer.
 	LDCache[K comparable, V any] struct {
-		mu       sync.Mutex
+		closeErr error
 		entries  map[K]*ldEntry[K, V]
-		queue    list.List
 		hand     *list.Element
-		capacity int
 		load     Loader[K, V]
 		dispose  Disposer[V]
 		changed  chan struct{}
+		queue    list.List
+		capacity int
+		mu       sync.Mutex
 		closing  bool
-		closeErr error
 	}
 
 	ldEntry[K comparable, V any] struct {

@@ -16,11 +16,11 @@ type (
 	// Cache stores up to capacity key-value pairs. Get and Put are safe to call
 	// concurrently. Entries are ordered by insertion, not by last access.
 	Cache[K comparable, V any] struct {
-		mu       sync.Mutex
-		capacity int
 		entries  map[K]*list.Element
-		order    list.List // Front: newest; Back: oldest.
 		hand     *list.Element
+		order    list.List // Front: newest; Back: oldest.
+		capacity int
+		mu       sync.Mutex
 	}
 
 	entry[K comparable, V any] struct {
@@ -110,4 +110,20 @@ func (c *Cache[K, V]) evict() {
 			candidate = c.order.Back()
 		}
 	}
+}
+
+// Clear the cache, visiting all entries.
+func (c *Cache[K, V]) Clear(f func(K, V)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if f != nil {
+		for _, l := range c.entries {
+			if e, ok := l.Value.(*entry[K, V]); ok {
+				f(e.key, e.value)
+			}
+		}
+	}
+	clear(c.entries)
+	c.order.Init()
+	c.hand = nil
 }
