@@ -15,7 +15,7 @@ import (
 func TestSIEVEOrder(t *testing.T) {
 	ctx := t.Context()
 	loads := map[string]int{}
-	c := NewContext(3, func(_ context.Context, k string) (string, error) { loads[k]++; return k, nil }, nil)
+	c := NewLDCache(3, func(_ context.Context, k string) (string, error) { loads[k]++; return k, nil }, nil)
 	take := func(k string) {
 		t.Helper()
 		lease, err := c.Acquire(ctx, k)
@@ -45,7 +45,7 @@ func TestSIEVEOrder(t *testing.T) {
 }
 
 func TestPinWaitAndTimeout(t *testing.T) {
-	c := NewContext(1, func(_ context.Context, k int) (int, error) { return k, nil }, nil)
+	c := NewLDCache(1, func(_ context.Context, k int) (int, error) { return k, nil }, nil)
 	held, err := c.Acquire(t.Context(), 1)
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestPinWaitAndTimeout(t *testing.T) {
 func TestShutdownAndRelease(t *testing.T) {
 	var mu sync.Mutex
 	closed := []int{}
-	c := NewContext(2, func(_ context.Context, k int) (int, error) { return k, nil }, func(v int) error {
+	c := NewLDCache(2, func(_ context.Context, k int) (int, error) { return k, nil }, func(v int) error {
 		mu.Lock()
 		defer mu.Unlock()
 		closed = append(closed, v)
@@ -103,7 +103,7 @@ func TestShutdownAndRelease(t *testing.T) {
 }
 
 func TestCloseWaits(t *testing.T) {
-	c := NewContext(1, func(_ context.Context, k string) (string, error) { return k, nil }, nil)
+	c := NewLDCache(1, func(_ context.Context, k string) (string, error) { return k, nil }, nil)
 	lease, _ := c.Acquire(t.Context(), "a")
 	done := make(chan error, 1)
 	go func() { done <- c.Close(t.Context()) }()
@@ -124,7 +124,7 @@ func TestCloseWaits(t *testing.T) {
 }
 
 func TestWaitingAcquireResumes(t *testing.T) {
-	c := NewContext(1, func(_ context.Context, k string) (string, error) { return k, nil }, nil)
+	c := NewLDCache(1, func(_ context.Context, k string) (string, error) { return k, nil }, nil)
 	first, err := c.Acquire(t.Context(), "first")
 	if err != nil {
 		t.Fatal(err)
@@ -162,7 +162,7 @@ func TestWaitingAcquireResumes(t *testing.T) {
 
 func TestConcurrentAcquireLoadsOnce(t *testing.T) {
 	var loads int
-	c := NewContext(2, func(_ context.Context, k int) (int, error) { loads++; return k * 2, nil }, nil)
+	c := NewLDCache(2, func(_ context.Context, k int) (int, error) { loads++; return k * 2, nil }, nil)
 	const n = 30
 	var wg sync.WaitGroup
 	for range n {
@@ -190,7 +190,7 @@ func TestConcurrentAcquireLoadsOnce(t *testing.T) {
 
 func TestCloseTimeoutStillDisposes(t *testing.T) {
 	var disposed bool
-	c := NewContext(1, func(_ context.Context, k int) (int, error) { return k, nil }, func(_ int) error { disposed = true; return nil })
+	c := NewLDCache(1, func(_ context.Context, k int) (int, error) { return k, nil }, func(_ int) error { disposed = true; return nil })
 	l, _ := c.Acquire(t.Context(), 1)
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Millisecond)
 	defer cancel()

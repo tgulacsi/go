@@ -30,9 +30,9 @@ type (
 	}
 )
 
-// New creates a SIEVE cache with a fixed, positive capacity.
-// New panics if capacity is less than 1.
-func New[K comparable, V any](capacity int) *Cache[K, V] {
+// NewCache creates a SIEVE cache with a fixed, positive capacity.
+// NewCache panics if capacity is less than 1.
+func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 	if capacity < 1 {
 		panic("sieve: capacity must be positive")
 	}
